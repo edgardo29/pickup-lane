@@ -22,7 +22,9 @@ class CommunityGameDetailCreate(BaseModel):
     def reject_duplicate_payment_methods(self) -> "CommunityGameDetailCreate":
         method_types = [method.type for method in self.payment_methods_snapshot]
         if len(method_types) != len(set(method_types)):
-            raise ValueError("payment_methods_snapshot must not contain duplicate types.")
+            raise ValueError(
+                "payment_methods_snapshot must not contain duplicate types."
+            )
         return self
 
 
@@ -64,7 +66,9 @@ class CommunityGameDetailUpdate(BaseModel):
             return self
         method_types = [method.type for method in self.payment_methods_snapshot]
         if len(method_types) != len(set(method_types)):
-            raise ValueError("payment_methods_snapshot must not contain duplicate types.")
+            raise ValueError(
+                "payment_methods_snapshot must not contain duplicate types."
+            )
         return self
 
 
@@ -81,5 +85,7 @@ class CommunityGameDetailHostUpsert(BaseModel):
     def reject_duplicate_payment_methods(self) -> "CommunityGameDetailHostUpsert":
         method_types = [method.type for method in self.payment_methods_snapshot]
         if len(method_types) != len(set(method_types)):
-            raise ValueError("payment_methods_snapshot must not contain duplicate types.")
+            raise ValueError(
+                "payment_methods_snapshot must not contain duplicate types."
+            )
         return self

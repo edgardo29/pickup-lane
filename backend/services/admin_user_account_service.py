@@ -3,7 +3,7 @@
 import hashlib
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select
@@ -198,7 +198,7 @@ def preview_admin_user_suspension(
     user_id: uuid.UUID,
 ) -> AdminUserSuspensionPreviewRead:
     user = get_admin_user_or_404(db, user_id)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     (
         official_host_assignments,
         official_host_assignment_count,
@@ -403,7 +403,7 @@ def suspend_admin_user(
             expected_reason=reason,
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     (
         official_host_assignments,
         official_host_assignment_count,
@@ -672,7 +672,7 @@ def unsuspend_admin_user(
         )
 
     validate_user_can_be_unsuspended(target_user)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     notification = Notification(
         id=uuid.uuid4(),
         user_id=target_user.id,

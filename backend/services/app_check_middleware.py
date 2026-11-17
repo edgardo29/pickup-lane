@@ -5,18 +5,29 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from fastapi import HTTPException, Request
+from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import Headers
 from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from backend.observability.http_errors import public_error_response
+from backend.observability.http_errors import (
+    handle_http_exception,
+    handle_unexpected_exception,
+    public_error_response,
+)
 from backend.observability.structured_logging import emit_event
+from backend.observability.timeouts import PublicTimeoutError
 from backend.services.app_check_policy import AppCheckRoutePolicy
 from backend.services.app_check_service import (
     APP_CHECK_HEADER_NAME,
     AppCheckVerificationOutcome,
     AppCheckVerificationResult,
     verify_app_check_token,
+)
+from backend.services.auth_service import (
+    VERIFIED_FIREBASE_IDENTITY_STATE_KEY,
+    get_verified_firebase_identity_from_authorization,
 )
 from backend.settings import BackendSettings, FirebaseAppCheckMode
 
@@ -85,6 +96,29 @@ class AppCheckMiddleware:
             return
 
         headers = Headers(scope=scope)
+        if (
+            self._settings.firebase_app_check_mode is FirebaseAppCheckMode.ENFORCED
+            and route_match.requires_authentication
+        ):
+            try:
+                identity = await run_in_threadpool(
+                    get_verified_firebase_identity_from_authorization,
+                    headers.get("authorization"),
+                )
+            except HTTPException as exc:
+                response = await handle_http_exception(Request(scope, receive), exc)
+                await response(scope, receive, send)
+                return
+            except PublicTimeoutError as exc:
+                response = await handle_unexpected_exception(
+                    Request(scope, receive), exc
+                )
+                await response(scope, receive, send)
+                return
+            scope.setdefault("state", {})[VERIFIED_FIREBASE_IDENTITY_STATE_KEY] = (
+                identity
+            )
+
         verification = self._verifier(headers, self._settings)
         operation = (
             "app_check.observe"

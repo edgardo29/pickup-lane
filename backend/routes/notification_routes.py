@@ -40,7 +40,9 @@ def create_notification(
     _raise_admin_notification_scaffold_removed()
 
 
-@router.get("/me", response_model=list[NotificationRead], status_code=status.HTTP_200_OK)
+@router.get(
+    "/me", response_model=list[NotificationRead], status_code=status.HTTP_200_OK
+)
 def list_my_notifications(
     notification_type: str | None = None,
     notification_category: str | None = None,

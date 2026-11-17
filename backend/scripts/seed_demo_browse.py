@@ -44,12 +44,18 @@ def seed_demo_browse() -> None:
         participants = seed_participants(db, users, games, bookings)
         db.flush()
         notifications = seed_notifications(db, users, games, bookings, participants)
-        archive_old_scenario_games(db, allowed_game_ids={game.id for game in games.values()})
+        archive_old_scenario_games(
+            db, allowed_game_ids={game.id for game in games.values()}
+        )
         db.commit()
 
     print("Browse demo data ready.")
-    print(f"Seeded {len(ALL_DEMO_GAMES)} games with images, bookings, and participants.")
-    print(f"Seeded {len(chats)} game chats and {len(chats) * MESSAGES_PER_CHAT} chat messages.")
+    print(
+        f"Seeded {len(ALL_DEMO_GAMES)} games with images, bookings, and participants."
+    )
+    print(
+        f"Seeded {len(chats)} game chats and {len(chats) * MESSAGES_PER_CHAT} chat messages."
+    )
     print(f"Seeded {len(notifications)} inbox notifications.")
 
 

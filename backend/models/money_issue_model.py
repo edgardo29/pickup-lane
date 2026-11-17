@@ -24,7 +24,9 @@ from backend.database_metadata import Base
 class MoneyIssue(Base):
     __tablename__ = "money_issues"
     __table_args__ = (
-        CheckConstraint("status IN ('open', 'resolved')", name="ck_money_issues_status"),
+        CheckConstraint(
+            "status IN ('open', 'resolved')", name="ck_money_issues_status"
+        ),
         CheckConstraint(
             (
                 "issue_type IN ("
@@ -101,16 +103,11 @@ class MoneyIssue(Base):
             name="ck_money_issues_resolution_fields_match_status",
         ),
         CheckConstraint(
-            (
-                "(issue_type NOT LIKE 'refund_%' OR target_refund_id IS NOT NULL)"
-            ),
+            ("(issue_type NOT LIKE 'refund_%' OR target_refund_id IS NOT NULL)"),
             name="ck_money_issues_refund_requires_refund",
         ),
         CheckConstraint(
-            (
-                "(issue_type NOT LIKE 'credit_%' "
-                "OR target_credit_usage_id IS NOT NULL)"
-            ),
+            ("(issue_type NOT LIKE 'credit_%' OR target_credit_usage_id IS NOT NULL)"),
             name="ck_money_issues_credit_requires_usage",
         ),
         UniqueConstraint("operation_key", name="uq_money_issues_operation_key"),
@@ -145,10 +142,14 @@ class MoneyIssue(Base):
         UUID(as_uuid=True), ForeignKey("games.id", ondelete="SET NULL"), nullable=True
     )
     target_booking_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("bookings.id", ondelete="SET NULL"), nullable=True
+        UUID(as_uuid=True),
+        ForeignKey("bookings.id", ondelete="SET NULL"),
+        nullable=True,
     )
     target_payment_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("payments.id", ondelete="SET NULL"), nullable=True
+        UUID(as_uuid=True),
+        ForeignKey("payments.id", ondelete="SET NULL"),
+        nullable=True,
     )
     target_refund_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("refunds.id", ondelete="RESTRICT"), nullable=True
@@ -183,7 +184,9 @@ class MoneyIssue(Base):
     resolved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    resolution_reason_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    resolution_reason_code: Mapped[str | None] = mapped_column(
+        String(80), nullable=True
+    )
     resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     resolution_external_reference: Mapped[str | None] = mapped_column(
         String(255), nullable=True

@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select
@@ -485,7 +485,7 @@ def issue_admin_game_credit(
     idempotency_key = explicit_idempotency_key or (
         f"admin-credit:{admin_user.id}:{payload.user_id}:{uuid.uuid4()}"
     )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     game_credit = GameCredit(
         id=uuid.uuid4(),
         user_id=payload.user_id,
@@ -555,7 +555,7 @@ def reverse_admin_game_credit(
             detail="Game credit not found.",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if game_credit.credit_status != "active":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

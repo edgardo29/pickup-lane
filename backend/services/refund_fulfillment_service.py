@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import or_, select
@@ -321,12 +321,14 @@ def _sync_dependents(
     actor_user_id: uuid.UUID | None = None,
     compensation_error_code: str | None = None,
 ) -> None:
-    compensations = list(db.scalars(
-        select(PaymentCompensation)
-        .where(PaymentCompensation.payment_id == payment.id)
-        .order_by(PaymentCompensation.id.asc())
-        .with_for_update()
-    ).all())
+    compensations = list(
+        db.scalars(
+            select(PaymentCompensation)
+            .where(PaymentCompensation.payment_id == payment.id)
+            .order_by(PaymentCompensation.id.asc())
+            .with_for_update()
+        ).all()
+    )
     compensation = next(
         (row for row in compensations if row.refund_id == refund.id), None
     )
@@ -373,9 +375,7 @@ def _sync_dependents(
                 outcome.applied_by_user_id = refund.approved_by_user_id
             else:
                 outcome.applied_status = "failed"
-                outcome.failure_reason = (
-                    "Cash refund succeeded after a later financial decision became active."
-                )
+                outcome.failure_reason = "Cash refund succeeded after a later financial decision became active."
                 outcome.applied_at = now
                 outcome.applied_by_user_id = refund.approved_by_user_id
         elif refund.refund_status in {"failed", "cancelled"}:
@@ -390,7 +390,9 @@ def _sync_dependents(
         outcome.updated_at = now
         db.add(outcome)
 
-    if (refund_has_confirmed_return or confirmed_value_changed) and payment.booking_id is not None:
+    if (
+        refund_has_confirmed_return or confirmed_value_changed
+    ) and payment.booking_id is not None:
         booking = db.get(Booking, payment.booking_id)
         if booking is not None:
             old_booking_status = booking.booking_status
@@ -398,7 +400,9 @@ def _sync_dependents(
             old_reservation_status = booking.reservation_status
             collected, returned = _booking_cash_totals(db, booking.id)
             booking.payment_status = (
-                "refunded" if collected > 0 and returned >= collected else "partially_refunded"
+                "refunded"
+                if collected > 0 and returned >= collected
+                else "partially_refunded"
             )
             booking.updated_at = now
             db.add(booking)
@@ -441,9 +445,14 @@ def _sync_dependents(
                     ),
                 )
 
-    if (refund_has_confirmed_return or confirmed_value_changed) and refund.host_publish_fee_id is not None:
+    if (
+        refund_has_confirmed_return or confirmed_value_changed
+    ) and refund.host_publish_fee_id is not None:
         host_publish_fee = db.get(HostPublishFee, refund.host_publish_fee_id)
-        if host_publish_fee is not None and _confirmed_returned_for_payment(db, payment.id) >= payment.amount_cents:
+        if (
+            host_publish_fee is not None
+            and _confirmed_returned_for_payment(db, payment.id) >= payment.amount_cents
+        ):
             host_publish_fee.fee_status = "refunded"
             host_publish_fee.updated_at = now
             db.add(host_publish_fee)
@@ -456,13 +465,9 @@ def _sync_dependents(
         )
 
         if outcome.applied_status in {"applied", "not_applicable"}:
-            reclassify_superseded_publish_refund_issues(
-                db, financial_outcome=outcome
-            )
+            reclassify_superseded_publish_refund_issues(db, financial_outcome=outcome)
         elif outcome.applied_status == "failed":
-            recompute_superseded_publish_refund_issues(
-                db, financial_outcome=outcome
-            )
+            recompute_superseded_publish_refund_issues(db, financial_outcome=outcome)
 
         create_financial_outcome_notice_if_needed(
             db,
@@ -475,9 +480,7 @@ def _sync_dependents(
             advance_required_payment_compensations_for_payment,
         )
 
-        advance_required_payment_compensations_for_payment(
-            db, payment=payment, now=now
-        )
+        advance_required_payment_compensations_for_payment(db, payment=payment, now=now)
 
 
 def apply_refund_provider_result(
@@ -492,7 +495,7 @@ def apply_refund_provider_result(
     admin_action_id: uuid.UUID | None = None,
     expected_provider_refund_id: str | None = None,
 ) -> tuple[str, str]:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if not _validate_provider_result(
         refund,
         payment,
@@ -527,7 +530,9 @@ def apply_refund_provider_result(
             )
         return "unsafe", "refund_invalid_provider_result"
 
-    local_status, provider_status, reason_code = _normalize_provider_status(result.status)
+    local_status, provider_status, reason_code = _normalize_provider_status(
+        result.status
+    )
     prior_refund_status = refund.refund_status
     prior_confirmed = _confirmed_returned_for_payment(db, payment.id)
     event = record_refund_event(
@@ -550,7 +555,9 @@ def apply_refund_provider_result(
     confirmed_value_changed = (
         _confirmed_returned_for_payment(db, payment.id) > prior_confirmed
     )
-    transition_changed = confirmed_value_changed or effective_status != prior_refund_status
+    transition_changed = (
+        confirmed_value_changed or effective_status != prior_refund_status
+    )
     if transition_changed:
         _sync_dependents(
             db,
@@ -661,7 +668,12 @@ def apply_refund_provider_result(
                 occurred_at=now,
             )
         return "handled", reason_code
-    return "retry", "refund_processing" if provider_status == "processing" else "refund_outcome_unknown"
+    return (
+        "retry",
+        "refund_processing"
+        if provider_status == "processing"
+        else "refund_outcome_unknown",
+    )
 
 
 def apply_historical_refund_provider_result(
@@ -677,7 +689,7 @@ def apply_historical_refund_provider_result(
     admin_action_id: uuid.UUID | None = None,
 ) -> tuple[str, str]:
     """Apply an observation for an attempt older than Refund.current_attempt_number."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expected_key = (
         refund_attempt_key(refund.id, attempt.attempt_number)
         if attempt.attempt_number > 0
@@ -725,7 +737,9 @@ def apply_historical_refund_provider_result(
         )
         return "unsafe", "historical_attempt_identity_mismatch"
 
-    local_status, provider_status, reason_code = _normalize_provider_status(result.status)
+    local_status, provider_status, reason_code = _normalize_provider_status(
+        result.status
+    )
     prior_status = refund_attempt_statuses(db, refund.id).get(attempt.attempt_number)
     effective_status = reduce_refund_attempt_status(prior_status, local_status)
     accepted_status = local_status if effective_status != prior_status else None
@@ -757,7 +771,10 @@ def apply_historical_refund_provider_result(
     refund.automatic_mutation_blocked_at = now
     refund.updated_at = now
     db.add(refund)
-    if refund.refund_status == "approved" and refund.provider_attempt_started_at is None:
+    if (
+        refund.refund_status == "approved"
+        and refund.provider_attempt_started_at is None
+    ):
         record_refund_event(
             db,
             refund=refund,
@@ -834,18 +851,14 @@ def lock_refund_financial_context(
                 .where(Game.id == booking_reference.game_id)
                 .with_for_update()
             )
-            db.scalar(
-                select(Booking).where(Booking.id == booking_id).with_for_update()
-            )
+            db.scalar(select(Booking).where(Booking.id == booking_id).with_for_update())
     payment = db.scalars(
         select(Payment).where(Payment.id == payment_reference.id).with_for_update()
     ).one()
     fee_id = refund_reference.host_publish_fee_id
     if fee_id is not None:
         db.scalar(
-            select(HostPublishFee)
-            .where(HostPublishFee.id == fee_id)
-            .with_for_update()
+            select(HostPublishFee).where(HostPublishFee.id == fee_id).with_for_update()
         )
     related_refunds = list(
         db.scalars(
@@ -918,7 +931,7 @@ def handle_refund_fulfillment(db: Session, job) -> HandlerResult:
     ):
         return HandlerResult.permanent_failure("refund_unsafe_replay")
     payment, refund = lock_refund_financial_context(db, refund_id)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     current_attempt_status = refund_attempt_statuses(db, refund.id).get(
         refund.current_attempt_number
     )
@@ -940,7 +953,7 @@ def handle_refund_fulfillment(db: Session, job) -> HandlerResult:
         not ledger.attempt_history_complete
         or refund.amount_cents > ledger.available_cents
     ):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         refund.automatic_mutation_blocked_reason = "historical_attempt_conflict"
         refund.automatic_mutation_blocked_at = now
         refund.updated_at = now
@@ -1052,7 +1065,10 @@ def handle_refund_fulfillment(db: Session, job) -> HandlerResult:
             return HandlerResult.permanent_failure("refund_unsafe_replay")
         if result is None:
             started_at = provider_attempt_started_at
-            if started_at is None or datetime.now(timezone.utc) - started_at >= REFUND_MUTATION_CUTOFF:
+            if (
+                started_at is None
+                or datetime.now(UTC) - started_at >= REFUND_MUTATION_CUTOFF
+            ):
                 return HandlerResult.permanent_failure("refund_outcome_unknown")
             result = create_refund(
                 charge_id=provider_charge_id,
@@ -1107,7 +1123,8 @@ def handle_refund_fulfillment(db: Session, job) -> HandlerResult:
     except Exception as exc:  # noqa: BLE001 - Stripe failures remain unsafe.
         if getattr(exc, "http_status", None) == 429:
             return HandlerResult.transient_failure(
-                "refund_provider_retry", retry_delay=_refund_retry_delay(job_attempt_count)
+                "refund_provider_retry",
+                retry_delay=_refund_retry_delay(job_attempt_count),
             )
         return HandlerResult.permanent_failure("refund_outcome_unknown")
 
@@ -1142,14 +1159,21 @@ def _refund_retry_delay(attempt_count: int) -> timedelta:
 
 def _proven_exhausted_identity(job) -> tuple[uuid.UUID, int] | None:
     identity = job.protected_identity
-    if not isinstance(identity, dict) or set(identity) != {"refund_id", "attempt_number"}:
+    if not isinstance(identity, dict) or set(identity) != {
+        "refund_id",
+        "attempt_number",
+    }:
         return None
     try:
         refund_id = uuid.UUID(identity["refund_id"])
     except (TypeError, ValueError):
         return None
     attempt_number = identity["attempt_number"]
-    if isinstance(attempt_number, bool) or not isinstance(attempt_number, int) or attempt_number < 1:
+    if (
+        isinstance(attempt_number, bool)
+        or not isinstance(attempt_number, int)
+        or attempt_number < 1
+    ):
         return None
     expected_key = refund_attempt_key(refund_id, attempt_number)
     if (
@@ -1170,9 +1194,7 @@ def _proven_exhausted_identity(job) -> tuple[uuid.UUID, int] | None:
     return refund_id, attempt_number
 
 
-def handle_refund_job_exhausted(
-    db: Session, job, error_code: str
-) -> str | None:
+def handle_refund_job_exhausted(db: Session, job, error_code: str) -> str | None:
     proven = _proven_exhausted_identity(job)
     if proven is None:
         return None
@@ -1200,7 +1222,7 @@ def handle_refund_job_exhausted(
         )
     ):
         return None
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if refund.provider_attempt_started_at is None:
         event = record_refund_event(
             db,

@@ -1,7 +1,7 @@
 """Refund event helpers for provider and reconciliation history."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -136,14 +136,16 @@ def get_refund_attempt_by_provider_refund_id(
     provider_refund_id: str,
 ) -> RefundEvent | None:
     """Return one canonical immutable attempt for a provider refund identity."""
-    matching_rows = list(db.scalars(
-        select(RefundEvent)
-        .where(
-            RefundEvent.provider == provider,
-            RefundEvent.provider_refund_id == provider_refund_id,
-        )
-        .order_by(RefundEvent.occurred_at.asc(), RefundEvent.id.asc())
-    ).all())
+    matching_rows = list(
+        db.scalars(
+            select(RefundEvent)
+            .where(
+                RefundEvent.provider == provider,
+                RefundEvent.provider_refund_id == provider_refund_id,
+            )
+            .order_by(RefundEvent.occurred_at.asc(), RefundEvent.id.asc())
+        ).all()
+    )
     canonical_rows: list[RefundEvent] = []
     for refund_id, attempt_number in dict.fromkeys(
         (row.refund_id, row.attempt_number) for row in matching_rows
@@ -197,7 +199,7 @@ def record_refund_event(
     attempt_request_key: str | None = None,
     apply_to_refund: bool = True,
 ) -> RefundEvent:
-    now = occurred_at or datetime.now(timezone.utc)
+    now = occurred_at or datetime.now(UTC)
     normalized_provider_status = normalize_provider_refund_status(provider_status)
     effective_provider = provider or refund.provider
     existing_provider_event = get_refund_event_by_provider_event_id(
@@ -270,17 +272,19 @@ def record_refund_event(
         "summary": summary,
         "metadata": metadata,
     }
-    existing_event = get_refund_event_by_idempotency_key(
-        db, refund.id, idempotency_key
-    )
+    existing_event = get_refund_event_by_idempotency_key(db, refund.id, idempotency_key)
     if existing_event is not None:
         if not _refund_event_replay_matches(existing_event, **replay_identity):
-            raise ValueError("refund event idempotency key conflicts with existing event")
+            raise ValueError(
+                "refund event idempotency key conflicts with existing event"
+            )
         existing_event._recorded_now = False
         return existing_event
     if existing_provider_event is not None:
         if not _refund_event_replay_matches(existing_provider_event, **replay_identity):
-            raise ValueError("provider event identity conflicts with existing refund event")
+            raise ValueError(
+                "provider event identity conflicts with existing refund event"
+            )
         existing_provider_event._recorded_now = False
         return existing_provider_event
 
@@ -290,9 +294,12 @@ def record_refund_event(
         "provider_outcome_unknown",
         "reconciliation_checked",
     }
-    observation_updates_refund = not provider_observation or provider_observation_can_update_refund(
-        current_status=refund.refund_status,
-        observed_status=effective_new_refund_status,
+    observation_updates_refund = (
+        not provider_observation
+        or provider_observation_can_update_refund(
+            current_status=refund.refund_status,
+            observed_status=effective_new_refund_status,
+        )
     )
     effective_apply_to_refund = apply_to_refund and observation_updates_refund
     if effective_apply_to_refund and effective_new_refund_status is not None:

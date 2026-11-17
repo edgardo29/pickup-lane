@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -164,7 +164,7 @@ def get_or_create_admin_venue_from_sources(
             )
         return matching_venue
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     venue = Venue(
         id=uuid.uuid4(),
         name=clean_required_text(venue_data["name"], "venue.name"),
@@ -475,9 +475,7 @@ def changed_update_fields(
         current_value = getattr(game, field_name)
         next_value = update_data[field_name]
         if isinstance(current_value, datetime) and isinstance(next_value, datetime):
-            if current_value.astimezone(timezone.utc) != next_value.astimezone(
-                timezone.utc
-            ):
+            if current_value.astimezone(UTC) != next_value.astimezone(UTC):
                 changed_fields.add(field_name)
             continue
 
@@ -649,7 +647,7 @@ def update_official_game(
         actual_changed_fields & ADMIN_EDIT_CHECKOUT_SENSITIVE_FIELDS
     )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expired_pending_booking_count = 0
     if checkout_sensitive_changed_fields:
         expired_pending_booking_count = expire_pending_checkouts_for_admin_edit(

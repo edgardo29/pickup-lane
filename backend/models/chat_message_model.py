@@ -28,9 +28,7 @@ class ChatMessage(Base):
             name="ck_chat_messages_message_type",
         ),
         CheckConstraint(
-            (
-                "visibility_status IN ('visible', 'removed')"
-            ),
+            ("visibility_status IN ('visible', 'removed')"),
             name="ck_chat_messages_visibility_status",
         ),
         CheckConstraint(
@@ -61,24 +59,15 @@ class ChatMessage(Base):
             name="ck_chat_messages_pinned_requires_pinned_by_user",
         ),
         CheckConstraint(
-            (
-                "(visibility_status <> 'removed' "
-                "OR removed_at IS NOT NULL)"
-            ),
+            ("(visibility_status <> 'removed' OR removed_at IS NOT NULL)"),
             name="ck_chat_messages_removed_requires_removed_at",
         ),
         CheckConstraint(
-            (
-                "(visibility_status <> 'removed' "
-                "OR removed_source IS NOT NULL)"
-            ),
+            ("(visibility_status <> 'removed' OR removed_source IS NOT NULL)"),
             name="ck_chat_messages_removed_requires_source",
         ),
         CheckConstraint(
-            (
-                "(review_status <> 'reviewed' "
-                "OR reviewed_at IS NOT NULL)"
-            ),
+            ("(review_status <> 'reviewed' OR reviewed_at IS NOT NULL)"),
             name="ck_chat_messages_reviewed_requires_reviewed_at",
         ),
         CheckConstraint(

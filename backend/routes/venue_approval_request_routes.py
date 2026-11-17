@@ -10,13 +10,13 @@ from backend.schemas import (
     VenueApprovalRequestRead,
 )
 from backend.services.auth_service import require_active_admin
-from backend.services.venue_approval_request_service import (
-    get_venue_approval_request_record,
-    list_venue_approval_request_records,
-)
 from backend.services.query_pagination import (
     DEFAULT_ADMIN_COLLECTION_LIMIT,
     MAX_ADMIN_COLLECTION_LIMIT,
+)
+from backend.services.venue_approval_request_service import (
+    get_venue_approval_request_record,
+    list_venue_approval_request_records,
 )
 
 router = APIRouter(

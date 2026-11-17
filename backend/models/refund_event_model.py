@@ -114,7 +114,9 @@ class RefundEvent(Base):
     provider_refund_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     provider_charge_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     provider_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
-    previous_refund_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    previous_refund_status: Mapped[str | None] = mapped_column(
+        String(30), nullable=True
+    )
     new_refund_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
     reason_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)

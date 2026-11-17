@@ -7,12 +7,6 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import User
 from backend.routes.retired_route_helpers import raise_retired_mutation_route
-from backend.services.auth_service import (
-    get_optional_current_app_user,
-    require_active_admin,
-    require_active_user,
-    require_verified_user,
-)
 from backend.schemas import (
     SubPostCancel,
     SubPostChatEnsureCreate,
@@ -25,6 +19,12 @@ from backend.schemas import (
     SubPostPublicRead,
     SubPostRead,
     SubPostUpdate,
+)
+from backend.services.auth_service import (
+    get_optional_current_app_user,
+    require_active_admin,
+    require_active_user,
+    require_verified_user,
 )
 from backend.services.need_a_sub_post_service import (
     cancel_sub_post_workflow,
@@ -231,7 +231,9 @@ def get_need_a_sub_post(
     return get_visible_sub_post_detail(db, sub_post_id, current_user)
 
 
-@router.patch("/{sub_post_id}", response_model=SubPostRead, status_code=status.HTTP_200_OK)
+@router.patch(
+    "/{sub_post_id}", response_model=SubPostRead, status_code=status.HTTP_200_OK
+)
 def update_need_a_sub_post(
     sub_post_id: uuid.UUID,
     payload: SubPostUpdate,

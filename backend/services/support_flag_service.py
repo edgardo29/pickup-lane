@@ -1,7 +1,7 @@
 """Support flag workflows for durable admin follow-up state."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -312,7 +312,7 @@ def reopen_resolved_support_flag(
     metadata: dict[str, Any] | None,
     source_admin_action_id: uuid.UUID | None,
 ) -> SupportFlag:
-    reopened_at = datetime.now(timezone.utc)
+    reopened_at = datetime.now(UTC)
     support_flag.flag_status = "open"
     support_flag.severity = severity
     support_flag.source = source
@@ -570,7 +570,7 @@ def resolve_support_flag(
             detail="resolution outcome is not supported for this support flag.",
         )
 
-    resolved_at = datetime.now(timezone.utc)
+    resolved_at = datetime.now(UTC)
     audit_action = record_admin_action(
         db,
         admin_user_id=resolver_user.id,

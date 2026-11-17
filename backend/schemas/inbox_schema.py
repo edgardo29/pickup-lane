@@ -5,7 +5,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.schemas.notification_schema import NotificationActionRead
 
-
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 
 

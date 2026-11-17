@@ -1,7 +1,7 @@
 """User stats validation, reads, and protected create/update workflows."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -96,7 +96,10 @@ def validate_user_stats_update_rules(update_data: dict[str, object]) -> None:
                     detail=f"{field_name} must be greater than or equal to 0.",
                 )
 
-    if "last_calculated_at" in update_data and update_data["last_calculated_at"] is None:
+    if (
+        "last_calculated_at" in update_data
+        and update_data["last_calculated_at"] is None
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="last_calculated_at cannot be null.",
@@ -107,7 +110,7 @@ def normalize_user_stats_fields(stats_data: dict[str, object]) -> dict[str, obje
     normalized_data = dict(stats_data)
 
     if normalized_data["last_calculated_at"] is None:
-        normalized_data["last_calculated_at"] = datetime.now(timezone.utc)
+        normalized_data["last_calculated_at"] = datetime.now(UTC)
 
     return normalized_data
 
@@ -158,8 +161,10 @@ def list_user_stats(
     limit: int = DEFAULT_ADMIN_COLLECTION_LIMIT,
     offset: int = 0,
 ) -> list[UserStats]:
-    statement = select(UserStats).join(User, UserStats.user_id == User.id).where(
-        User.deleted_at.is_(None)
+    statement = (
+        select(UserStats)
+        .join(User, UserStats.user_id == User.id)
+        .where(User.deleted_at.is_(None))
     )
 
     if user_id is not None:
@@ -192,7 +197,7 @@ def update_user_stats_workflow(
 
     db_user_stats.last_calculated_at = update_data.get(
         "last_calculated_at",
-        datetime.now(timezone.utc),
+        datetime.now(UTC),
     )
 
     try:

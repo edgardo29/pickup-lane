@@ -416,8 +416,7 @@ def validate_game_status_history_update_fields(update_data: dict[str, object]) -
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "Game status history lifecycle fields cannot be changed "
-                "after creation."
+                "Game status history lifecycle fields cannot be changed after creation."
             ),
         )
 
@@ -480,7 +479,9 @@ def list_game_status_history_records(
         statement = statement.where(GameStatusHistory.change_source == change_source)
 
     history_rows = db.scalars(
-        statement.order_by(GameStatusHistory.created_at.asc(), GameStatusHistory.id.asc())
+        statement.order_by(
+            GameStatusHistory.created_at.asc(), GameStatusHistory.id.asc()
+        )
         .offset(bounded_collection_offset(offset))
         .limit(
             bounded_collection_limit(
@@ -585,7 +586,9 @@ def validate_booking_status_history_references(
         get_changed_by_user_or_404(db, history_data["changed_by_user_id"])
 
 
-def validate_booking_status_history_update_fields(update_data: dict[str, object]) -> None:
+def validate_booking_status_history_update_fields(
+    update_data: dict[str, object],
+) -> None:
     immutable_fields = BOOKING_IMMUTABLE_HISTORY_UPDATE_FIELDS & update_data.keys()
 
     if immutable_fields:
@@ -753,7 +756,8 @@ def validate_participant_status_history_business_rules(
 
     if (
         history_data["old_participant_status"] == history_data["new_participant_status"]
-        and history_data["old_attendance_status"] == history_data["new_attendance_status"]
+        and history_data["old_attendance_status"]
+        == history_data["new_attendance_status"]
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

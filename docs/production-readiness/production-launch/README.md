@@ -13,11 +13,13 @@ page specifications, start with `docs/production-readiness/feature-pages/README.
    requirements, dependencies, verification, and completion condition. Read
    any exact upstream requirement the pass cites.
 2. Check `docs/production-readiness/production-launch/production-launch-pass-completion-log.md`
-   and any existing major-pass record under
-   `docs/production-readiness/pass-records/` (named `pass-NN.md`). The log
+   and any existing pass folder under
+   `docs/production-readiness/pass-records/` (named `pass-NN/`). The log
    records completed major passes; a blank date does not identify active work.
 3. Read `docs/production-readiness/production-launch/production-launch-pass-workflow.md`
    and begin at Stage 0. Read
+   `docs/production-readiness/production-launch/production-launch-stage-0-template.md`
+   in full when you start Stage 0, and
    `docs/production-readiness/production-launch/production-launch-pass-planning-template.md`
    in full when you reach Gate A. Read the supporting documents in Section 2
    that apply to this pass.
@@ -27,9 +29,10 @@ page specifications, start with `docs/production-readiness/feature-pages/README.
 1. Use the handoff in the new request to identify the major or minor pass,
    stage or gate, next action, and branch or pull request, if one exists.
 2. Read the complete selected major pass in the Production Launch Requirements,
-   the Production Launch Pass Workflow, and its existing major-pass record.
-   Read the plan, review results, verification evidence, and deferred
-   obligations that record identifies when they apply to the remaining work.
+   the Production Launch Pass Workflow, and the files in its pass folder: the
+   Stage 0 file, the plan for the current major or minor pass, and the pass
+   record's review results, verification evidence, and deferred obligations
+   when they apply to the remaining work.
 3. Check the handoff against the current repository and actual verification
    results before continuing at the identified stage. Read the supporting
    documents in Section 2 that apply. If the handoff is missing or inaccurate,
@@ -48,6 +51,8 @@ exists. Keep temporary progress out of this README.
   conditions.
 - `docs/production-readiness/production-launch/production-launch-pass-workflow.md` —
   assessment, planning, implementation, review, and finalization steps.
+- `docs/production-readiness/production-launch/production-launch-stage-0-template.md`
+  — structure for a major pass's Stage 0 assessment and split decision.
 - `docs/production-readiness/production-launch/production-launch-pass-planning-template.md`
   — structure for a major- or minor-pass engineering plan.
 - `docs/production-readiness/production-launch/production-launch-pass-completion-log.md`
@@ -69,8 +74,11 @@ and tests show what exists, not what is required. If these sources conflict,
 identify the exact passages and stop the affected work for a decision. Do not
 invent a rule or change a Production Launch Requirement without amending it.
 
-Major-pass records under `docs/production-readiness/pass-records/` hold plans,
-verification evidence, and deferred obligations. Pass 03 creates
+Each major pass has a folder under `docs/production-readiness/pass-records/`
+holding its Stage 0 file (`pass-NN-stage-0.md`), its plan files
+(`pass-NN-plan.md`, or `pass-NNa-plan.md` and so on when split), and its pass
+record (`pass-NN-record.md`) with review results, verification evidence, and
+deferred obligations. Pass 03 creates
 `docs/production-readiness/verification-map.md` for planned coverage; a
 planned check is not completed evidence. The completion log stays limited to
 completed passes and dates.

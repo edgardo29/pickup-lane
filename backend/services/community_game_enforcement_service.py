@@ -2,7 +2,7 @@
 
 import uuid
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -246,7 +246,7 @@ def apply_community_game_state_action(
             detail="Community game host is unavailable.",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     before = {field_name: getattr(game, field_name) for field_name in after}
     for field_name, field_value in after.items():
         setattr(game, field_name, field_value)

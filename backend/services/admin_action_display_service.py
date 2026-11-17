@@ -871,14 +871,20 @@ SENSITIVE_FINANCIAL_TARGET_LABELS = {
     TARGET_WAITLIST_ENTRY_ID: "Waitlist entry",
 }
 
-ACTION_DISPLAY_RULES.update({
-    action_type: AdminActionDisplayRule(
-        action_type,
-        SENSITIVE_FINANCIAL_READ_LABELS[action_type],
-        (PrimaryTargetRule(target_field, SENSITIVE_FINANCIAL_TARGET_LABELS[target_field]),),
-    )
-    for action_type, target_field in SENSITIVE_FINANCIAL_READ_TARGETS.items()
-})
+ACTION_DISPLAY_RULES.update(
+    {
+        action_type: AdminActionDisplayRule(
+            action_type,
+            SENSITIVE_FINANCIAL_READ_LABELS[action_type],
+            (
+                PrimaryTargetRule(
+                    target_field, SENSITIVE_FINANCIAL_TARGET_LABELS[target_field]
+                ),
+            ),
+        )
+        for action_type, target_field in SENSITIVE_FINANCIAL_READ_TARGETS.items()
+    }
+)
 
 
 def admin_action_label(action_type: str) -> str:
@@ -954,7 +960,7 @@ def decode_admin_action_log_cursor(
         raw_payload = base64.urlsafe_b64decode(normalized_cursor.encode("ascii"))
         payload = json.loads(raw_payload.decode("utf-8"))
         if not isinstance(payload, dict):
-            raise ValueError("cursor payload must be an object")
+            raise TypeError("cursor payload must be an object")
         if payload.get("cursor_version") != ADMIN_ACTION_LOG_CURSOR_VERSION:
             raise ValueError("unsupported cursor version")
         if payload.get("sort_version") != ADMIN_ACTION_LOG_SORT_VERSION:
@@ -1126,7 +1132,11 @@ def build_target_summary(
             destination_part = destination_by_field.get(target_rule.field_name)
             if destination_part is not None:
                 destination_path = f"/admin/money/{destination_part}/{target_id}"
-        elif target_rule.field_name in (TARGET_PAYMENT_ID, TARGET_REFUND_ID, TARGET_GAME_CREDIT_ID):
+        elif target_rule.field_name in (
+            TARGET_PAYMENT_ID,
+            TARGET_REFUND_ID,
+            TARGET_GAME_CREDIT_ID,
+        ):
             destination_part = {
                 TARGET_PAYMENT_ID: "payments",
                 TARGET_REFUND_ID: "refunds",
@@ -1331,7 +1341,9 @@ def list_admin_action_log(
             )
             for action in page_actions
         ],
-        action_type_options=([] if target_game_id is not None else admin_action_type_options()),
+        action_type_options=(
+            [] if target_game_id is not None else admin_action_type_options()
+        ),
         limit=query_limit,
         next_cursor=next_cursor,
         has_more=has_more,

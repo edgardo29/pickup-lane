@@ -33,7 +33,9 @@ class GameCreate(BaseModel):
     total_spots: int = Field(ge=MIN_TOTAL_SPOTS, le=MAX_TOTAL_SPOTS)
     price_per_player_cents: int = Field(ge=0, le=MAX_PRICE_PER_PLAYER_CENTS)
     allow_guests: bool = True
-    max_guests_per_booking: int = Field(default=2, ge=0, le=MAX_PLAYER_GUESTS_PER_BOOKING)
+    max_guests_per_booking: int = Field(
+        default=2, ge=0, le=MAX_PLAYER_GUESTS_PER_BOOKING
+    )
     waitlist_enabled: bool = True
     is_chat_enabled: bool = True
     custom_rules_text: str | None = None
@@ -229,7 +231,9 @@ class GameUpdate(BaseModel):
     game_player_group: str | None = None
     skill_level: str | None = None
     environment_type: str | None = None
-    total_spots: int | None = Field(default=None, ge=MIN_TOTAL_SPOTS, le=MAX_TOTAL_SPOTS)
+    total_spots: int | None = Field(
+        default=None, ge=MIN_TOTAL_SPOTS, le=MAX_TOTAL_SPOTS
+    )
     price_per_player_cents: int | None = Field(
         default=None, ge=0, le=MAX_PRICE_PER_PLAYER_CENTS
     )
@@ -261,7 +265,9 @@ class GameHostEdit(BaseModel):
     game_player_group: str | None = None
     skill_level: str | None = None
     environment_type: str | None = None
-    total_spots: int | None = Field(default=None, ge=MIN_TOTAL_SPOTS, le=MAX_TOTAL_SPOTS)
+    total_spots: int | None = Field(
+        default=None, ge=MIN_TOTAL_SPOTS, le=MAX_TOTAL_SPOTS
+    )
     price_per_player_cents: int | None = Field(
         default=None, ge=0, le=MAX_PRICE_PER_PLAYER_CENTS
     )

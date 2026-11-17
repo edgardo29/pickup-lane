@@ -11,7 +11,7 @@ import signal
 import time
 import uuid
 from collections.abc import Mapping
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from backend.observability.redaction import contains_sensitive_text
@@ -26,7 +26,7 @@ from backend.settings import get_settings
 
 
 def _canonical_timestamp(value: datetime) -> str:
-    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _safe_operator_string(value: str | None, *, maximum: int) -> str | None:

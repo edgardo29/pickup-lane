@@ -7,16 +7,16 @@ from backend.database import get_db
 from backend.models import User
 from backend.schemas import AdminUserRead, SelfUserRead, UserUpdate
 from backend.services.auth_service import get_current_app_user, require_active_admin
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+)
 from backend.services.user_service import (
     get_current_user_profile,
     get_user_profile_or_404,
     list_user_profiles,
     reject_generic_user_mutation,
     update_current_user_profile,
-)
-from backend.services.query_pagination import (
-    DEFAULT_ADMIN_COLLECTION_LIMIT,
-    MAX_ADMIN_COLLECTION_LIMIT,
 )
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -79,7 +79,9 @@ def get_user(
     return get_user_profile_or_404(db, user_id)
 
 
-@router.patch("/{user_id}", response_model=AdminUserRead, status_code=status.HTTP_200_OK)
+@router.patch(
+    "/{user_id}", response_model=AdminUserRead, status_code=status.HTTP_200_OK
+)
 def update_user(
     user_id: uuid.UUID,
     current_admin: User = Depends(require_active_admin),
@@ -88,7 +90,9 @@ def update_user(
     reject_generic_user_mutation()
 
 
-@router.delete("/{user_id}", response_model=AdminUserRead, status_code=status.HTTP_200_OK)
+@router.delete(
+    "/{user_id}", response_model=AdminUserRead, status_code=status.HTTP_200_OK
+)
 def delete_user(
     user_id: uuid.UUID,
     current_admin: User = Depends(require_active_admin),

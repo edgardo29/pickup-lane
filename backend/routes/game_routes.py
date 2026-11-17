@@ -5,30 +5,38 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
+from backend.models import (
+    Game,
+    GameParticipant,
+    User,
+)
+from backend.schemas import (
+    GameBookingGuestAddCreate,
+    GameCancelCreate,
+    GameCardListRead,
+    GameCreate,
+    GameDetailRead,
+    GameGuestAddCreate,
+    GameGuestAddRead,
+    GameGuestRemoveCreate,
+    GameGuestRemoveRead,
+    GameHostEdit,
+    GameJoinCreate,
+    GameJoinRead,
+    GameLeaveCreate,
+    GameLeaveRead,
+    GameParticipantCountRead,
+    GameRead,
+    GameUpdate,
+    PublicGameParticipantRead,
+)
 from backend.services.auth_service import (
     get_optional_current_app_user,
     require_active_admin,
     require_recent_active_admin,
     require_verified_user,
 )
-from backend.models import (
-    Game,
-    GameParticipant,
-    User,
-)
 from backend.services.community_game_edit_service import host_edit_game_workflow
-from backend.services.game_service import (
-    build_game_detail_read,
-    create_game_workflow,
-    delete_game_workflow,
-    get_game_or_404,
-    get_public_game_or_404,
-    list_browse_game_cards,
-    list_games as list_games_workflow,
-    list_public_game_participant_counts,
-    list_public_game_participants,
-    update_game_workflow,
-)
 from backend.services.game_cancellation_service import cancel_game_state_workflow
 from backend.services.game_roster_service import (
     add_booking_game_guests_workflow,
@@ -37,29 +45,22 @@ from backend.services.game_roster_service import (
     leave_game_roster_workflow,
     remove_game_guests_workflow,
 )
+from backend.services.game_service import (
+    build_game_detail_read,
+    create_game_workflow,
+    delete_game_workflow,
+    get_public_game_or_404,
+    list_browse_game_cards,
+    list_public_game_participant_counts,
+    list_public_game_participants,
+    update_game_workflow,
+)
+from backend.services.game_service import (
+    list_games as list_games_workflow,
+)
 from backend.services.query_pagination import (
     DEFAULT_COLLECTION_LIMIT,
     MAX_COLLECTION_LIMIT,
-)
-from backend.schemas import (
-    GameCancelCreate,
-    GameBookingGuestAddCreate,
-    GameCardListRead,
-    GameCreate,
-    GameGuestAddCreate,
-    GameGuestAddRead,
-    GameGuestRemoveCreate,
-    GameGuestRemoveRead,
-    GameHostEdit,
-    GameDetailRead,
-    GameParticipantCountRead,
-    GameJoinCreate,
-    GameJoinRead,
-    GameLeaveCreate,
-    GameLeaveRead,
-    PublicGameParticipantRead,
-    GameRead,
-    GameUpdate,
 )
 
 router = APIRouter(prefix="/games", tags=["games"])
@@ -254,7 +255,9 @@ def update_game(
 
 
 @router.patch(
-    "/{game_id}/host-edit", response_model=GameDetailRead, status_code=status.HTTP_200_OK
+    "/{game_id}/host-edit",
+    response_model=GameDetailRead,
+    status_code=status.HTTP_200_OK,
 )
 def host_edit_game(
     game_id: uuid.UUID,

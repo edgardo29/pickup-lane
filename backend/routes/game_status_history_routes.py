@@ -10,13 +10,13 @@ from backend.schemas import (
     GameStatusHistoryRead,
 )
 from backend.services.auth_service import require_active_admin
-from backend.services.status_history_service import (
-    get_game_status_history_record,
-    list_game_status_history_records,
-)
 from backend.services.query_pagination import (
     DEFAULT_ADMIN_COLLECTION_LIMIT,
     MAX_ADMIN_COLLECTION_LIMIT,
+)
+from backend.services.status_history_service import (
+    get_game_status_history_record,
+    list_game_status_history_records,
 )
 
 router = APIRouter(prefix="/game-status-history", tags=["game_status_history"])

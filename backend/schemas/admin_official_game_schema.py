@@ -71,7 +71,9 @@ class AdminOfficialGameUpdate(BaseModel):
     game_player_group: str | None = None
     skill_level: str | None = None
     environment_type: str | None = None
-    total_spots: int | None = Field(default=None, ge=MIN_TOTAL_SPOTS, le=MAX_TOTAL_SPOTS)
+    total_spots: int | None = Field(
+        default=None, ge=MIN_TOTAL_SPOTS, le=MAX_TOTAL_SPOTS
+    )
     price_per_player_cents: int | None = Field(
         default=None,
         ge=0,
@@ -276,9 +278,7 @@ class AdminOfficialGameCancellationBookingResultRead(BaseModel):
     booking_status: str
     booking_payment_status: str
     result_category: str
-    refunds: list[AdminOfficialGameCancellationRefundRead] = Field(
-        default_factory=list
-    )
+    refunds: list[AdminOfficialGameCancellationRefundRead] = Field(default_factory=list)
     cash_refunded_cents: int = 0
     credit_restored_cents: int = 0
     credit_released_cents: int = 0

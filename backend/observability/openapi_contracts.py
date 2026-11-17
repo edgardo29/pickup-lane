@@ -17,7 +17,6 @@ from backend.observability.http_contracts import (
     route_uses_database,
 )
 
-
 PUBLIC_ERROR_SCHEMA = "PublicErrorResponse"
 VALIDATION_ERROR_SCHEMA = "ValidationErrorResponse"
 CHAT_RATE_LIMIT_ROUTE_KEYS = frozenset(

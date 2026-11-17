@@ -9,7 +9,7 @@ from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Protocol
 
 from backend.observability.correlation import optional_correlation_context
@@ -22,6 +22,7 @@ _RUNTIME_FIELDS = frozenset(
     {
         "actor_kind",
         "attempt_count",
+        "caller_correlation_id",
         "http_method",
         "http_status_code",
         "labels",
@@ -136,7 +137,7 @@ class RuntimeEventEmitter:
             raise TypeError("Runtime environment and release must be text.")
         EventEnvelope(
             event_name="logging.bootstrap",
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
             severity="info",
             source_identity=self.source_identity,
             environment=self.environment,
@@ -171,7 +172,7 @@ class RuntimeEventEmitter:
                 raise ValueError("event fields contain unsupported keys")
             envelope = EventEnvelope(
                 event_name=event_name,
-                occurred_at=datetime.now(timezone.utc),
+                occurred_at=datetime.now(UTC),
                 severity=severity,
                 source_identity=self.source_identity,
                 environment=self.environment,
@@ -194,7 +195,7 @@ class RuntimeEventEmitter:
         try:
             envelope = EventEnvelope(
                 event_name="logging.event_rejected",
-                occurred_at=datetime.now(timezone.utc),
+                occurred_at=datetime.now(UTC),
                 severity="warning",
                 source_identity=self.source_identity,
                 environment=self.environment,

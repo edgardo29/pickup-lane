@@ -11,7 +11,5 @@ def account_eligible_condition():
 
 def user_is_account_eligible(user: User | None) -> bool:
     return (
-        user is not None
-        and user.account_status == "active"
-        and user.deleted_at is None
+        user is not None and user.account_status == "active" and user.deleted_at is None
     )

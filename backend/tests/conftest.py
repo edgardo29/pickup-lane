@@ -1,398 +1,319 @@
-import ipaddress
+"""Backend test setup.
+
+Every test run:
+
+1. Uses synthetic settings only. Real keys and the development database are
+   never loaded.
+2. Refuses to run unless the database is ``pickup_lane_test_db``.
+3. Rebuilds the test database schema from the Alembic migrations.
+4. Runs each test inside a database transaction that is rolled back afterward.
+
+Network access is blocked by pytest-socket (see ``pytest.ini``). Tests marked
+``live`` call real outside services and run only with ``pytest --live``.
+"""
+
 import os
-import socket
+import time
+import uuid
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from urllib.parse import urlsplit
+from types import SimpleNamespace
 
 import pytest
+import time_machine
+from dotenv import dotenv_values
 from fastapi.testclient import TestClient
-from sqlalchemy import text
 
-from backend.settings import reset_settings_cache
-from backend.tests.support.environment_safety import (
-    EnvironmentSafetyError,
-    assert_cleanup_table_inventory_complete,
-    install_test_network_guard,
-    validate_dedicated_test_database_url,
-    validate_local_test_connection_identity,
-)
+REPO_ROOT = Path(__file__).resolve().parents[2]
+TEST_DATABASE_NAME = "pickup_lane_test_db"
 
-# Keep this list in dependency order for cleanup: child tables first, then the
-# parent tables they reference.
-TEST_TABLES = (
-    "durable_job_events",
-    "durable_worker_heartbeats",
-    "durable_jobs",
-    "admin_review_case_events",
-    "admin_review_case_notes",
-    "admin_content_moderation_findings",
-    "admin_review_signals",
-    "admin_target_notices",
-    "sub_post_chat_reads",
-    "sub_post_chat_message_detections",
-    "sub_post_chat_messages",
-    "sub_post_chats",
-    "sub_post_status_history",
-    "sub_post_request_status_history",
-    "sub_post_requests",
-    "sub_post_positions",
-    "sub_posts",
-    "platform_notice_selected_reads",
-    "platform_notice_global_seen_states",
-    "platform_notice_recipients",
-    "admin_rejected_attempts",
-    "support_flags",
-    "admin_financial_outcomes",
-    "admin_actions",
-    "admin_review_cases",
-    "platform_notices",
-    "money_issue_events",
-    "money_issues",
-    "game_credit_usage",
-    "game_credits",
-    "game_chat_reads",
-    "game_chat_message_detections",
-    "notifications",
-    "chat_messages",
-    "game_chats",
-    "community_game_details",
-    "game_status_history",
-    "booking_status_history",
-    "participant_status_history",
-    "refund_events",
-    "refunds",
-    "host_publish_entitlements",
-    "host_publish_fees",
-    "community_publish_attempts",
-    "payment_compensations",
-    "payment_confirmation_attempts",
-    "payment_method_operations",
-    "payment_events",
-    "payments",
-    "waitlist_entries",
-    "game_participants",
-    "booking_policy_acceptances",
-    "bookings",
-    "user_stats",
-    "user_payment_methods",
-    "user_settings",
-    "venue_images",
-    "game_images",
-    "games",
-    "venue_approval_requests",
-    "venues",
-    "policy_acceptances",
-    "policy_documents",
-    "users",
-)
-CLEANUP_TABLE_EXCLUSIONS: dict[str, str] = {}
-TEST_DATABASE_ADVISORY_LOCK_ID = 917_263_514
-_NETWORK_GUARD_RESTORE = None
-ORDINARY_TEST_PROVIDER_ENVIRONMENT_NAMES = frozenset(
-    {
-        "BACKEND_PROVIDER_CONTRACT_MODE",
-        "FIREBASE_ADMIN_CREDENTIALS",
-        "FIREBASE_ADMIN_CREDENTIALS_JSON",
-        "R2_ACCESS_KEY_ID",
-        "R2_ACCOUNT_ID",
-        "R2_BUCKET_NAME",
-        "R2_ENDPOINT_URL",
-        "R2_SECRET_ACCESS_KEY",
-        "R2_TEST_ACCESS_KEY_ID",
-        "R2_TEST_ACCOUNT_ID",
-        "R2_TEST_BUCKET_NAME",
-        "R2_TEST_ENDPOINT_URL",
-        "R2_TEST_SECRET_ACCESS_KEY",
-    }
-)
-ALWAYS_REMOVED_TEST_ENVIRONMENT_NAMES = frozenset(
-    {
-        "AWS_ACCESS_KEY_ID",
-        "AWS_DEFAULT_PROFILE",
-        "AWS_PROFILE",
-        "AWS_SECRET_ACCESS_KEY",
-        "AWS_SESSION_TOKEN",
-    }
+# Settings every test run uses. All values are synthetic.
+SYNTHETIC_SETTINGS = {
+    "APP_ENV": "test",
+    "CURSOR_SIGNING_SECRET": "synthetic-cursor-signing-secret",
+    "ENABLE_STRIPE_PAYMENTS": "false",
+    "FIREBASE_APP_CHECK_MODE": "disabled",
+    "FIREBASE_PROJECT_ID": "pickup-lane-synthetic",
+    "INBOX_TOKEN_SECRET": "synthetic-inbox-token-secret",
+    "STRIPE_CURRENCY": "USD",
+    "STRIPE_PUBLISHABLE_KEY": "synthetic-stripe-publishable-key",
+    "STRIPE_SECRET_KEY": "synthetic-stripe-secret-key",
+    "STRIPE_WEBHOOK_SECRET": "synthetic-stripe-webhook-secret",
+}
+
+# Real credentials that must never reach a test, even if exported in the shell.
+REMOVED_SETTINGS = (
+    "MIGRATION_DATABASE_URL",
+    "FIREBASE_ADMIN_CREDENTIALS",
+    "FIREBASE_ADMIN_CREDENTIALS_JSON",
+    "R2_ACCOUNT_ID",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "R2_BUCKET_NAME",
+    "R2_ENDPOINT_URL",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+    "AWS_PROFILE",
+    "AWS_DEFAULT_PROFILE",
 )
 
 
-def pytest_ignore_collect(collection_path, config) -> bool:
-    del config
-    try:
-        relative = Path(str(collection_path)).resolve().relative_to(
-            (Path(__file__).resolve().parent / "provider_contract" / "r2").resolve()
-        )
-    except ValueError:
-        return False
-    del relative
-    return os.getenv("BACKEND_PROVIDER_CONTRACT_MODE") != "1"
-
-
-def _install_synthetic_backend_test_settings(*, provider_contract_mode: bool) -> None:
-    if os.environ.get("APP_ENV") not in {"ci", "test"}:
-        os.environ["APP_ENV"] = "test"
-    os.environ.update(
-        {
-            "ENABLE_STRIPE_PAYMENTS": "false",
-            "FIREBASE_APP_CHECK_MODE": "disabled",
-            "FIREBASE_PROJECT_ID": "pickup-lane-synthetic",
-            "INBOX_TOKEN_SECRET": "synthetic-inbox-test-token",
-            "STRIPE_CURRENCY": "USD",
-            "STRIPE_PUBLISHABLE_KEY": "synthetic-stripe-publishable-key",
-            "STRIPE_SECRET_KEY": "synthetic-stripe-secret-key",
-            "STRIPE_WEBHOOK_SECRET": "synthetic-stripe-webhook-secret",
-        }
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--live",
+        action="store_true",
+        help="also run tests marked live, which call real outside services",
     )
-    for name in ALWAYS_REMOVED_TEST_ENVIRONMENT_NAMES:
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    # Runs before any backend module is imported, so the app only ever sees
+    # these settings. TEST_DATABASE_URL comes from the environment (CI) or
+    # backend/.env (local); nothing else is read from backend/.env.
+    database_url = os.environ.get("TEST_DATABASE_URL") or dotenv_values(
+        REPO_ROOT / "backend" / ".env"
+    ).get("TEST_DATABASE_URL")
+    if not database_url:
+        raise pytest.UsageError(
+            "TEST_DATABASE_URL is not set. Add it to backend/.env or the environment."
+        )
+    os.environ.update(SYNTHETIC_SETTINGS, DATABASE_URL=database_url)
+    for name in REMOVED_SETTINGS:
         os.environ.pop(name, None)
-    if not provider_contract_mode:
-        for name in ORDINARY_TEST_PROVIDER_ENVIRONMENT_NAMES:
-            os.environ.pop(name, None)
 
 
-def _is_safe_test_database(database_url: str) -> bool:
-    try:
-        validate_dedicated_test_database_url(database_url)
-    except EnvironmentSafetyError:
-        return False
-    return True
-
-
-def _validate_backend_test_environment(database_url: str) -> None:
-    validate_dedicated_test_database_url(database_url)
-    assert_cleanup_table_inventory_complete(
-        TEST_TABLES,
-        excluded_tables=CLEANUP_TABLE_EXCLUSIONS,
-    )
-
-
-def _install_backend_network_guard(database_url: str) -> None:
-    global _NETWORK_GUARD_RESTORE
-
-    if _NETWORK_GUARD_RESTORE is not None:
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    if config.getoption("--live"):
         return
+    skip_live = pytest.mark.skip(reason="calls a real outside service; run with --live")
+    for item in items:
+        if item.get_closest_marker("live"):
+            item.add_marker(skip_live)
 
-    _NETWORK_GUARD_RESTORE = install_test_network_guard(database_url)
 
+@pytest.fixture(scope="session")
+def _test_database():
+    """Check the database, then rebuild its schema from the migrations."""
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.pool import NullPool
 
-def _r2_socket_address_allowed(
-    address,
-    *,
-    expected_hostname: str,
-    allowed_addresses: set[str],
-) -> bool:
-    if not isinstance(address, tuple) or len(address) < 2:
-        return False
-    host, port = address[0], address[1]
-    if port != 443 or not isinstance(host, str) or not allowed_addresses:
-        return False
-    if host.rstrip(".").lower() == expected_hostname:
-        return True
+    engine = create_engine(os.environ["DATABASE_URL"], poolclass=NullPool)
     try:
-        normalized_ip = str(ipaddress.ip_address(host.split("%", 1)[0]))
-    except ValueError:
-        return False
-    return normalized_ip in allowed_addresses
-
-
-def _install_r2_provider_contract_network_guard(endpoint_url: str) -> None:
-    global _NETWORK_GUARD_RESTORE
-
-    parsed = urlsplit(endpoint_url)
-    if parsed.scheme != "https" or parsed.hostname is None or parsed.port is not None:
-        raise pytest.UsageError("Invalid isolated R2 provider-contract endpoint.")
-    allowed_addresses = {
-        address[4][0]
-        for address in socket.getaddrinfo(parsed.hostname, 443, type=socket.SOCK_STREAM)
-    }
-    expected_hostname = parsed.hostname.rstrip(".").lower()
-    original_connect = socket.socket.connect
-    original_connect_ex = socket.socket.connect_ex
-    original_create_connection = socket.create_connection
-
-    def is_allowed(address) -> bool:
-        return _r2_socket_address_allowed(
-            address,
-            expected_hostname=expected_hostname,
-            allowed_addresses=allowed_addresses,
+        with engine.begin() as connection:
+            name = connection.scalar(text("SELECT current_database()"))
+            if name != TEST_DATABASE_NAME:
+                pytest.exit(
+                    f"Refusing to run tests against {name!r}; "
+                    f"expected {TEST_DATABASE_NAME!r}.",
+                    returncode=pytest.ExitCode.USAGE_ERROR,
+                )
+            connection.execute(text("DROP SCHEMA public CASCADE"))
+            connection.execute(text("CREATE SCHEMA public"))
+        alembic_config = Config()
+        alembic_config.set_main_option(
+            "script_location", str(REPO_ROOT / "backend" / "alembic")
         )
-
-    def guarded_connect(socket_instance, address):
-        if not is_allowed(address):
-            raise OSError("R2 contract network access is restricted.")
-        return original_connect(socket_instance, address)
-
-    def guarded_connect_ex(socket_instance, address):
-        if not is_allowed(address):
-            return 1
-        return original_connect_ex(socket_instance, address)
-
-    def guarded_create_connection(address, *args, **kwargs):
-        if not is_allowed(address):
-            raise OSError("R2 contract network access is restricted.")
-        return original_create_connection(address, *args, **kwargs)
-
-    socket.socket.connect = guarded_connect
-    socket.socket.connect_ex = guarded_connect_ex
-    socket.create_connection = guarded_create_connection
-
-    def restore_network_guard() -> None:
-        socket.socket.connect = original_connect
-        socket.socket.connect_ex = original_connect_ex
-        socket.create_connection = original_create_connection
-
-    _NETWORK_GUARD_RESTORE = restore_network_guard
-
-
-def _restore_backend_network_guard() -> None:
-    global _NETWORK_GUARD_RESTORE
-
-    if _NETWORK_GUARD_RESTORE is None:
-        return
-
-    restore_network_guard = _NETWORK_GUARD_RESTORE
-    _NETWORK_GUARD_RESTORE = None
-    restore_network_guard()
-
-
-def pytest_sessionstart(session) -> None:
-    del session
-    provider_contract_mode = os.getenv("BACKEND_PROVIDER_CONTRACT_MODE") == "1"
-    _install_synthetic_backend_test_settings(
-        provider_contract_mode=provider_contract_mode
-    )
-    reset_settings_cache()
-    database_url = os.getenv("DATABASE_URL", "")
-    try:
-        if provider_contract_mode:
-            _install_r2_provider_contract_network_guard(os.environ["R2_ENDPOINT_URL"])
-        else:
-            _install_backend_network_guard(database_url)
-        if database_url and not provider_contract_mode:
-            _validate_backend_test_environment(database_url)
-    except EnvironmentSafetyError as exc:
-        raise pytest.UsageError(str(exc)) from exc
-
-
-def pytest_sessionfinish(session, exitstatus) -> None:
-    del session, exitstatus
-    reset_settings_cache()
-    _restore_backend_network_guard()
-
-
-def _test_uses_database(request: pytest.FixtureRequest) -> bool:
-    if os.getenv("BACKEND_PROVIDER_CONTRACT_MODE") == "1":
-        return False
-    if request.node.get_closest_marker("no_db_cleanup"):
-        return False
-    return not request.node.get_closest_marker("migration_lifecycle")
-
-
-def _truncate_test_tables(connection, table_names: str) -> None:
-    # Cleanup is test-database maintenance, not an application query. Keep the
-    # session lock timeout as the bounded guard against leaked transactions,
-    # but do not let the application statement timeout cancel a large cascade
-    # and contaminate every test that follows.
-    connection.execute(text("SET LOCAL statement_timeout = 0"))
-    connection.execute(text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE"))
-
-
-def _clear_main_app_dependency_overrides() -> None:
-    import backend.main as main_module
-
-    main_module.app.dependency_overrides.clear()
-
-
-def _rebuild_shared_test_app():
-    # No-DB platform tests may import backend.main while settings are
-    # monkeypatched. Rebuild the shared app after those patches are restored so
-    # DB-backed tests do not inherit a stale module-level app.
-    reset_settings_cache()
-
-    import backend.main as main_module
-
-    main_module.app.dependency_overrides.clear()
-    main_module.app = main_module.create_app()
-    return main_module.app
+        alembic_config.attributes["connection"] = engine
+        command.upgrade(alembic_config, "head")
+    finally:
+        engine.dispose()
 
 
 @pytest.fixture
-def client() -> TestClient:
-    database_url = os.getenv("DATABASE_URL", "")
+def db(_test_database):
+    """A database session. Everything the test and the API write is rolled back."""
+    from backend.database import SessionLocal, engine
 
-    if not database_url:
-        pytest.skip("DATABASE_URL is required for backend integration tests.")
-
+    connection = engine.connect()
+    transaction = connection.begin()
+    original_session_settings = dict(SessionLocal.kw)
+    # Every session the app opens during the test (API requests, the audit
+    # log, background jobs) joins this transaction. Their commits become
+    # savepoints, and the whole transaction is rolled back at the end.
+    SessionLocal.configure(bind=connection, join_transaction_mode="create_savepoint")
+    session = SessionLocal()
     try:
-        validate_dedicated_test_database_url(database_url)
-    except EnvironmentSafetyError as exc:
-        raise pytest.UsageError(str(exc)) from exc
-
-    app = _rebuild_shared_test_app()
-
-    try:
-        with TestClient(app) as test_client:
-            yield test_client
+        yield session
     finally:
-        _clear_main_app_dependency_overrides()
+        session.close()
+        SessionLocal.kw.clear()
+        SessionLocal.kw.update(original_session_settings)
+        transaction.rollback()
+        connection.close()
 
 
-@pytest.fixture(autouse=True)
-def clean_database(
-    request: pytest.FixtureRequest,
-):
-    if not _test_uses_database(request):
-        yield
-        return
+@pytest.fixture
+def committed_db(request: pytest.FixtureRequest, _test_database):
+    """A database session whose writes are really committed.
 
-    database_url = os.getenv("DATABASE_URL", "")
-    if not database_url:
-        pytest.skip("DATABASE_URL is required for backend integration tests.")
+    Only for tests that need data shared across separate database connections,
+    such as two requests racing for the last spot. Slower than ``db``: every
+    table is emptied after the test.
+    """
+    if "db" in request.fixturenames:
+        raise pytest.UsageError("A test uses either db or committed_db, not both.")
 
+    from sqlalchemy import text
+
+    import backend.models  # noqa: F401 - registers every table on the metadata.
+    from backend.database import SessionLocal, engine
+    from backend.database_metadata import Base
+
+    session = SessionLocal()
     try:
-        target = validate_dedicated_test_database_url(database_url)
-    except EnvironmentSafetyError as exc:
-        raise pytest.UsageError(str(exc)) from exc
-
-    from backend.database import engine
-
-    table_names = ", ".join(TEST_TABLES)
-
-    with engine.connect() as connection:
-        validate_local_test_connection_identity(
-            connection, target.database_name, target.port
-        )
-        connection.execute(
-            text("SELECT pg_advisory_lock(:lock_id)"),
-            {"lock_id": TEST_DATABASE_ADVISORY_LOCK_ID},
-        )
-        connection.commit()
-
-        try:
-            _clear_main_app_dependency_overrides()
-
-            # Each test gets a clean database so tests can create the same
-            # logical records without leaking state into the next test. The
-            # advisory lock keeps shared-DB local runs from truncating while
-            # another test request is still reading or writing.
-            with connection.begin():
-                _truncate_test_tables(connection, table_names)
-
-            yield
-
-            _clear_main_app_dependency_overrides()
-
-            # Clean again after the test so a failed test does not leave rows
-            # behind for the next local run.
-            with connection.begin():
-                _truncate_test_tables(connection, table_names)
-        finally:
-            _clear_main_app_dependency_overrides()
-            if connection.in_transaction():
-                connection.rollback()
-
+        yield session
+    finally:
+        session.close()
+        tables = ", ".join(f'"{table.name}"' for table in Base.metadata.sorted_tables)
+        with engine.begin() as connection:
+            connection.execute(text("SET LOCAL statement_timeout = 0"))
             connection.execute(
-                text("SELECT pg_advisory_unlock(:lock_id)"),
-                {"lock_id": TEST_DATABASE_ADVISORY_LOCK_ID},
+                text(f"TRUNCATE TABLE {tables} RESTART IDENTITY CASCADE")
             )
-            connection.commit()
+
+
+@pytest.fixture(scope="session")
+def _running_app():
+    """Start the app once per run, as in production, and stop it at the end."""
+    from backend.main import app
+
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def client(request: pytest.FixtureRequest, _running_app: TestClient):
+    """Calls the API the way the browser does, inside the test's database setup."""
+    database = "committed_db" if "committed_db" in request.fixturenames else "db"
+    request.getfixturevalue(database)
+
+    _running_app.cookies.clear()
+    try:
+        yield _running_app
+    finally:
+        _running_app.app.dependency_overrides.clear()
+
+
+# A fixed moment used by time-sensitive tests: noon in America/Chicago (CDT).
+FIXED_NOW = datetime(2026, 6, 15, 17, 0, tzinfo=UTC)
+
+
+class Clock:
+    """Controls what the application sees as the current time during a test."""
+
+    def __init__(self, traveller) -> None:
+        self._traveller = traveller
+
+    @property
+    def now(self) -> datetime:
+        return datetime.now(UTC)
+
+    def move_to(self, moment: datetime) -> None:
+        self._traveller.move_to(moment, tick=False)
+
+    def advance(self, delta: timedelta) -> None:
+        self._traveller.shift(delta)
+
+
+@pytest.fixture
+def clock():
+    """Freeze time at FIXED_NOW for the whole test; move it only on purpose."""
+    with time_machine.travel(FIXED_NOW, tick=False) as traveller:
+        yield Clock(traveller)
+
+
+class FakeFirebase:
+    """Stands in for Firebase Authentication during a test.
+
+    Only Firebase's answers are faked: whether a token is valid, revoked, or
+    expired, and what the Firebase user record says. The app's own token
+    handling runs unchanged. This proves the app's decisions, not Firebase's
+    project settings, which need the real Firebase test project (P03.R13).
+    """
+
+    def __init__(self) -> None:
+        self._tokens: dict[str, dict | Exception] = {}
+        self._revoked: set[str] = set()
+        self.accounts: dict[str, SimpleNamespace] = {}
+        self.unavailable = False
+        self.token_checks = 0
+
+    def sign_in(self, user, *, email_verified: bool = True, **claims) -> dict[str, str]:
+        """Return request headers for a valid token belonging to ``user``."""
+        account = SimpleNamespace(
+            uid=user.auth_user_id,
+            email=user.email,
+            email_verified=email_verified,
+            disabled=False,
+        )
+        self.accounts[user.auth_user_id] = account
+        token = f"token-{uuid.uuid4().hex}"
+        self._tokens[token] = {
+            "uid": user.auth_user_id,
+            "email": user.email,
+            "email_verified": email_verified,
+            "auth_time": int(time.time()),
+            **claims,
+        }
+        return {"Authorization": f"Bearer {token}"}
+
+    def rejected_token(self, error: Exception) -> dict[str, str]:
+        """Return request headers for a token Firebase rejects with ``error``."""
+        token = f"token-{uuid.uuid4().hex}"
+        self._tokens[token] = error
+        return {"Authorization": f"Bearer {token}"}
+
+    def revoke(self, headers: dict[str, str]) -> None:
+        self._revoked.add(headers["Authorization"].removeprefix("Bearer "))
+
+    def verify_id_token(
+        self, token, app=None, check_revoked=False, clock_skew_seconds=0
+    ):
+        from firebase_admin import auth
+
+        self.token_checks += 1
+        if self.unavailable:
+            raise auth.CertificateFetchError("Firebase is unavailable.", None)
+        entry = self._tokens.get(token)
+        if entry is None:
+            raise auth.InvalidIdTokenError("Unknown token.")
+        if isinstance(entry, Exception):
+            raise entry
+        # Firebase reports revocation only when the caller asks it to check.
+        if check_revoked and token in self._revoked:
+            raise auth.RevokedIdTokenError("Token revoked.")
+        return dict(entry)
+
+    def get_user(self, uid, app=None):
+        from firebase_admin import auth
+
+        account = self.accounts.get(uid)
+        if account is None:
+            raise auth.UserNotFoundError("No such Firebase user.")
+        return account
+
+    def delete_user(self, uid, app=None):
+        from firebase_admin import auth
+
+        if self.accounts.pop(uid, None) is None:
+            raise auth.UserNotFoundError("No such Firebase user.")
+
+
+@pytest.fixture
+def firebase(monkeypatch: pytest.MonkeyPatch) -> FakeFirebase:
+    """Replace Firebase Authentication with a fake for this test."""
+    from firebase_admin import auth
+
+    import backend.firebase_admin_client as firebase_client
+
+    fake = FakeFirebase()
+    monkeypatch.setattr(firebase_client, "initialize_firebase_admin", object)
+    monkeypatch.setattr(auth, "verify_id_token", fake.verify_id_token)
+    monkeypatch.setattr(auth, "get_user", fake.get_user)
+    monkeypatch.setattr(auth, "delete_user", fake.delete_user)
+    return fake

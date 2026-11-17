@@ -1,54 +1,52 @@
 # [Feature pass ID] — [Page name] Feature Pass Plan
 
-Use this template during Gate B of `docs/production-readiness/feature-pages/feature-pass-workflow.md`
-for one complete page specification. The specification defines the required
-behavior and expected results. This document records what is already verified
-and what remains. Replace the bracketed instructions and sample rows in a
-completed assessment. Use the page's F01–F54 ID from
-`docs/production-readiness/feature-pages/page-inventory.md` in the title.
-
 **Page specification:** [Exact path under `docs/production-readiness/feature-pages/pages/`]  
-**Related specifications:** [Exact paths and sections that own shared rules,
-or `None`]  
-**Other pages to check after shared-code changes:** [Exact page specification
-paths identified during assessment, or `None`]  
-**Architecture and standards to check:** [Exact paths from the documents read
-for this pass, limited to the parts being changed]
+**Endpoints:** [Each backend endpoint the page calls, e.g. `GET /games/browse`. Use these to search the old tests in `backend/tests/`.]
 
-Save the completed assessment under `docs/production-readiness/feature-pages/feature-pass-plans/`. Name it from
-the page specification's path below `pages/`, replacing `/` with `-`. For
-example, `pages/public/need-a-sub-post-detail.md` becomes
-`feature-pass-plans/public-need-a-sub-post-detail.md`.
+[Use this template during Gate B of
+`docs/production-readiness/feature-pages/feature-pass-workflow.md`. Use the
+page's F01–F54 ID from `docs/production-readiness/feature-pages/page-inventory.md`
+in the title. Save it under `docs/production-readiness/feature-pages/feature-pass-plans/`,
+named from the specification's path below `pages/` with `/` replaced by `-`.
+For example, `pages/public/browse-games.md` becomes `public-browse-games.md`.
+Remove all bracketed instructions before saving.]
 
-## 1. Assessment against the page specification
+## 1. Page requirements
 
-[Use the selected page specification as the fixed list. Give one row to each
-distinct required behavior in its Sections 3 and 4, including rules it
-explicitly adopts from another specification. Identify each rule by exact
-section and a short, unique label; do not copy its full wording.]
+[One row for each required behavior in Sections 3 and 4 of the page
+specification. Use a short label; do not copy the full wording.]
 
-Use only these current-state labels: **Verified** (an observed check established
-the required result), **Present but unverified**, **Missing or incorrect**, and
-**Blocked**. A route, component, or test file merely existing is not proof of
-correct behavior. Keep findings brief and explain remaining work only where
-there is a gap.
+| Spec section | Requirement | In the code? | What's missing |
+|---|---|---|---|
+| [3.1] | [Short label] | [Yes, Partly, or No] | [What's missing, or "—"] |
 
-| Required behavior and exact specification reference | Current state | Finding or remaining work |
-|---|---|---|
-| [Section and short rule label] | [One label above] | [What was observed and what remains] |
+## 2. Test scenarios
 
-[List every applicable numbered scenario in Section 5 of the selected page
-specification. Do not repeat its scenario or expected result. Mark **Verified**
-only when a check actually produced that expected result; otherwise use
-**Not yet verified**, **Failed**, or **Blocked**. Briefly state what was found,
-including the existing check when one established the result.]
+[List every numbered scenario in Section 5 of the page specification in the
+table or tables that prove it. Backend tests prove what the API returns and
+saves. Frontend tests prove what the page shows and does. A scenario that needs
+both appears in both tables. Only tests in the current test suite count; the
+old tests in `backend/tests_archive/` and `frontend/tests_archive/` do not. Leave Result blank until the tests are
+run in Gate C.]
 
-| Section 5 scenario | Current state | Finding |
-|---|---|---|
-| [Number] | [Verified, Not yet verified, Failed, or Blocked] | [What the existing check established, or why the scenario remains unverified] |
+### 2.1 Backend tests
 
-[Identify any decision or dependency that blocks work, its exact source, and
-what is needed to proceed. A Section 5 scenario checks a requirement; it does
-not add a new product requirement. Gate C of
-`docs/production-readiness/feature-pages/feature-pass-workflow.md` governs implementation and
-verification.]
+| # | Scenario | Test exists? | Result |
+|---|---|---|---|
+| [1] | [Short label] | [Yes or No] | [Pass or Fail] |
+
+### 2.2 Frontend tests
+
+| # | Scenario | Test exists? | Result |
+|---|---|---|---|
+| [2] | [Short label] | [Yes or No] | [Pass or Fail] |
+
+## 3. Work to do
+
+1. [Each fix, missing piece, or test to add, in order.]
+
+[If a decision or dependency blocks any work, add a "Blocked" section naming
+what is blocked and what is needed. Otherwise leave it out.
+
+When Gate D approves the page, replace this list with "None. All work is
+done."]

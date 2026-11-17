@@ -86,7 +86,9 @@ class SupportFlag(Base):
         Index("ix_support_flags_target_venue_image_id", "target_venue_image_id"),
         Index("ix_support_flags_target_notification_id", "target_notification_id"),
         Index("ix_support_flags_source_admin_action_id", "source_admin_action_id"),
-        Index("ix_support_flags_resolution_admin_action_id", "resolution_admin_action_id"),
+        Index(
+            "ix_support_flags_resolution_admin_action_id", "resolution_admin_action_id"
+        ),
         Index(
             "uq_support_flags_flag_type_idempotency_key",
             "flag_type",

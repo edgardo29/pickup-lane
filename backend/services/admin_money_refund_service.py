@@ -1,7 +1,7 @@
 """Admin money refund retry and reconciliation workflows."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -186,9 +186,7 @@ def get_refund_for_retry_or_404(db: Session, refund_id: uuid.UUID) -> Refund:
         refunds = list(
             db.scalars(
                 select(Refund)
-                .where(
-                    Refund.host_publish_fee_id == reference.host_publish_fee_id
-                )
+                .where(Refund.host_publish_fee_id == reference.host_publish_fee_id)
                 .order_by(Refund.id.asc())
                 .with_for_update()
             ).all()
@@ -212,8 +210,7 @@ def get_refund_for_retry_or_404(db: Session, refund_id: uuid.UUID) -> Refund:
         db.scalars(
             select(AdminFinancialOutcome)
             .where(
-                AdminFinancialOutcome.host_publish_fee_id
-                == refund.host_publish_fee_id
+                AdminFinancialOutcome.host_publish_fee_id == refund.host_publish_fee_id
                 if refund.host_publish_fee_id is not None
                 else AdminFinancialOutcome.refund_id == refund.id
             )
@@ -269,16 +266,16 @@ def get_host_publish_fee_for_retry(
     ).first()
 
 
-def get_refund_processing_started_at(
-    db: Session, refund: Refund
-) -> datetime | None:
+def get_refund_processing_started_at(db: Session, refund: Refund) -> datetime | None:
     if refund.current_attempt_number > 0:
         return refund.provider_attempt_started_at
     first_processing_event_at = db.scalar(
         select(func.min(RefundEvent.occurred_at)).where(
             RefundEvent.refund_id == refund.id,
             RefundEvent.attempt_number == 0,
-            RefundEvent.event_type.in_({"provider_result_recorded", "reconciliation_checked"}),
+            RefundEvent.event_type.in_(
+                {"provider_result_recorded", "reconciliation_checked"}
+            ),
             RefundEvent.provider == "stripe",
             RefundEvent.provider_refund_id.is_not(None),
             RefundEvent.provider_status == "processing",
@@ -372,7 +369,9 @@ def require_current_provider_attempt_identity(
             .order_by(RefundEvent.occurred_at.asc(), RefundEvent.id.asc())
         ).all()
     )
-    if not any(refund_event_has_authoritative_provider_observation(row) for row in rows):
+    if not any(
+        refund_event_has_authoritative_provider_observation(row) for row in rows
+    ):
         return
     attempt = reduce_refund_attempt_evidence(rows).get(refund.current_attempt_number)
     if (
@@ -416,7 +415,6 @@ def validate_refund_retry(
     )
 
 
-
 def sum_succeeded_refunds_for_payment(
     db: Session,
     *,
@@ -430,9 +428,7 @@ def sum_succeeded_refunds_for_payment(
     statement = select(Refund).where(Refund.payment_id == payment_id)
     if excluding_refund_id is not None:
         statement = statement.where(Refund.id != excluding_refund_id)
-    return authoritative_succeeded_amount_for_refunds(
-        db, db.scalars(statement).all()
-    )
+    return authoritative_succeeded_amount_for_refunds(db, db.scalars(statement).all())
 
 
 def sync_refunded_payment_state(
@@ -639,9 +635,7 @@ def record_admin_refund_retry_provider_result_checkpoint(
         )
 
     checkpoint_key = f"admin_refund_retry_provider_result:{admin_action_id}"
-    existing_event = get_refund_event_by_idempotency_key(
-        db, refund_id, checkpoint_key
-    )
+    existing_event = get_refund_event_by_idempotency_key(db, refund_id, checkpoint_key)
     if existing_event is not None:
         return existing_event.id
 
@@ -728,7 +722,7 @@ def retry_admin_money_refund(
     prior_attempt = refund.current_attempt_number
     prior_amount = refund.amount_cents
     prior_key = refund.stripe_request_key
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     compensation = db.scalars(
         select(PaymentCompensation)
         .where(PaymentCompensation.refund_id == refund.id)
@@ -803,9 +797,7 @@ def retry_admin_money_refund(
         reason=reason,
         idempotency_key=idempotency_key,
         metadata={
-            **refund_audit_metadata(
-                refund, source="admin_money_refund_retry"
-            ),
+            **refund_audit_metadata(refund, source="admin_money_refund_retry"),
             "prior_attempt_number": prior_attempt,
             "new_attempt_number": prior_attempt + 1,
         },
@@ -836,7 +828,9 @@ def retry_admin_money_refund(
         ):
             issue.amount_cents = remaining_cents
             issue.latest_reason_code = "refund_retry_remainder_recounted"
-            issue.latest_summary = "Refund retry amount was reduced to the verified remainder."
+            issue.latest_summary = (
+                "Refund retry amount was reduced to the verified remainder."
+            )
             issue.updated_at = now
             append_money_issue_event(
                 db,
@@ -909,6 +903,7 @@ def retry_admin_money_refund(
     return get_admin_money_refund_detail(
         db, refund_id=refund_id, viewer_user=admin_user
     )
+
 
 def stage_refund_issue_for_terminal_or_unknown(
     db: Session,
@@ -1047,9 +1042,7 @@ def reconcile_admin_money_refund(
     if (
         refund.refund_status == "succeeded"
         and refund_expected_attempts_are_terminal(db, refund)
-        and refund_attempt_statuses(db, refund.id).get(
-            refund.current_attempt_number
-        )
+        and refund_attempt_statuses(db, refund.id).get(refund.current_attempt_number)
         == "succeeded"
     ):
         raise HTTPException(
@@ -1105,7 +1098,7 @@ def reconcile_admin_money_refund(
         for row in historical_attempts.values()
     )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if provider_refund_id is None and not historical_attempts:
         try:
             admin_action = record_reconciliation_action()
@@ -1276,7 +1269,7 @@ def reconcile_admin_money_refund(
             status_code=status.HTTP_409_CONFLICT,
             detail="Refund attempt history changed while Stripe reconciliation was in progress.",
         )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     try:
         admin_action = record_reconciliation_action()
         db.flush()
@@ -1368,8 +1361,7 @@ def reconcile_admin_money_refund(
         and reconciled_attempts_are_safe_terminal
         and refund_expected_attempts_are_terminal(db, refund)
         and not (
-            refund.provider_attempt_started_at is not None
-            and provider_refund is None
+            refund.provider_attempt_started_at is not None and provider_refund is None
         )
     ):
         ledger = get_refund_payment_ledger(
@@ -1392,8 +1384,7 @@ def reconcile_admin_money_refund(
         .limit(1)
     ).first()
     if (
-        authoritative_succeeded_amount_for_refunds(db, (refund,))
-        >= refund.amount_cents
+        authoritative_succeeded_amount_for_refunds(db, (refund,)) >= refund.amount_cents
         and refund_expected_attempts_are_terminal(db, refund)
         and refund_event is not None
     ):

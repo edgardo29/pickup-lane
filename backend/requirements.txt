@@ -15,7 +15,13 @@ psycopg==3.3.3
 Pillow==12.3.0
 pydantic==2.13.3
 pydantic_core==2.46.3
+pre-commit==4.7.0
 pytest==9.0.3
+pytest-alembic==0.13.2
+pytest-cov==7.1.0
+pytest-socket==0.8.1
+ruff==0.16.5
+time-machine==3.6.0
 mutmut==2.4.5
 whatthepatch==1.0.7
 python-dotenv==1.2.2

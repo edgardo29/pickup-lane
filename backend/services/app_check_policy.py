@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, Pattern
+from re import Pattern
 
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from starlette.routing import Mount
+
+from backend.services.auth_service import get_verified_firebase_identity
 
 
 class AppCheckPolicyError(RuntimeError):
@@ -28,6 +31,7 @@ class AppCheckRoutePolicyEntry:
     path_regex: Pattern[str]
     disposition: AppCheckRouteDisposition
     route_family: str
+    requires_authentication: bool
 
     def matches_path(self, path: str) -> bool:
         return bool(self.path_regex.match(path))
@@ -41,6 +45,7 @@ class AppCheckRouteMatch:
     route_template: str
     disposition: AppCheckRouteDisposition
     route_family: str
+    requires_authentication: bool
 
     @property
     def applies(self) -> bool:
@@ -62,6 +67,7 @@ class AppCheckRoutePolicy:
                     route_template=entry.route_template,
                     disposition=entry.disposition,
                     route_family=entry.route_family,
+                    requires_authentication=entry.requires_authentication,
                 )
 
         return None
@@ -174,6 +180,15 @@ def _classify_api_route(route: APIRoute) -> AppCheckRoutePolicyEntry:
         path_regex=route.path_regex,
         disposition=disposition,
         route_family=route_family,
+        requires_authentication=_has_authentication_dependency(route.dependant),
+    )
+
+
+def _has_authentication_dependency(dependant) -> bool:
+    return any(
+        dependency.call is get_verified_firebase_identity
+        or _has_authentication_dependency(dependency)
+        for dependency in dependant.dependencies
     )
 
 

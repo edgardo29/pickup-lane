@@ -51,10 +51,7 @@ class AdminFinancialOutcome(Base):
             name="ck_admin_financial_outcomes_target_required",
         ),
         CheckConstraint(
-            (
-                "applied_status NOT IN ('applied', 'failed') "
-                "OR applied_at IS NOT NULL"
-            ),
+            ("applied_status NOT IN ('applied', 'failed') OR applied_at IS NOT NULL"),
             name="ck_admin_financial_outcomes_terminal_requires_applied_at",
         ),
         CheckConstraint(

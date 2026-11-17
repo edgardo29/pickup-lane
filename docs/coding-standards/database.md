@@ -33,9 +33,9 @@ alembic upgrade head
 ```
 
 The application reads `DATABASE_URL` from `backend/.env` unless a command
-explicitly overrides it. Alembic instead connects through
-`MIGRATION_DATABASE_URL` when it is set; for development database work, set
-both variables explicitly as shown in Local Database Rebuilds.
+explicitly overrides it. Alembic connects through `MIGRATION_DATABASE_URL`
+when it is set and falls back to `DATABASE_URL` otherwise. Leave
+`MIGRATION_DATABASE_URL` out of the local `backend/.env`; see Test Databases.
 
 `backend/.env` is a real local environment file and must remain ignored and
 uncommitted. Tracked example files such as `backend/.env.example` are allowed
@@ -46,17 +46,12 @@ The current local databases are:
 
 * `pickup_lane_db_dev`: local development, browser testing, manual QA, and
   development rebuilds
-* `pickup_lane_test_db`: backend and API tests that should behave like CI
-* `pickup_lane_migration_test_db`: migration lifecycle and schema-history tests
-  that intentionally reset Alembic-created schema state through
-  `MIGRATION_DATABASE_URL`
+* `pickup_lane_test_db`: backend and API tests
+* `pickup_lane_migration_test_db`: the migration checks, which walk every
+  migration up and down
 
-Do not use the test database for manual QA. Do not run destructive test setup
-against the development database.
-
-Do not run migration lifecycle tests against `pickup_lane_test_db`. Those tests
-own only `pickup_lane_migration_test_db` and must validate the exact database
-identity before any destructive reset.
+Do not use the test databases for manual QA. Pytest rebuilds them on every
+run.
 
 ## Pre-Production Migration Policy
 
@@ -364,7 +359,7 @@ database once contained them.
 Schema migrations should define schema, not serve as general seed scripts.
 
 Use `backend/scripts/` only for local mock/demo-data setup. Non-demo commands
-such as the test runner, admin bootstrap, and durable worker live outside it.
+such as the admin bootstrap and durable worker live outside it.
 
 Immutable reference rows that are required for database behavior may be
 inserted by a focused migration when an applicable requirement source calls for
@@ -405,12 +400,8 @@ MIGRATION_DATABASE_URL='[LOCAL_DEV_DATABASE_URL]' \
 backend/.venv/bin/alembic upgrade head
 ```
 
-Set both variables to the development database URL. Alembic connects through
-`MIGRATION_DATABASE_URL` whenever it is set, and values loaded from
-`backend/.env` do not override variables set in the command environment.
-Supplying only `DATABASE_URL`, or unsetting `MIGRATION_DATABASE_URL` in the
-shell, can leave Alembic using a `MIGRATION_DATABASE_URL` from `backend/.env`,
-such as `pickup_lane_migration_test_db`.
+Set both variables to the development database URL so the command never
+depends on what `backend/.env` contains.
 
 Optional browse-demo data seed:
 
@@ -418,86 +409,32 @@ Optional browse-demo data seed:
 DATABASE_URL='[LOCAL_DEV_DATABASE_URL]' backend/.venv/bin/python -m backend.scripts.seed_demo_browse
 ```
 
-### Test Database
+### Test Databases
 
-Pickup Lane keeps two test databases with separate responsibilities:
+* `pickup_lane_test_db`: the backend and API tests. Set its URL as
+  `TEST_DATABASE_URL` in `backend/.env`; CI sets it in the environment.
+* `pickup_lane_migration_test_db`: the migration checks. Same server and
+  credentials; the tests use the test URL with only the database name
+  changed.
 
-* `pickup_lane_test_db` is the ordinary backend/API test database.
-* `pickup_lane_migration_test_db` is the destructive migration-lifecycle test
-  database.
-
-They must use the same local PostgreSQL server and port, addressed as
-`localhost`, `127.0.0.1`, or `::1`, and they must remain distinct. This
-loopback-only boundary lets the repository lock coordinate every supported
-local and CI operation. Connection query parameters are rejected so they cannot
-override the validated endpoint. The runner also rejects PostgreSQL environment
-overrides that can change the endpoint or schema, requires `localhost` to
-resolve only to loopback addresses, and checks the connected client socket's
-loopback peer, port, and actual database name before in-database destructive
-SQL or test-controlled Alembic migrations. Neither database may be replaced
-with `pickup_lane_db_dev`, a production database, a similarly named backup, or
-any other target.
-
-Configure their SQLAlchemy URLs as `TEST_DATABASE_URL` and
-`MIGRATION_DATABASE_URL` in ignored `backend/.env` or the command environment.
-The repository runner loads those values, validates the exact database names,
-forces the pytest subprocess into the test/CI environment, and supplies the
-ordinary URL as `DATABASE_URL`. It does not use the ambient development
-`DATABASE_URL` as a test target.
-
-`MIGRATION_DATABASE_URL` has an environment-specific meaning, and Alembic
-resolves its connection through it:
-
-* In test and CI runs, it must name `pickup_lane_migration_test_db`, and the
-  identity checks and destructive-operation restrictions in this section
-  apply. It never authorizes destructive migration testing against a
-  development, staging, or production database.
-* In staging and production, the backend requires it as that environment's
-  migration connection: a role with the permissions needed for authorized
-  schema changes, separate from the more restricted roles used by ordinary
-  application processes (`system-architecture.md` Section 5.4).
-* In local development it is optional. Alembic uses it when it is set and
-  falls back to `DATABASE_URL` only when it is unset.
-
-Use the repository runner from the repository root:
+Create both once:
 
 ```bash
-backend/.venv/bin/python -m backend.test_runner rebuild ordinary
-backend/.venv/bin/python -m backend.test_runner rebuild migration
-backend/.venv/bin/python -m backend.test_runner rebuild all
+createdb -h localhost -U postgres -O pickup-lane-user pickup_lane_test_db
+createdb -h localhost -U postgres -O pickup-lane-user pickup_lane_migration_test_db
 ```
 
-The ordinary rebuild creates a clean database, fingerprints `alembic.ini`,
-Alembic `env.py`, and every current revision file, applies Alembic through the
-current single head, verifies that those sources did not change during the
-rebuild, and records the fingerprint. Every runner-managed pytest execution
-checks both the recorded head and this fingerprint before pytest starts. If a
-canonical migration's contents change after it was applied, the revision ID
-alone is not accepted as current: rebuild the ordinary database.
+After that, pytest manages them. Every run checks that it is connected to
+`pickup_lane_test_db`, then drops and rebuilds its schema from the migrations,
+so no manual rebuild is needed after a migration change. Each migration check
+empties `pickup_lane_migration_test_db` before it starts. How tests use them is
+in `backend-testing.md`.
 
-The migration rebuild creates a genuinely empty migration-lifecycle database.
-The migration tests own its schema setup and reset behavior; do not apply the
-ordinary head to it before those tests.
-
-Rebuild the affected test database after any of these changes:
-
-* editing, adding, deleting, or reordering an Alembic revision;
-* changing Alembic environment or migration configuration;
-* changing the configured test-database server or credentials;
-* encountering a missing, partial, or otherwise uncertain test schema.
-
-The runner normalizes supported loopback host aliases and uses per-database file
-locks in the shared `/tmp` directory, independent of each process's `TMPDIR`,
-across rebuilds and pytest runs. Two supported operations on the same machine
-cannot mutate or use either database concurrently. Every unrestricted pytest
-selection locks both databases because even a broadly selected migration run
-can discover ordinary tests. Destructive commands derive and validate the
-exact allow-listed target from the connection URL again immediately before drop
-and create. Output is credential-redacted.
-
-Do not bypass the runner with direct Alembic, `dropdb`, `createdb`, or pytest
-commands for normal test work. Development-database rebuilds remain a separate,
-explicitly authorized operation and are never performed by this runner.
+`MIGRATION_DATABASE_URL` is not used by tests. Staging and production require
+it as that environment's migration connection: a role with the permissions
+needed for authorized schema changes, separate from the more restricted roles
+used by ordinary application processes (`system-architecture.md` Section 5.4).
+Local development leaves it unset.
 
 ## Verification
 
@@ -518,6 +455,9 @@ Before considering a database change complete, confirm as applicable:
 * required indexes and constraints exist in both the model and migration
 * relevant seed scripts still run
 * focused backend checks pass when tests are requested
+
+`backend/.venv/bin/pytest backend/tests/migrations` checks the single head, the
+clean upgrade, the model match, and downgrades in one run.
 
 Do not treat success against an already-migrated local database as verification that
 an edited historical migration works. Verify with a clean rebuild.

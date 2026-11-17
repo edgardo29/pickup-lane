@@ -5,7 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'playwright-report', 'test-results']),
+  globalIgnores(['dist', 'playwright-report', 'test-results', 'tests_archive']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [
@@ -22,6 +22,16 @@ export default defineConfig([
     files: ['playwright.config.js'],
     languageOptions: {
       globals: globals.node,
+    },
+  },
+  {
+    // Tests run under Node (Vitest and Playwright), not Vite.
+    files: ['tests/**/*.{js,jsx}', 'e2e/**/*.js'],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+    },
+    rules: {
+      'react-refresh/only-export-components': 'off',
     },
   },
 ])

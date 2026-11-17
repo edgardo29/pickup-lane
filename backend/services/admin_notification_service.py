@@ -3,7 +3,7 @@ import binascii
 import hashlib
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -157,7 +157,7 @@ def decode_notification_cursor(
         raw_payload = base64.urlsafe_b64decode(normalized_cursor.encode("ascii"))
         payload = json.loads(raw_payload.decode("utf-8"))
         if not isinstance(payload, dict):
-            raise ValueError("cursor payload must be an object")
+            raise TypeError("cursor payload must be an object")
         if payload.get("cursor_version") != NOTIFICATION_LOOKUP_CURSOR_VERSION:
             raise ValueError("unsupported cursor version")
         if payload.get("sort_version") != NOTIFICATION_LOOKUP_SORT_VERSION:
@@ -348,7 +348,7 @@ def serialize_admin_notification_action_state(
 ) -> AdminNotificationActionStateRead:
     action_key = notification_data["action_key"]
     action = notification_data["action"]
-    evaluated_at = datetime.now(timezone.utc) if include_detail else None
+    evaluated_at = datetime.now(UTC) if include_detail else None
     target_record = action_target_record_for_notification(
         db,
         notification,

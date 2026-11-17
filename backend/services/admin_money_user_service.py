@@ -6,23 +6,30 @@ from fastapi import HTTPException, status
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
-from backend.models import GameCredit, MoneyIssue, Payment, Refund, User, UserPaymentMethod
+from backend.models import (
+    GameCredit,
+    MoneyIssue,
+    Payment,
+    Refund,
+    User,
+    UserPaymentMethod,
+)
 from backend.schemas.admin_money_user_schema import (
     AdminMoneyCreditPreviewSectionRead,
     AdminMoneyIssuePreviewSectionRead,
     AdminMoneyPaymentPreviewSectionRead,
-    AdminMoneyUserCreditPreviewRead,
     AdminMoneyRefundPreviewSectionRead,
     AdminMoneySavedCardsSectionRead,
+    AdminMoneyUserCreditPreviewRead,
     AdminMoneyUserDetailRead,
     AdminMoneyUserIssuePreviewRead,
     AdminMoneyUserPaymentPreviewRead,
     AdminMoneyUserRefundPreviewRead,
-    AdminMoneyUserSummaryRead,
     AdminMoneyUserSnapshotRead,
+    AdminMoneyUserSummaryRead,
 )
-from backend.services.admin_money_issue_query_service import list_admin_money_issues
 from backend.services.admin_money_display import compact_id
+from backend.services.admin_money_issue_query_service import list_admin_money_issues
 from backend.services.admin_money_payment_service import sum_payment_refunded_cents
 
 USER_MONEY_PREVIEW_LIMIT = 5
@@ -129,11 +136,11 @@ def sum_available_credit(db: Session, user_id: uuid.UUID) -> int:
 
 
 def build_user_summary(user: User) -> AdminMoneyUserSummaryRead:
-    name = " ".join(
-        part
-        for part in (user.first_name, user.last_name)
-        if part
-    ) or user.email or "User"
+    name = (
+        " ".join(part for part in (user.first_name, user.last_name) if part)
+        or user.email
+        or "User"
+    )
     return AdminMoneyUserSummaryRead(
         id=user.id,
         name=name,

@@ -9,6 +9,7 @@ from sqlalchemy import (
     Index,
     String,
     Text,
+    literal_column,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -74,10 +75,16 @@ class PlatformNotice(Base):
             text("id DESC"),
         ),
         Index("ix_platform_notices_cancelled_at", "cancelled_at"),
+        # The grouping matches how PostgreSQL stores the expression, and the
+        # operator class sits in postgresql_ops, so Alembic can compare this
+        # index with the database.
         Index(
             "ix_platform_notices_history_search_trgm",
-            text("(coalesce(title, '') || ' ' || coalesce(message, '')) gin_trgm_ops"),
+            literal_column(
+                "((coalesce(title, '') || ' ') || coalesce(message, ''))"
+            ).label("history_search"),
             postgresql_using="gin",
+            postgresql_ops={"history_search": "gin_trgm_ops"},
         ),
     )
 

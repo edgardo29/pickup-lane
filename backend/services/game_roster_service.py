@@ -1,7 +1,7 @@
 """Roster workflow orchestration for game join, leave, and guest changes."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -247,14 +247,17 @@ def join_game_roster_workflow(
             detail="Hosts are already part of their own game.",
         )
 
-    if db_game.publish_status != "published" or db_game.game_status not in JOINABLE_GAME_STATUSES:
+    if (
+        db_game.publish_status != "published"
+        or db_game.game_status not in JOINABLE_GAME_STATUSES
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This game is not open for joining.",
         )
     require_community_game_joining_open(db_game)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     require_roster_window_open(db_game, now, "Joining is closed for this game.")
 
     existing_participant = get_existing_active_participant(
@@ -401,8 +404,10 @@ def leave_game_roster_workflow(
             detail="You are not currently joined to this game.",
         )
 
-    now = datetime.now(timezone.utc)
-    require_roster_window_open(db_game, now, "Attendance changes are closed for this game.")
+    now = datetime.now(UTC)
+    require_roster_window_open(
+        db_game, now, "Attendance changes are closed for this game."
+    )
     refundable = is_refund_eligible(db_game.starts_at, now)
     app_payment_required = game_requires_app_player_payment(db_game)
     app_refund_eligible = refundable and app_payment_required
@@ -415,7 +420,9 @@ def leave_game_roster_workflow(
         waitlist_entry.updated_at = now
         db.add(waitlist_entry)
 
-    booking = db.get(Booking, participant.booking_id) if participant.booking_id else None
+    booking = (
+        db.get(Booking, participant.booking_id) if participant.booking_id else None
+    )
     participants_to_cancel = [participant]
     if booking is not None:
         participants_to_cancel = list(
@@ -504,15 +511,20 @@ def add_booking_game_guests_workflow(
 ) -> GameGuestAddRead:
     db_game = get_locked_game_or_404(db, game_id)
 
-    if db_game.publish_status != "published" or db_game.game_status not in JOINABLE_GAME_STATUSES:
+    if (
+        db_game.publish_status != "published"
+        or db_game.game_status not in JOINABLE_GAME_STATUSES
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only published active games can add guests.",
         )
     require_community_game_joining_open(db_game)
 
-    now = datetime.now(timezone.utc)
-    require_roster_window_open(db_game, now, "Attendance changes are closed for this game.")
+    now = datetime.now(UTC)
+    require_roster_window_open(
+        db_game, now, "Attendance changes are closed for this game."
+    )
 
     if guest_request.guest_count <= 0:
         raise HTTPException(
@@ -538,7 +550,10 @@ def add_booking_game_guests_workflow(
         )
 
     booking = db.get(Booking, participant.booking_id)
-    if booking is None or booking.booking_status not in {"confirmed", "partially_cancelled"}:
+    if booking is None or booking.booking_status not in {
+        "confirmed",
+        "partially_cancelled",
+    }:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Your booking is not eligible for guest changes.",
@@ -580,7 +595,9 @@ def add_booking_game_guests_workflow(
     booking_id = booking.id
     booking.participant_count += len(added_guests)
     booking.subtotal_cents = db_game.price_per_player_cents * booking.participant_count
-    booking.total_cents = booking.subtotal_cents + booking.platform_fee_cents - booking.discount_cents
+    booking.total_cents = (
+        booking.subtotal_cents + booking.platform_fee_cents - booking.discount_cents
+    )
     booking.booking_status = "confirmed"
     booking.reservation_status = "confirmed"
     booking.expires_at = None
@@ -647,8 +664,10 @@ def add_host_game_guests_workflow(
         )
     require_community_game_joining_open(db_game)
 
-    now = datetime.now(timezone.utc)
-    require_roster_window_open(db_game, now, "Attendance changes are closed for this game.")
+    now = datetime.now(UTC)
+    require_roster_window_open(
+        db_game, now, "Attendance changes are closed for this game."
+    )
 
     if guest_request.guest_count < 0:
         raise HTTPException(
@@ -663,16 +682,19 @@ def add_host_game_guests_workflow(
             detail="guest_count must be greater than 0.",
         )
 
-    current_host_guest_count = db.scalar(
-        select(func.count())
-        .select_from(GameParticipant)
-        .where(
-            GameParticipant.game_id == db_game.id,
-            GameParticipant.guest_of_user_id == acting_user.id,
-            GameParticipant.participant_type == "guest",
-            GameParticipant.participant_status.in_(ACTIVE_JOIN_STATUSES),
+    current_host_guest_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(GameParticipant)
+            .where(
+                GameParticipant.game_id == db_game.id,
+                GameParticipant.guest_of_user_id == acting_user.id,
+                GameParticipant.participant_type == "guest",
+                GameParticipant.participant_status.in_(ACTIVE_JOIN_STATUSES),
+            )
         )
-    ) or 0
+        or 0
+    )
     max_guests = db_game.host_guest_max if db_game.allow_guests else 0
     if current_host_guest_count + guest_count > max_guests:
         raise HTTPException(
@@ -731,7 +753,10 @@ def remove_game_guests_workflow(
             detail="remove_count must be greater than 0.",
         )
 
-    if db_game.publish_status != "published" or db_game.game_status not in JOINABLE_GAME_STATUSES:
+    if (
+        db_game.publish_status != "published"
+        or db_game.game_status not in JOINABLE_GAME_STATUSES
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only published active games can update guests.",
@@ -745,12 +770,16 @@ def remove_game_guests_workflow(
             detail="You are not currently joined to this game.",
         )
 
-    now = datetime.now(timezone.utc)
-    require_roster_window_open(db_game, now, "Attendance changes are closed for this game.")
+    now = datetime.now(UTC)
+    require_roster_window_open(
+        db_game, now, "Attendance changes are closed for this game."
+    )
     refundable = is_refund_eligible(db_game.starts_at, now)
     app_payment_required = game_requires_app_player_payment(db_game)
     was_waitlisted = participant.participant_status == "waitlisted"
-    booking = db.get(Booking, participant.booking_id) if participant.booking_id else None
+    booking = (
+        db.get(Booking, participant.booking_id) if participant.booking_id else None
+    )
 
     if booking is not None:
         booking_participants = get_booking_participants(
@@ -792,7 +821,9 @@ def remove_game_guests_workflow(
         guest.cancelled_at = now
         guest.updated_at = now
         guest.cancellation_type = "on_time" if refundable or was_waitlisted else "late"
-        guest.participant_status = "cancelled" if refundable or was_waitlisted else "late_cancelled"
+        guest.participant_status = (
+            "cancelled" if refundable or was_waitlisted else "late_cancelled"
+        )
         guest.attendance_status = "not_applicable"
         db.add(guest)
 
@@ -803,8 +834,12 @@ def remove_game_guests_workflow(
             if booking_participant.id not in removed_guest_ids
         ]
         booking.participant_count = len(remaining_participants)
-        booking.subtotal_cents = db_game.price_per_player_cents * len(remaining_participants)
-        booking.total_cents = booking.subtotal_cents + booking.platform_fee_cents - booking.discount_cents
+        booking.subtotal_cents = db_game.price_per_player_cents * len(
+            remaining_participants
+        )
+        booking.total_cents = (
+            booking.subtotal_cents + booking.platform_fee_cents - booking.discount_cents
+        )
         if was_waitlisted:
             booking.booking_status = "waitlisted"
             booking.reservation_status = "not_required"
@@ -821,7 +856,9 @@ def remove_game_guests_workflow(
         booking.updated_at = now
         db.add(booking)
 
-        waitlist_entry = get_existing_active_waitlist_entry(db, db_game.id, acting_user.id)
+        waitlist_entry = get_existing_active_waitlist_entry(
+            db, db_game.id, acting_user.id
+        )
         if waitlist_entry is not None:
             waitlist_entry.party_size = booking.participant_count
             waitlist_entry.updated_at = now

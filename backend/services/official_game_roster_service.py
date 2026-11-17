@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -180,7 +180,7 @@ def require_official_host_change_allowed(game: Game, *, action: str) -> None:
 
     require_game_not_started(
         game,
-        datetime.now(timezone.utc),
+        datetime.now(UTC),
         f"Host can only be {action} before the game starts.",
     )
 
@@ -301,7 +301,7 @@ def search_official_game_add_player_users(
             )
         ).all()
     )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     roster_count = count_roster_players(db, game.id, now=now)
 
     return AdminOfficialGameUserSearchRead(
@@ -332,7 +332,7 @@ def add_official_game_player(
             detail="Players can only be added to published active official games.",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     require_game_not_started(
         game,
         now,
@@ -600,7 +600,7 @@ def remove_official_game_player(
             detail="Remove host designation before removing this player.",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     booking = (
         db.scalar(
             select(Booking)
@@ -782,7 +782,7 @@ def assign_official_game_host(
             user_id=old_host_user_id,
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     game.host_user_id = host.id
     game.updated_at = now
     db.add(game)
@@ -866,7 +866,7 @@ def remove_official_game_host(
         user_id=old_host_user_id,
     )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     game.host_user_id = None
     game.updated_at = now
     db.add(game)

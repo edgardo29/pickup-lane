@@ -9,7 +9,9 @@ from backend.scripts.demo_data.users import ADMIN_KEY, PLAYER_KEYS
 MESSAGES_PER_CHAT = 5
 
 
-def seed_game_chats(db: Session, users: dict[str, User], games: dict[str, Game]) -> dict[str, GameChat]:
+def seed_game_chats(
+    db: Session, users: dict[str, User], games: dict[str, Game]
+) -> dict[str, GameChat]:
     seeded_chats: dict[str, GameChat] = {}
     timestamp = now_utc()
 
@@ -46,7 +48,9 @@ def seed_game_chats(db: Session, users: dict[str, User], games: dict[str, Game])
                     "message_body": message["message_body"],
                     "is_pinned": message["is_pinned"],
                     "pinned_at": message_timestamp if message["is_pinned"] else None,
-                    "pinned_by_user_id": message["sender_user_id"] if message["is_pinned"] else None,
+                    "pinned_by_user_id": message["sender_user_id"]
+                    if message["is_pinned"]
+                    else None,
                     "visibility_status": "visible",
                     "review_status": "clear",
                     "created_at": message_timestamp,
@@ -64,7 +68,9 @@ def seed_game_chats(db: Session, users: dict[str, User], games: dict[str, Game])
     return seeded_chats
 
 
-def build_demo_messages(game: Game, game_index: int, users: dict[str, User]) -> list[dict]:
+def build_demo_messages(
+    game: Game, game_index: int, users: dict[str, User]
+) -> list[dict]:
     from datetime import timedelta
 
     player_one = users[PLAYER_KEYS[game_index % len(PLAYER_KEYS)]]
@@ -91,7 +97,8 @@ def build_demo_messages(game: Game, game_index: int, users: dict[str, User]) -> 
             "age": timedelta(minutes=23),
             "sender_user_id": admin.id,
             "message_type": "pinned_update",
-            "message_body": game.parking_notes or "Give yourself a few extra minutes for parking.",
+            "message_body": game.parking_notes
+            or "Give yourself a few extra minutes for parking.",
             "is_pinned": True,
         },
         {

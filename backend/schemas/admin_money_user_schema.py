@@ -19,6 +19,7 @@ class AdminMoneyPaymentMethodRead(BaseModel):
     updated_at: datetime
     detached_at: datetime | None
 
+
 class AdminMoneyUserSummaryRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -28,14 +29,17 @@ class AdminMoneyUserSummaryRead(BaseModel):
     account_status: str
     created_at: datetime
 
+
 class AdminMoneyUserSnapshotRead(BaseModel):
     available_credit_cents: int
     currency: str = "USD"
     open_money_issue_count: int
 
+
 class AdminMoneyPreviewSectionRead(BaseModel):
     items: list[Any] = Field(default_factory=list)
     has_more: bool = False
+
 
 class AdminMoneySavedCardsSectionRead(BaseModel):
     items: list[AdminMoneyPaymentMethodRead] = Field(default_factory=list)
@@ -43,6 +47,7 @@ class AdminMoneySavedCardsSectionRead(BaseModel):
     has_more: bool = False
     includes_inactive: bool = False
     next_cursor: str | None = None
+
 
 class AdminMoneyUserIssuePreviewRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -64,6 +69,7 @@ class AdminMoneyUserIssuePreviewRead(BaseModel):
     first_detected_at: datetime
     last_detected_at: datetime
 
+
 class AdminMoneyUserPaymentPreviewRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -78,6 +84,7 @@ class AdminMoneyUserPaymentPreviewRead(BaseModel):
     is_fully_refunded: bool = False
     context_label: str | None = None
     created_at: datetime
+
 
 class AdminMoneyUserRefundPreviewRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -95,6 +102,7 @@ class AdminMoneyUserRefundPreviewRead(BaseModel):
     context_label: str | None = None
     created_at: datetime
 
+
 class AdminMoneyUserCreditPreviewRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -110,22 +118,27 @@ class AdminMoneyUserCreditPreviewRead(BaseModel):
     context_label: str | None = None
     created_at: datetime
 
+
 class AdminMoneyPaymentPreviewSectionRead(BaseModel):
     items: list[AdminMoneyUserPaymentPreviewRead] = Field(default_factory=list)
     has_more: bool = False
+
 
 class AdminMoneyRefundPreviewSectionRead(BaseModel):
     items: list[AdminMoneyUserRefundPreviewRead] = Field(default_factory=list)
     has_more: bool = False
 
+
 class AdminMoneyCreditPreviewSectionRead(BaseModel):
     items: list[AdminMoneyUserCreditPreviewRead] = Field(default_factory=list)
     has_more: bool = False
+
 
 class AdminMoneyIssuePreviewSectionRead(BaseModel):
     items: list[AdminMoneyUserIssuePreviewRead] = Field(default_factory=list)
     count: int
     has_more: bool = False
+
 
 class AdminMoneyUserDetailRead(BaseModel):
     user: AdminMoneyUserSummaryRead

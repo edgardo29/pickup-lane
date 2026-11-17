@@ -1,7 +1,7 @@
 """Application logic for trusted Stripe webhook events."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -157,7 +157,7 @@ def record_and_process_stripe_webhook_event(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Stripe event is missing created time.",
         )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     event_envelope = normalize_stripe_event_envelope(event_payload)
     payment_event = PaymentEvent(
         id=uuid.uuid4(),
@@ -166,7 +166,7 @@ def record_and_process_stripe_webhook_event(
         provider_event_id=provider_event_id,
         event_type=event_type,
         event_envelope=event_envelope,
-        provider_created_at=datetime.fromtimestamp(provider_created, tz=timezone.utc),
+        provider_created_at=datetime.fromtimestamp(provider_created, tz=UTC),
         processing_status=(
             "pending" if event_type in HANDLED_STRIPE_EVENTS else "ignored"
         ),
@@ -229,14 +229,11 @@ def normalize_stripe_event_envelope(event_payload: dict[str, Any]) -> dict[str, 
         key: value for key, value in metadata.items() if key in safe_metadata_keys
     }
     attempt_number = safe_metadata.get("attempt_number")
-    if (
-        attempt_number is not None
-        and (
-            not attempt_number.isascii()
-            or not attempt_number.isdigit()
-            or attempt_number.startswith("0")
-            or int(attempt_number) < 1
-        )
+    if attempt_number is not None and (
+        not attempt_number.isascii()
+        or not attempt_number.isdigit()
+        or attempt_number.startswith("0")
+        or int(attempt_number) < 1
     ):
         safe_metadata.pop("attempt_number", None)
     if metadata.get("source") in {"waitlist_auto_promote", "official_game_cancel"}:
@@ -347,10 +344,7 @@ def process_stored_stripe_event(db: Session, event_id: uuid.UUID) -> str:
         payment = (
             db.scalars(
                 select(Payment)
-                .where(
-                    Payment.provider_payment_intent_id
-                    == provider_payment_intent_id
-                )
+                .where(Payment.provider_payment_intent_id == provider_payment_intent_id)
                 .limit(1)
             ).first()
             if isinstance(provider_payment_intent_id, str)
@@ -498,9 +492,7 @@ def get_stripe_object_metadata(stripe_object: dict[str, Any]) -> dict[str, str]:
         return {}
 
     return {
-        str(key): str(value)
-        for key, value in metadata.items()
-        if value is not None
+        str(key): str(value) for key, value in metadata.items() if value is not None
     }
 
 
@@ -540,7 +532,9 @@ def get_payment_failure_fields(
 
     cancellation_reason = payment_intent.get("cancellation_reason")
     if not isinstance(error_code, str) or not error_code:
-        error_code = cancellation_reason if isinstance(cancellation_reason, str) else None
+        error_code = (
+            cancellation_reason if isinstance(cancellation_reason, str) else None
+        )
 
     failure_code = error_code or fallback_code
     failure_message = error_message or fallback_message
@@ -598,9 +592,7 @@ def get_locked_game(db: Session, game_id: uuid.UUID | None) -> Game | None:
     lock_state = get_payment_domain_lock_state(db)
     if game_id in lock_state["game_ids"]:
         return db.get(Game, game_id)
-    return db.scalars(
-        select(Game).where(Game.id == game_id).with_for_update()
-    ).first()
+    return db.scalars(select(Game).where(Game.id == game_id).with_for_update()).first()
 
 
 def expire_unresolved_checkout_hold_if_stale(
@@ -708,9 +700,7 @@ def lock_booking_payment_domain_by_booking_id(
 
     lock_state["game_ids"].add(game_id)
     lock_state["booking_ids"].add(booking.id)
-    lock_state["waitlist_ids"].update(
-        entry.id for entry in locked_waitlists
-    )
+    lock_state["waitlist_ids"].update(entry.id for entry in locked_waitlists)
     lock_state["participant_booking_ids"].add(booking.id)
     lock_state["domain_booking_ids"].add(booking.id)
     return booking
@@ -752,13 +742,9 @@ def get_locked_refund_by_provider_id(
     ).first()
 
 
-def get_refund_by_provider_id(
-    db: Session, provider_refund_id: str
-) -> Refund | None:
+def get_refund_by_provider_id(db: Session, provider_refund_id: str) -> Refund | None:
     return db.scalars(
-        select(Refund)
-        .where(Refund.provider_refund_id == provider_refund_id)
-        .limit(1)
+        select(Refund).where(Refund.provider_refund_id == provider_refund_id).limit(1)
     ).first()
 
 
@@ -786,9 +772,7 @@ def lock_refund_financial_context(
     )
 
     try:
-        payment, refund = lock_shared_refund_financial_context(
-            db, refund_reference.id
-        )
+        payment, refund = lock_shared_refund_financial_context(db, refund_reference.id)
     except LookupError:
         return None, None, None
     host_publish_fee = (
@@ -816,9 +800,7 @@ def get_locked_booking_participants(
     lock_state = get_payment_domain_lock_state(db)
     if booking_id not in lock_state["participant_booking_ids"]:
         statement = statement.with_for_update()
-    return list(
-        db.scalars(statement).all()
-    )
+    return list(db.scalars(statement).all())
 
 
 def mark_event_processed(event: PaymentEvent, now: datetime) -> None:
@@ -1311,7 +1293,9 @@ def expire_late_successful_payment(
     pending_participants = get_locked_booking_participants(
         db, booking.id, {"pending_payment"}
     )
-    participant_failure_status = "removed" if waitlist_entry is not None else "cancelled"
+    participant_failure_status = (
+        "removed" if waitlist_entry is not None else "cancelled"
+    )
     for participant in pending_participants:
         old_participant_status = participant.participant_status
         old_attendance_status = participant.attendance_status
@@ -1592,7 +1576,9 @@ def apply_payment_intent_succeeded(
 
     game = get_locked_game(db, booking.game_id)
     if game is None or not game_requires_app_player_payment(game):
-        mark_event_failed(event, "Internal game is not eligible for Stripe booking payment.")
+        mark_event_failed(
+            event, "Internal game is not eligible for Stripe booking payment."
+        )
         return
 
     if booking.booking_status in {"confirmed", "partially_cancelled"}:
@@ -1955,7 +1941,9 @@ def apply_payment_intent_pending_observation(
         fallback_code="payment_requires_update",
         fallback_message="Payment requires another step.",
     )
-    payment.failure_code = failure_code if observed_status == "requires_payment_method" else None
+    payment.failure_code = (
+        failure_code if observed_status == "requires_payment_method" else None
+    )
     payment.failure_message = None
     payment.updated_at = now
     db.add(payment)
@@ -2036,7 +2024,9 @@ def fail_pending_booking_hold(
     pending_participants = get_locked_booking_participants(
         db, booking.id, {"pending_payment"}
     )
-    participant_failure_status = "removed" if waitlist_entry is not None else "cancelled"
+    participant_failure_status = (
+        "removed" if waitlist_entry is not None else "cancelled"
+    )
     for participant in pending_participants:
         old_participant_status = participant.participant_status
         old_attendance_status = participant.attendance_status
@@ -2103,7 +2093,9 @@ def apply_payment_intent_failed_or_canceled(
         return
 
     if payment.payment_status in COLLECTED_PAYMENT_STATUSES:
-        mark_event_ignored(event, "Failure or cancel event arrived after payment success.")
+        mark_event_ignored(
+            event, "Failure or cancel event arrived after payment success."
+        )
         return
 
     waitlist_entry = get_waitlist_auto_promote_entry(db, payment)
@@ -2434,7 +2426,11 @@ def process_refund_event(
             if attempt_text is not None and attempt_text.isdigit()
             else None
         )
-        if refund is None and internal_refund_id is not None and attempt_number is not None:
+        if (
+            refund is None
+            and internal_refund_id is not None
+            and attempt_number is not None
+        ):
             candidate_reference = db.get(Refund, internal_refund_id)
             candidate = None
             if candidate_reference is not None:
@@ -2616,7 +2612,9 @@ def process_payment_intent_event(
             return
 
     if payment.payment_type != "booking":
-        mark_event_ignored(event, "PaymentIntent event matched unsupported payment type.")
+        mark_event_ignored(
+            event, "PaymentIntent event matched unsupported payment type."
+        )
         return
 
     if event_type == "payment_intent.succeeded":

@@ -4,12 +4,12 @@ import base64
 import hashlib
 import json
 import uuid
+from collections.abc import Mapping
 from datetime import datetime
-from typing import Any, Mapping
+from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import and_, or_
-
 
 _CONTEXT_MISMATCH_DETAIL = "cursor does not match the current query."
 
@@ -186,7 +186,9 @@ def next_cursor_for_rows(
         return None
 
     last_row = rows[limit - 1]
-    return encode_money_cursor(getattr(last_row, sort_attr), last_row.id, context=context)
+    return encode_money_cursor(
+        getattr(last_row, sort_attr), last_row.id, context=context
+    )
 
 
 def next_cursor_for_rows_with_value(

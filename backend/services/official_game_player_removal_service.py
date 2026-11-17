@@ -1,7 +1,7 @@
 import hashlib
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select
@@ -808,7 +808,7 @@ def record_credit_return_failure(
     if not credit_usages:
         return
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for credit_usage in credit_usages:
         game_credit = db.get(GameCredit, credit_usage.game_credit_id)
         stage_credit_money_issue(
@@ -906,7 +906,7 @@ def execute_official_game_player_removal(
             .with_for_update()
         ).all()
     )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     old_booking_status = booking.booking_status
     old_payment_status = booking.payment_status
     old_reservation_status = booking.reservation_status

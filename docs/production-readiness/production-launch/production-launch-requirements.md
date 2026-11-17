@@ -39,7 +39,7 @@ This document defines the production-readiness work that Pickup Lane must comple
 
 Each parent pass owns one production outcome. A pass may later be divided into child plans, but a child plan cannot remove, weaken, or silently defer a requirement in this document.
 
-The [Production Launch Pass Completion Log](production-launch-pass-completion-log.md) records completed parent passes and their completion dates. Discoverable parent records under `docs/production-readiness/pass-records/` (named `p01.md` through `p21.md`) record requirement-level verification, child ownership, deferred obligations, and links to detailed evidence. Pass 03 establishes the planned requirement-to-verification mapping in `docs/production-readiness/verification-map.md`; later passes keep it consistent with their actual evidence. Individual pass plans record the engineering approach for work that remains. This document contains neither progress history nor implementation commentary.
+The [Production Launch Pass Completion Log](production-launch-pass-completion-log.md) records completed parent passes and their completion dates. Each parent pass has a folder under `docs/production-readiness/pass-records/` (`pass-01/` through `pass-21/`). Its Stage 0 file (`pass-NN-stage-0.md`) records the scope and child split, and its parent pass record (`pass-NN-record.md`) records requirement-level verification, child ownership, deferred obligations, and links to detailed evidence. Pass 03 establishes the planned requirement-to-verification mapping in `docs/production-readiness/verification-map.md`; later passes keep it consistent with their actual evidence. Individual pass plans record the engineering approach for work that remains. This document contains neither progress history nor implementation commentary.
 
 <a id="section-2"></a>
 
@@ -150,7 +150,7 @@ Before implementation planning or implementation begins for a requirement govern
 - the deployment or operating procedure; or
 - the environment, method, or expected result used to verify the requirement.
 
-If missing information could change any item in that list, the affected requirement must remain unstarted. Its parent pass record under `docs/production-readiness/pass-records/` must identify:
+If missing information could change any item in that list, the affected requirement must remain unstarted. Its parent pass's Stage 0 file or pass record under `docs/production-readiness/pass-records/` must identify:
 
 1. the exact requirement that cannot start;
 2. the exact production-service, capacity, workload, business, privacy, or legal information or decision that is missing; and

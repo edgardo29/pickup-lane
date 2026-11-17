@@ -1,7 +1,7 @@
 """Booking reads and protected create/update workflows."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -119,7 +119,9 @@ def get_booking_for_user_or_404(
 
     db_booking = db.get(Booking, booking_id)
     if db_booking is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found."
+        )
     return db_booking
 
 
@@ -211,7 +213,9 @@ def update_booking_workflow(
         get_active_game_or_404(db, booking_update.game_id)
 
     if booking_update.buyer_user_id is not None:
-        get_active_user_or_404(db, booking_update.buyer_user_id, "Buyer user not found.")
+        get_active_user_or_404(
+            db, booking_update.buyer_user_id, "Buyer user not found."
+        )
 
     if booking_update.cancelled_by_user_id is not None:
         get_active_user_or_404(
@@ -271,7 +275,7 @@ def update_booking_workflow(
     for field_name, field_value in update_data.items():
         setattr(db_booking, field_name, field_value)
 
-    db_booking.updated_at = datetime.now(timezone.utc)
+    db_booking.updated_at = datetime.now(UTC)
 
     try:
         db.add(db_booking)

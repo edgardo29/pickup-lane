@@ -12,8 +12,9 @@ for a later pass; complete actual dependencies before dependent work.
 This document governs feature assessment, implementation, verification,
 completed-work review, corrections, Git safety, publication authorization,
 and manual merge. The finalized page specifications supply the requirements
-and verification scenarios. A page-specific assessment records the current
-assessment without changing those requirements.
+and verification scenarios. Each page's Feature Pass Plan tracks what is in
+the code, which tests exist, and what work remains, without changing those
+requirements.
 
 Product features do not use production-readiness pass numbers, pass records,
 the verification map, or
@@ -22,6 +23,13 @@ When feature work also satisfies a production-readiness requirement, that
 program still owns its separate evidence and completion decision.
 
 ## 1. Gate A — Read the documents
+
+**Branch.** Before the pass's first file change, create its branch from
+`develop`, named `feature/<page ID>-<page name>`: the page ID from
+`page-inventory.md`, then the page specification's file name, for example
+`feature/F15-browse-games`. Use one branch and one pull request per page pass.
+The pull request targets `develop`; merging `develop` into `main` is a separate
+step outside the pass.
 
 Start with `docs/production-readiness/feature-pages/page-inventory.md` to find the
 ID and Product & Functional Specification for the page being implemented.
@@ -76,30 +84,51 @@ status, and data integrity rules, inspect backend or database enforcement
 where appropriate; hiding a frontend control is insufficient.
 
 Preserve behavior that already meets the specification. Identify work that
-must be completed first and other pages affected by shared changes. Use one
+must be completed first. When shared code will change, add an item to
+Feature Pass Plan, Section 3 (Work to do) to re-check each other page that
+uses it. Use one
 implementation when pages share the same rule, and keep different rules
 separate. Complete prerequisites before dependent work.
 
 Read `docs/production-readiness/feature-pages/feature-pass-planning-template.md` in full, then save the
-selected page's assessment under `docs/production-readiness/feature-pages/feature-pass-plans/` using the naming
+selected page's Feature Pass Plan under `docs/production-readiness/feature-pages/feature-pass-plans/` using the naming
 rule in that template. Use the exact rules in the page specification's
-Sections 3 and 4 and its numbered Section 5 scenarios as the fixed assessment
-list. The document identifies what is verified, what still needs checking,
-what is missing or incorrect, and what is blocked without copying the
-specification.
-Before implementation, have the complete assessment reviewed against the
+Sections 3 and 4 and its numbered Section 5 scenarios as the fixed
+list. The Feature Pass Plan records, without copying the specification, Section 1 (Page
+requirements: whether each requirement is in the code), Section 2 (Test
+scenarios: whether each scenario has a backend test in Section 2.1 and a
+frontend test in Section 2.2, as it requires), and Section 3 (Work to do).
+Before implementation, have the complete Feature Pass Plan reviewed against the
 specification and the inspected code and tests. Correct any defects, then
-review the corrected assessment again.
+review the corrected Feature Pass Plan again.
 
 ## 3. Gate C — Implement and verify the page
 
-Use the reviewed assessment to identify the remaining work. Resolve technical
+**Working through the Feature Pass Plan**
+
+1. Work through Feature Pass Plan, Section 3 (Work to do) in order, one item at a time.
+2. After finishing each item in Feature Pass Plan, Section 3 (Work to do),
+   update the Feature Pass Plan:
+   - Feature Pass Plan, Section 1 (Page requirements): set "In the code?" to **Yes** for each
+     requirement fixed.
+   - Feature Pass Plan, Section 2.1 (Backend tests) and Section 2.2 (Frontend
+     tests): set "Test exists?" to **Yes** for each test added, and fill in
+     "Result" with **Pass** or **Fail** for each test run.
+
+   Always update before stopping or switching chats.
+3. If new work is found, add it to Feature Pass Plan, Section 3 (Work to do)
+   before starting it.
+4. Gate C is done when every "In the code?" is **Yes**, and every "Test
+   exists?" is **Yes** and every "Result" is **Pass** in both Section 2.1 and
+   Section 2.2.
+
+Use the reviewed Feature Pass Plan to identify the remaining work. Resolve technical
 choices using the specifications, current repository, approved architecture,
 and applicable engineering standards. Use
 `docs/production-readiness/database-architecture.md` for
 approved database changes that have not yet been implemented. Stop affected
 work if an unresolved product decision could change the required behavior.
-If implementation reveals an incorrect assessment, update the document and
+If implementation reveals an incorrect Feature Pass Plan, update it and
 review the correction before relying on it.
 
 Follow Sections 3 and 4 of the selected page specification and the shared
@@ -122,11 +151,11 @@ correctly.
 
 ## 4. Gate D — Review corrections and completed work
 
-Conduct an independent, read-only review of the completed page pass against every item in its approved assessment, Sections 3–5 of the selected page specification, and the architecture and standards identified in the assessment.
+Conduct an independent, read-only review of the completed page pass against every item in its approved Feature Pass Plan, Sections 3–5 of the selected page specification, and the applicable coding standards.
 
 Examine the relevant implementation, directly affected dependencies, and verification results from Gate C. Confirm that the required behavior, failure handling, prohibited effects, and applicable test scenarios have been addressed.
 
-**Limit the review to the selected page pass and its directly affected dependencies.** If shared code changed, review only the other pages identified as affected in the assessment. If a directly affected page or dependency was omitted, report the specific connection and return to Gate C to update the assessment. Review the updated assessment before continuing. Do not investigate unrelated features, files, or repository issues.
+**Limit the review to the selected page pass and its directly affected dependencies.** If shared code changed, review only the other pages named in the re-check items in Feature Pass Plan, Section 3 (Work to do). If a directly affected page or dependency was omitted, report the specific connection and return to Gate C to update the Feature Pass Plan. Review the updated Feature Pass Plan before continuing. Do not investigate unrelated features, files, or repository issues.
 
 ### Security and sensitive-information review
 
@@ -160,9 +189,11 @@ Gate D is strictly read-only. Return identified problems to Gate C for correctio
 
 After corrections, rerun the verification affected by those corrections. Repeat Gitleaks and manual sensitive-information inspection, then conduct a new independent Gate D review of the complete corrected work.
 
-If corrections change the assessment or its affected-page list, update and review the assessment before proceeding.
+If corrections change the Feature Pass Plan or its re-check items in Section 3 (Work to do), update and review the Feature Pass Plan before proceeding.
 
 Approve Gate D only when the selected page pass satisfies its assessed requirements, the required verification has passed, and no blocking findings remain.
+
+When Gate D approves the page, replace the items in Feature Pass Plan, Section 3 (Work to do) with "None. All work is done."
 
 ## 5. Gate E — Finalize, publish when authorized, and record page completion
 
@@ -178,7 +209,7 @@ If publication is authorized:
 
 3. **Run Gitleaks against the exact staged contents and manually inspect them for secrets and prohibited sensitive information.** Also inspect any publication artifacts outside the staged files. Confirm that every item matches what was approved in Gate D, that inspection coverage is complete, and that no unresolved sensitive-information findings remain.
 
-4. Confirm that every verification scenario required by the approved page-pass plan has a recorded passing result reviewed in Gate D. Do not introduce additional tests or expand the verification scope during Gate E. If required verification is missing, failed, or invalidated by subsequent changes, stop and return to Gate C.
+4. Confirm that every "Result" in Feature Pass Plan, Section 2.1 (Backend tests) and Section 2.2 (Frontend tests) is **Pass** and was reviewed in Gate D. Do not introduce additional tests or expand the verification scope during Gate E. If required verification is missing, failed, or invalidated by subsequent changes, stop and return to Gate C.
 
 5. Commit and push normally only after the preceding requirements pass. Create or update the pull request. Confirm its base branch, source branch, title, and description. Inspect the complete pull-request diff and verify that it contains only the exact changes approved in Gate D.
 

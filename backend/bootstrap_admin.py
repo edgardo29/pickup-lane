@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from firebase_admin import auth
 from sqlalchemy import func, select
@@ -83,7 +83,7 @@ def bootstrap_admin(email: str) -> User:
         verify_firebase_user(normalized_email, user)
 
         user.role = "admin"
-        user.updated_at = datetime.now(timezone.utc)
+        user.updated_at = datetime.now(UTC)
         db.add(user)
         add_missing_user_context_rows(user, db)
         db.commit()

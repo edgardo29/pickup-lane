@@ -1,7 +1,7 @@
 """Waitlist workflow orchestration for game joins and promotion."""
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -82,7 +82,7 @@ def commit_paid_waitlist_auto_promotion_state(db: Session, *, detail: str) -> No
 
 def get_database_now(db: Session) -> datetime:
     if not isinstance(db, Session):
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
     database_now = db.scalar(select(func.now()))
     if not isinstance(database_now, datetime):
         raise RuntimeError(  # noqa: TRY004
@@ -196,7 +196,9 @@ def build_waitlist_entry_for_join(
         auto_charge_consent_at=now if authorized_payment_method is not None else None,
         auto_charge_consent_version=auto_charge_consent_version,
         authorized_payment_method_id=(
-            authorized_payment_method.id if authorized_payment_method is not None else None
+            authorized_payment_method.id
+            if authorized_payment_method is not None
+            else None
         ),
         authorized_stripe_payment_method_id=(
             authorized_payment_method.stripe_payment_method_id
@@ -268,9 +270,7 @@ def create_waitlist_auto_charge_payment(
             "waitlist_entry_id": str(waitlist_entry.id),
             "user_id": str(booking.buyer_user_id),
             "authorized_amount_cents": waitlist_entry.authorized_amount_cents,
-            "auto_charge_consent_version": (
-                waitlist_entry.auto_charge_consent_version
-            ),
+            "auto_charge_consent_version": (waitlist_entry.auto_charge_consent_version),
             "auto_charge_consent_at": (
                 waitlist_entry.auto_charge_consent_at.isoformat()
                 if waitlist_entry.auto_charge_consent_at is not None
@@ -396,7 +396,9 @@ def mark_paid_waitlist_auto_promotion_failed(
     if payment is not None:
         payment.payment_status = payment_status or "failed"
         payment.provider_status = (
-            payment_status if payment_status not in {None, "failed", "unknown"} else None
+            payment_status
+            if payment_status not in {None, "failed", "unknown"}
+            else None
         )
         payment.failure_code = failure_code
         payment.failure_message = failure_message

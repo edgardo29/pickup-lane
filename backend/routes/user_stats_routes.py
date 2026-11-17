@@ -8,14 +8,16 @@ from backend.models import User, UserStats
 from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import UserStatsRead
 from backend.services.auth_service import get_current_app_user, require_active_admin
-from backend.services.user_stats_service import (
-    get_current_user_stats,
-    get_user_stats_record,
-    list_user_stats as list_user_stats_workflow,
-)
 from backend.services.query_pagination import (
     DEFAULT_ADMIN_COLLECTION_LIMIT,
     MAX_ADMIN_COLLECTION_LIMIT,
+)
+from backend.services.user_stats_service import (
+    get_current_user_stats,
+    get_user_stats_record,
+)
+from backend.services.user_stats_service import (
+    list_user_stats as list_user_stats_workflow,
 )
 
 router = APIRouter(prefix="/user-stats", tags=["user_stats"])

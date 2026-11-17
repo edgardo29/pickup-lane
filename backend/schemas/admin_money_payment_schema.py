@@ -29,10 +29,12 @@ class AdminMoneyPaymentListRead(BaseModel):
     display: AdminMoneyDisplayRead | None = None
     created_at: datetime
 
+
 class AdminMoneyPaymentDetailItemRead(AdminMoneyPaymentListRead):
     failure_message: str | None = None
     idempotency_key: str
     updated_at: datetime
+
 
 class AdminMoneyPaymentListResponseRead(BaseModel):
     items: list[AdminMoneyPaymentListRead] = Field(default_factory=list)

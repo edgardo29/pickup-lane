@@ -173,7 +173,9 @@ def seed_participants(
         if current_user_status and not is_current_user_host:
             current_user = users[CURRENT_USER_KEY]
             participant_key = f"{game_data['key']}:{CURRENT_USER_KEY}"
-            attendance_status = game_data.get("current_user_attendance_status", "unknown")
+            attendance_status = game_data.get(
+                "current_user_attendance_status", "unknown"
+            )
             checked_in_at = timestamp if attendance_status == "attended" else None
 
             if current_user_status == "waitlisted":
@@ -237,14 +239,21 @@ def seed_participants(
                     ),
                     "cancelled_at": None,
                     "checked_in_at": checked_in_at,
-                    "marked_attendance_by_user_id": host.id if attendance_status == "attended" else None,
-                    "attendance_decided_at": timestamp if attendance_status == "attended" else None,
+                    "marked_attendance_by_user_id": host.id
+                    if attendance_status == "attended"
+                    else None,
+                    "attendance_decided_at": timestamp
+                    if attendance_status == "attended"
+                    else None,
                     "attendance_notes": None,
                     "updated_at": timestamp,
                 },
             )
 
-        if is_current_user_host and game_data.get("current_user_attendance_status") == "attended":
+        if (
+            is_current_user_host
+            and game_data.get("current_user_attendance_status") == "attended"
+        ):
             host_participant = seeded_participants[host_participant_key]
             host_participant.attendance_status = "attended"
             host_participant.checked_in_at = timestamp

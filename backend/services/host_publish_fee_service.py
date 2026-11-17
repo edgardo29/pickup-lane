@@ -1,7 +1,7 @@
 """Host publish fee scaffold and current-host read workflows."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -102,7 +102,7 @@ def normalize_host_publish_fee_lifecycle_fields(
     existing_fee: HostPublishFee | None = None,
 ) -> dict[str, object]:
     normalized_data = dict(fee_data)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if normalized_data["fee_status"] == "paid":
         normalized_data["paid_at"] = (
@@ -158,8 +158,7 @@ def validate_host_publish_fee_business_rules(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "waiver_reason must be 'none', 'first_game_free', "
-                "or 'admin_comp'."
+                "waiver_reason must be 'none', 'first_game_free', or 'admin_comp'."
             ),
         )
 
@@ -327,7 +326,9 @@ def list_host_publish_fee_records(
             )
         )
     )
-    selected_ids = list(db.scalars(page_query.with_only_columns(HostPublishFee.id)).all())
+    selected_ids = list(
+        db.scalars(page_query.with_only_columns(HostPublishFee.id)).all()
+    )
     if selected_ids:
         record_sensitive_admin_read_batch(
             authenticated_admin_id=authenticated_admin_id,
@@ -370,7 +371,7 @@ def update_host_publish_fee_record(
         setattr(db_host_publish_fee, field_name, field_value)
 
     db_host_publish_fee.paid_at = effective_fee_data["paid_at"]
-    db_host_publish_fee.updated_at = datetime.now(timezone.utc)
+    db_host_publish_fee.updated_at = datetime.now(UTC)
 
     try:
         db.add(db_host_publish_fee)

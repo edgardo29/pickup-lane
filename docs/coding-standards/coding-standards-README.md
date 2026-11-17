@@ -8,8 +8,8 @@ applicable to the work before changing or reviewing code.
 - `backend-standards.md`: general Python, FastAPI, Pydantic,
   SQLAlchemy, PostgreSQL, Alembic, reliability, security, and testability
   practices.
-- `backend-testing.md`: backend and API test organization,
-  fixtures, isolation, proof quality, and execution.
+- `backend-testing.md`: backend test layout, the page marker,
+  how to write tests, and how to run them.
 - `css-standards.md`: general CSS ownership, cascade,
   accessibility, responsive behavior, and maintenance rules.
 - `database.md`: PostgreSQL, Alembic, migration,
@@ -18,11 +18,13 @@ applicable to the work before changing or reviewing code.
   engineering practices, including state, effects, API behavior, security,
   accessibility, and performance.
 - `frontend-structure.md`: Pickup Lane frontend ownership, file
-  placement, imports, styles, assets, routes, and test locations.
+  placement, imports, styles, assets, and routes.
+- `frontend-testing.md`: frontend test layout, naming tests by page
+  and scenario, how to write tests, and how to run them.
 
 Read `backend-standards.md` and `backend-structure.md` before relevant backend
-changes. Read the backend testing and database guides when their specialized
-requirements apply.
+changes. Read the backend testing, frontend testing, and database guides when their
+specialized requirements apply.
 
 Read both frontend documents before relevant frontend changes. Neither replaces
 the other. Also read `css-standards.md` before stylesheet changes.

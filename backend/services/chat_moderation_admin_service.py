@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -117,7 +117,7 @@ CHAT_IDEMPOTENCY_CONSTRAINTS = {
 
 
 def now_utc() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def normalize_chat_scope(chat_scope: str) -> str:
@@ -364,14 +364,17 @@ def game_chat_page_has_messages(
     offset: int,
     limit: int,
 ) -> bool:
-    return db.scalar(
-        select(ChatMessage.id)
-        .join(GameChat, GameChat.id == ChatMessage.chat_id)
-        .where(*game_message_filters(view, parent_id))
-        .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
-        .offset(offset)
-        .limit(limit)
-    ) is not None
+    return (
+        db.scalar(
+            select(ChatMessage.id)
+            .join(GameChat, GameChat.id == ChatMessage.chat_id)
+            .where(*game_message_filters(view, parent_id))
+            .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        is not None
+    )
 
 
 def need_a_sub_chat_page_has_messages(
@@ -382,14 +385,19 @@ def need_a_sub_chat_page_has_messages(
     offset: int,
     limit: int,
 ) -> bool:
-    return db.scalar(
-        select(SubPostChatMessage.id)
-        .join(SubPostChat, SubPostChat.id == SubPostChatMessage.chat_id)
-        .where(*sub_message_filters(view, parent_id))
-        .order_by(SubPostChatMessage.created_at.desc(), SubPostChatMessage.id.desc())
-        .offset(offset)
-        .limit(limit)
-    ) is not None
+    return (
+        db.scalar(
+            select(SubPostChatMessage.id)
+            .join(SubPostChat, SubPostChat.id == SubPostChatMessage.chat_id)
+            .where(*sub_message_filters(view, parent_id))
+            .order_by(
+                SubPostChatMessage.created_at.desc(), SubPostChatMessage.id.desc()
+            )
+            .offset(offset)
+            .limit(limit)
+        )
+        is not None
+    )
 
 
 def build_message_list_response(

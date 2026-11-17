@@ -6,7 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.schemas.admin_money_context_schema import AdminMoneyDisplayRead
 
-
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 
 
@@ -18,11 +17,13 @@ class AdminMoneyIssueResolveCreate(BaseModel):
     resolution_external_reference: str | None = Field(default=None, max_length=255)
     idempotency_key: str = Field(min_length=8, max_length=160)
 
+
 class AdminMoneyIssueCreditRetryCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
     reason: str = Field(min_length=3, max_length=1000)
     idempotency_key: str = Field(min_length=8, max_length=160)
+
 
 class AdminMoneyIssueSummaryRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -59,6 +60,7 @@ class AdminMoneyIssueSummaryRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
 class AdminMoneyIssueEventRead(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -84,6 +86,7 @@ class AdminMoneyIssueEventRead(BaseModel):
     )
     occurred_at: datetime
     created_at: datetime
+
 
 class AdminMoneyIssueListResponseRead(BaseModel):
     items: list[AdminMoneyIssueSummaryRead] = Field(default_factory=list)

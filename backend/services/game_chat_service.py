@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from time import monotonic_ns
 
 from fastapi import HTTPException, status
@@ -165,7 +165,7 @@ def normalize_game_chat_lifecycle_fields(
             or (
                 existing_game_chat.closed_at if existing_game_chat is not None else None
             )
-            or datetime.now(timezone.utc)
+            or datetime.now(UTC)
         )
     else:
         normalized_data["closed_at"] = None
@@ -320,7 +320,7 @@ def update_game_chat_record(
     for field_name, field_value in update_data.items():
         setattr(db_game_chat, field_name, field_value)
 
-    db_game_chat.updated_at = datetime.now(timezone.utc)
+    db_game_chat.updated_at = datetime.now(UTC)
 
     try:
         db.add(db_game_chat)
@@ -752,7 +752,7 @@ def mark_chat_read(
     user: User,
     now: datetime | None = None,
 ) -> GameChatRead:
-    effective_now = now or datetime.now(timezone.utc)
+    effective_now = now or datetime.now(UTC)
     last_message_id = db.scalar(
         select(ChatMessage.id)
         .where(
@@ -916,7 +916,7 @@ def reconcile_game_chat_notifications_after_moderation(
 
 def ensure_timezone(value: datetime) -> datetime:
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
+        return value.replace(tzinfo=UTC)
 
     return value
 
@@ -979,7 +979,7 @@ def refresh_game_chat_summary(db: Session, db_game_chat: GameChat) -> None:
             latest_visible_message.message_body
         )
         db_game_chat.latest_message_at = latest_visible_message.created_at
-    db_game_chat.updated_at = datetime.now(timezone.utc)
+    db_game_chat.updated_at = datetime.now(UTC)
     db.add(db_game_chat)
 
 
@@ -1041,7 +1041,7 @@ def create_chat_message_record(
     chat_message: ChatMessageCreate,
     current_user: User,
 ) -> ChatMessage:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     message_data = chat_message.model_dump()
     db_game_chat = get_game_chat_or_404(db, message_data["chat_id"])
     db_game = require_chat_member_for_message_change(

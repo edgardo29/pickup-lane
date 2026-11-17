@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from http import HTTPStatus
 from time import monotonic
 from typing import Any
@@ -27,6 +27,12 @@ from backend.observability.correlation import (
 )
 from backend.observability.errors import PublicErrorDescriptor
 from backend.observability.events import EventEnvelope
+from backend.observability.http_contracts import (
+    NO_STORE_CACHE_CONTROL,
+    PRIVATE_NO_STORE_CACHE_CONTROL,
+    apply_api_security_headers,
+    private_route_matches,
+)
 from backend.observability.metrics import MetricsRecorder, metrics_context
 from backend.observability.redaction import (
     REDACTION_MARKER,
@@ -47,6 +53,7 @@ VALIDATION_FAILED_MESSAGE = "Request validation failed."
 MALFORMED_JSON_MESSAGE = "Malformed JSON request body."
 HTTP_STATUS_UNPROCESSABLE_ENTITY = 422
 _REQUEST_LOGGING_STATE_KEY = "_pickup_lane_logging"
+_RETRYABLE_TIMEOUT_RETRY_AFTER_SECONDS = 5
 
 _STATUS_ERROR_CODES: dict[int, str] = {
     status.HTTP_400_BAD_REQUEST: "API.BAD_REQUEST",
@@ -80,6 +87,7 @@ _APPROVED_HTTP_EXCEPTION_HEADERS: dict[int, dict[str, str]] = {
     status.HTTP_401_UNAUTHORIZED: {"www-authenticate": "WWW-Authenticate"},
     status.HTTP_405_METHOD_NOT_ALLOWED: {"allow": "Allow"},
     status.HTTP_429_TOO_MANY_REQUESTS: {"retry-after": "Retry-After"},
+    status.HTTP_503_SERVICE_UNAVAILABLE: {"retry-after": "Retry-After"},
 }
 
 
@@ -108,10 +116,12 @@ class CorrelationIdMiddleware:
             if self._metrics_recorder is not None
             else False
         )
-        correlation_id = _resolve_request_correlation_id(scope)
+        correlation_id = generate_correlation_id()
+        caller_correlation_id = _validated_caller_correlation_id(scope)
         token = set_correlation_id(correlation_id)
         logging_state = {
             "correlation_id": correlation_id,
+            "caller_correlation_id": caller_correlation_id,
             "event_emitter": self._event_emitter,
             "http_method": _http_method(scope),
             "http_status_code": None,
@@ -133,7 +143,7 @@ class CorrelationIdMiddleware:
                     logging_state["http_status_code"] = int(message["status"])
                     logging_state["response_started"] = True
                 headers = MutableHeaders(scope=message)
-                headers.setdefault(CORRELATION_ID_HEADER, correlation_id)
+                headers[CORRELATION_ID_HEADER] = correlation_id
             await send(message)
 
         try:
@@ -278,7 +288,13 @@ async def handle_unexpected_exception(
             detail=timeout_contract.detail,
             details=timeout_contract.details,
             correlation_id=correlation_id,
+            headers=(
+                {"Retry-After": str(_RETRYABLE_TIMEOUT_RETRY_AFTER_SECONDS)}
+                if timeout_contract.details.get("outcome") == "retry_later"
+                else None
+            ),
         )
+        _apply_outer_error_security_headers(request, response)
         _emit_outer_completion(
             logging_state, correlation_id, timeout_contract.status_code
         )
@@ -303,12 +319,30 @@ async def handle_unexpected_exception(
         detail=GENERIC_UNEXPECTED_DETAIL,
         correlation_id=correlation_id,
     )
+    _apply_outer_error_security_headers(request, response)
     _emit_outer_completion(
         logging_state,
         correlation_id,
         status.HTTP_500_INTERNAL_SERVER_ERROR,
     )
     return response
+
+
+def _apply_outer_error_security_headers(
+    request: Request, response: JSONResponse
+) -> None:
+    private_request = any(
+        route.matches(method=request.method, path=request.scope["path"])
+        for route in private_route_matches(request.app.routes)
+    )
+    apply_api_security_headers(
+        response.headers,
+        cache_control=(
+            PRIVATE_NO_STORE_CACHE_CONTROL
+            if private_request
+            else NO_STORE_CACHE_CONTROL
+        ),
+    )
 
 
 def _request_logging_state(request: Request | None) -> dict[str, object] | None:
@@ -409,15 +443,21 @@ def _emit_http_completion(
                 )
         finally:
             _release_request_metric(logging_state)
+    fields = {
+        "caller_correlation_id": (
+            logging_state.get("caller_correlation_id")
+            if logging_state is not None
+            else None
+        ),
+        "http_method": method,
+        "http_status_code": status_code,
+        "labels": {"route_template": route_template},
+        "result": result,
+    }
     emit_event(
         "http.request",
         severity,
-        {
-            "http_method": method,
-            "http_status_code": status_code,
-            "labels": {"route_template": route_template},
-            "result": result,
-        },
+        fields,
     )
 
 
@@ -443,12 +483,16 @@ def _http_method(scope: Scope) -> str:
 def _route_template(scope: Scope) -> str:
     route = scope.get("route")
     candidate = getattr(route, "path", None)
-    if not isinstance(candidate, str):
+    app = scope.get("app")
+    registered_routes = getattr(app, "routes", ())
+    if not isinstance(candidate, str) or not any(
+        registered_route is route for registered_route in registered_routes
+    ):
         return "/{unmatched}"
     try:
         EventEnvelope(
             event_name="http.request",
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
             labels={"route_template": candidate},
         )
     except Exception:  # noqa: BLE001 - unsafe paths collapse to one fixed route.
@@ -456,16 +500,16 @@ def _route_template(scope: Scope) -> str:
     return candidate
 
 
-def _resolve_request_correlation_id(scope: Scope) -> str:
+def _validated_caller_correlation_id(scope: Scope) -> str | None:
     headers = Headers(scope=scope)
     incoming_value = headers.get(CORRELATION_ID_HEADER)
     if incoming_value:
         try:
             return validate_correlation_id(incoming_value)
         except CorrelationIdError:
-            return generate_correlation_id()
+            return None
 
-    return generate_correlation_id()
+    return None
 
 
 def _public_error_response(

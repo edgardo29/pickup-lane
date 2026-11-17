@@ -91,7 +91,9 @@ class PaymentEvent(Base):
         DateTime(timezone=True), nullable=True
     )
 
-    processing_error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    processing_error_code: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")

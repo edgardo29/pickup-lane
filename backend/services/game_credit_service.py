@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -141,7 +141,7 @@ def get_game_credit_balance_for_user(
     balance = get_available_game_credit_balance(
         db,
         effective_user_id,
-        now=datetime.now(timezone.utc),
+        now=datetime.now(UTC),
     )
 
     return GameCreditBalanceRead(
@@ -251,9 +251,7 @@ def get_booking_credit_usage_total(
 
 def lock_game_credit(db: Session, game_credit_id: uuid.UUID) -> GameCredit | None:
     return db.scalars(
-        select(GameCredit)
-        .where(GameCredit.id == game_credit_id)
-        .with_for_update()
+        select(GameCredit).where(GameCredit.id == game_credit_id).with_for_update()
     ).first()
 
 
@@ -488,9 +486,7 @@ def release_reserved_game_credit_usage(
     reason_code: str,
 ) -> GameCreditUsage:
     usage = db.scalars(
-        select(GameCreditUsage)
-        .where(GameCreditUsage.id == usage_id)
-        .with_for_update()
+        select(GameCreditUsage).where(GameCreditUsage.id == usage_id).with_for_update()
     ).first()
     if usage is None:
         raise GameCreditLedgerError("Game credit usage was not found.")
@@ -586,9 +582,7 @@ def restore_redeemed_game_credit_usage(
     restore_reason: str,
 ) -> GameCreditUsage:
     usage = db.scalars(
-        select(GameCreditUsage)
-        .where(GameCreditUsage.id == usage_id)
-        .with_for_update()
+        select(GameCreditUsage).where(GameCreditUsage.id == usage_id).with_for_update()
     ).first()
     if usage is None:
         raise GameCreditLedgerError("Game credit usage was not found.")

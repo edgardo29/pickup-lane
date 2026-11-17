@@ -659,9 +659,7 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
     ),
     "reveal_game_chat_message_content": AdminActionPolicy(
         action_type="reveal_game_chat_message_content",
-        required_target_rules=(
-            TargetRule(all_of=(TARGET_GAME_ID, TARGET_MESSAGE_ID)),
-        ),
+        required_target_rules=(TargetRule(all_of=(TARGET_GAME_ID, TARGET_MESSAGE_ID)),),
         allowed_target_fields=target_set(TARGET_GAME_ID, TARGET_MESSAGE_ID),
         metadata_builder_key="none",
         category="sensitive_read",
@@ -850,26 +848,33 @@ SENSITIVE_FINANCIAL_READ_TARGETS: dict[str, str] = {
 }
 
 SENSITIVE_READ_LIST_LIMITS: dict[str, int] = {
-    action_type: (200 if action_type in {
-        "read_staff_waitlist_entry_list_item",
-        "read_staff_host_publish_fee_list_item",
-    } else 100)
+    action_type: (
+        200
+        if action_type
+        in {
+            "read_staff_waitlist_entry_list_item",
+            "read_staff_host_publish_fee_list_item",
+        }
+        else 100
+    )
     for action_type in SENSITIVE_FINANCIAL_READ_TARGETS
     if action_type.endswith("_list_item")
 }
 
-ADMIN_ACTION_POLICIES.update({
-    action_type: AdminActionPolicy(
-        action_type=action_type,
-        required_target_rules=(TargetRule(all_of=(target_field,)),),
-        allowed_target_fields=target_set(target_field),
-        metadata_builder_key="none",
-        category="sensitive_read",
-        allows_audit_note=False,
-        allows_deleted_user_target=(action_type == "read_admin_money_user_detail"),
-    )
-    for action_type, target_field in SENSITIVE_FINANCIAL_READ_TARGETS.items()
-})
+ADMIN_ACTION_POLICIES.update(
+    {
+        action_type: AdminActionPolicy(
+            action_type=action_type,
+            required_target_rules=(TargetRule(all_of=(target_field,)),),
+            allowed_target_fields=target_set(target_field),
+            metadata_builder_key="none",
+            category="sensitive_read",
+            allows_audit_note=False,
+            allows_deleted_user_target=(action_type == "read_admin_money_user_detail"),
+        )
+        for action_type, target_field in SENSITIVE_FINANCIAL_READ_TARGETS.items()
+    }
+)
 
 ADMIN_ACTION_TYPES = tuple(ADMIN_ACTION_POLICIES)
 SENSITIVE_READ_ACTION_TYPES = frozenset(

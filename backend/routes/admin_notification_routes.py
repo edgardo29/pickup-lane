@@ -29,8 +29,7 @@ def reject_unsupported_lookup_params(request: Request) -> None:
             detail={
                 "code": "notification_lookup_unsupported_query_param",
                 "message": (
-                    "Notification Lookup only supports recipient history "
-                    "parameters."
+                    "Notification Lookup only supports recipient history parameters."
                 ),
                 "params": unsupported_params,
             },

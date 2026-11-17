@@ -10,9 +10,22 @@ A **major pass** is one of the 21 production launch passes. A **minor pass** is 
 lettered subdivision, such as `Pass 01A`, created when a major pass must be
 split. The [Production Launch Pass Completion
 Log](production-launch-pass-completion-log.md) records completed major passes.
-Each major pass has a main record under
-`docs/production-readiness/pass-records/`, such as `pass-01.md`. The
-`docs/production-readiness/verification-map.md` file, created in Pass 03,
+
+Each major pass has its own folder under
+`docs/production-readiness/pass-records/`, such as `pass-01/`. The folder
+holds three kinds of files:
+
+- **Stage 0 file** (`pass-01-stage-0.md`): the Stage 0 assessment and split
+  decision.
+- **Plan files**: the engineering plan only. An unsplit pass has one,
+  `pass-01-plan.md`. A split pass has one per minor pass, such as
+  `pass-01a-plan.md` and `pass-01b-plan.md`.
+- **Pass record** (`pass-01-record.md`): the major-pass record. It holds
+  review results, verification evidence, deferred obligations, and the state
+  of every requirement. When the pass is split, one record covers all of its
+  minor passes.
+
+The `docs/production-readiness/verification-map.md` file, created in Pass 03,
 connects numbered production-launch requirements to their planned checks.
 
 **Accepted repository state** means the code and documentation currently
@@ -51,6 +64,20 @@ the work is unmerged. Start previously merged work at Stage 0.
 
 ## 2. Stage 0 — Assess the pass and decide whether to split it
 
+**Branch.** Before the pass's first file change, create its branch from
+`develop`, named `production-launch/PL<pass number>-<pass title>`: `PL`
+(Production Launch) and the two-digit pass number, then the pass title from
+`production-launch-requirements.md` in lowercase with dashes between words and
+punctuation removed, for example
+`production-launch/PL06-backend-api-and-http-foundations`. If Stage 0 divides
+the pass, rename the branch for the first minor pass, with the minor-pass
+letter in lowercase and that minor pass's title, for example
+`production-launch/PL06a-request-limits`; the Stage 0 file is published with
+it. Create each later minor pass's branch from `develop` when that minor pass
+starts. Use one branch and one pull request per pass or minor pass. The pull
+request targets `develop`; merging `develop` into `main` is a separate step
+outside the pass.
+
 Stage 0 determines which requirements are already satisfied, what remains, and
 whether to complete the work as one major pass or several minor passes. It does
 not design the implementation.
@@ -76,30 +103,29 @@ not design the implementation.
    Confirm that the minor passes cover the entire major pass without losing or
    needlessly duplicating work. Each later minor pass starts from the accepted
    repository state that exists when its work begins.
-5. Record blocked or deferred work as described in Section 8 of this workflow.
-   Deferral never counts as
-   implementation or verification. Other work may proceed only when it does
-   not depend on the missing fact or decision.
+5. Record blocked or deferred work with the fields listed in Section 8 of this
+   workflow. Deferral never counts as implementation or verification. Other
+   work may proceed only when it does not depend on the missing fact or
+   decision.
 
-Create the main major-pass record under
-`docs/production-readiness/pass-records/` as `pass-01.md` through `pass-21.md`
-when that major pass begins. State whether it will run as one major pass, be
-divided into minor passes, or is blocked, and explain why. Assign every
-major-pass requirement to the pass responsible for completing it. Name minor
-passes with letters, such as `Pass 01A` and `Pass 01B`. A separate minor-pass
-record is optional; when used, name it `pass-01a.md`, `pass-01b.md`, and so on,
-and link it from the major-pass record.
+When the major pass begins, create its folder and write the Stage 0 result in
+`pass-NN-stage-0.md` using
+`production-launch-stage-0-template.md`. State whether the pass will run as
+one major pass, be divided into minor passes, or is blocked, and explain why.
+Assign every major-pass requirement to the pass responsible for completing it.
+Name minor passes with letters, such as `Pass 01A` and `Pass 01B`. The Stage 0
+file contains no plan.
 
-Keep the major-pass record complete enough for a future session to continue
-without relying on chat history. Do not require a separate intake document.
-Reassess the Stage 0 scope and pass-splitting decision only when current
-requirements, dependencies, or the accepted repository state make it
-inaccurate. If no safe work is ready, record the specific blocker and stop.
+Keep the Stage 0 file complete enough for a future session to continue
+without relying on chat history. Rewrite it only when current requirements,
+dependencies, or the accepted repository state make the scope or split
+decision inaccurate. If no safe work is ready, record the specific blocker and
+stop.
 
 Leave the major pass's completion date blank in the Production Launch Pass
 Completion Log while work is underway. The log does not track active work or
-minor-pass progress; the major-pass record preserves the Stage 0 result and
-later evidence.
+minor-pass progress; the Stage 0 file preserves the scope decision and the
+pass record preserves later results.
 
 ## 3. Gate A — Write the engineering plan
 
@@ -108,9 +134,10 @@ Before implementation, read the complete
 then use it to write the engineering plan for the executable major or minor
 pass. Inspect the relevant code and documents while preparing the plan.
 
-Store the plan in the major-pass record or record the exact path of its
-separate planning document there. Gate A is complete when the plan is ready
-for Gate B review.
+Save the plan as its own file in the pass folder: `pass-NN-plan.md` for an
+unsplit pass, or `pass-NNa-plan.md`, `pass-NNb-plan.md`, and so on for each
+minor pass. The plan file contains only the plan. Gate A is complete when the
+plan is ready for Gate B review.
 
 ## 4. Gate B — Review and approve the engineering plan
 
@@ -130,7 +157,8 @@ Gate B is approved only when the plan has no important omission or conflict,
 each requirement has a workable design and verification method, and every
 delayed obligation still identifies who or which pass will complete it and by
 when. Save the findings, corrections, and approval or blocker reason in the
-major-pass record or a linked review document. Gate B approval does not itself
+pass record (`pass-NN-record.md`), creating it if it does not exist yet. Do not
+add them to the plan file. Gate B approval does not itself
 authorize changes to an external service, publishing Git changes, or starting
 work beyond the current assignment.
 
@@ -156,13 +184,13 @@ For each planned change:
    A planned check or a check that has not run is not a passing result. Run any
    additional tests needed to confirm that related behavior still works.
 
-For every affected requirement, update the major-pass record or its related
-evidence file. State whether each required check passed, failed, has not run,
-cannot run because a specific external fact or setting is unavailable, or is
-assigned to a named later pass. Record what was observed. If a verification
-method or the pass assigned to perform it changes, update the verification map.
-A minor-pass record may contain the details, but the major-pass record must name
-that file and show the state of every major-pass requirement.
+For every affected requirement, update the pass record or its related evidence
+file. State whether each required check passed, failed, has not run, cannot run
+because a specific external fact or setting is unavailable, or is assigned to a
+named later pass. Record what was observed. If a verification method or the
+pass assigned to perform it changes, update the verification map. When the pass
+is split, the pass record shows the state of every major-pass requirement and
+the minor pass responsible for it.
 
 Before Gate D, inspect the complete change and the related code. Fix
 implementation problems and repeat the affected checks. If implementation
@@ -265,15 +293,15 @@ release.
 ## 8. Evidence and open obligations
 
 The Production Launch Pass Completion Log stays a two-column major-pass
-completion record; it does not track individual requirements or evidence. Each major pass has one
-main record at
-`docs/production-readiness/pass-records/pass-NN.md`, where `NN` is its two-digit
-requirement number. That record tracks only deferred obligations assigned by
-the major pass or assigned to it by another pass. Separate minor-pass records are
-optional and append a
-lowercase letter to the major-pass number, such as `pass-01a.md` and
-`pass-01b.md`. The major-pass record remains the starting point. Link to
-existing authoritative documents instead of copying their full contents.
+completion record; it does not track individual requirements or evidence. Each
+major pass has one pass record at
+`docs/production-readiness/pass-records/pass-NN/pass-NN-record.md`, where `NN`
+is its two-digit pass number. The pass record holds review results,
+verification evidence, and deferred obligations created by the pass or
+assigned to it by another pass. Minor passes have no separate records; the
+major pass's record covers them. Blockers found at Stage 0 stay in the Stage 0
+file, and the pass record links to them when it records their resolution. Link
+to existing authoritative documents instead of copying their full contents.
 
 Pass 03 creates `docs/production-readiness/verification-map.md` and maps every
 applicable numbered requirement in Passes 01–21 to its planned numbered
@@ -294,7 +322,8 @@ the redaction and evidence-validity rules in Section 3.5 of the Production
 Launch Requirements. A link to a command, test name, PR, or plan without these
 observations is not sufficient proof.
 
-For each blocked or deferred obligation, the originating major-pass record must
+For each blocked or deferred obligation, the originating Stage 0 file or pass
+record must
 state:
 
 - the requirement ID and missing fact or decision;

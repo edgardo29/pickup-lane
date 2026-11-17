@@ -22,12 +22,12 @@ from backend.observability.telemetry import (
 
 __all__ = [
     "CORRELATION_ID_HEADER",
+    "REDACTION_MARKER",
     "CorrelationIdError",
     "EventEnvelope",
     "EventEnvelopeError",
     "PublicErrorDescriptor",
     "PublicErrorError",
-    "REDACTION_MARKER",
     "TelemetryLabelError",
     "correlation_context",
     "generate_correlation_id",

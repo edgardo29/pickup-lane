@@ -1,7 +1,7 @@
 """Authentication-backed account setup, synchronization, and cleanup workflows."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -25,10 +25,9 @@ from backend.services.account_deletion_service import (
     require_account_removal_preserves_active_admin,
 )
 from backend.services.auth_service import (
+    VerifiedFirebaseIdentity,
     commit_user_sync,
     get_active_user_by_auth_id,
-    get_auth_user_id_from_token,
-    get_verified_firebase_identity_from_authorization,
     sync_email_verification_from_firebase,
 )
 from backend.services.hosting_access_service import (
@@ -63,7 +62,7 @@ def add_missing_user_context_rows(user: User, db: Session) -> bool:
                 no_show_count=0,
                 late_cancel_count=0,
                 host_cancel_count=0,
-                last_calculated_at=datetime.now(timezone.utc),
+                last_calculated_at=datetime.now(UTC),
             )
         )
         did_add_row = True
@@ -119,10 +118,7 @@ def has_complete_profile(user: User) -> bool:
     return bool(user.first_name and user.last_name and user.date_of_birth)
 
 
-def build_sync_user_payload_from_token(
-    authorization: str | None,
-) -> AuthSyncUserRequest:
-    identity = get_verified_firebase_identity_from_authorization(authorization)
+def build_sync_user_payload(identity: VerifiedFirebaseIdentity) -> AuthSyncUserRequest:
     email = identity.email
 
     if not isinstance(email, str) or not email.strip():
@@ -159,8 +155,8 @@ def get_user_after_idempotent_conflict(
     return existing_user
 
 
-def sync_user_workflow(authorization: str | None, db: Session) -> User:
-    payload = build_sync_user_payload_from_token(authorization)
+def sync_user_workflow(identity: VerifiedFirebaseIdentity, db: Session) -> User:
+    payload = build_sync_user_payload(identity)
     existing_user = get_active_user_by_auth_id(payload.auth_user_id, db)
 
     if existing_user is not None:
@@ -181,7 +177,7 @@ def sync_user_workflow(authorization: str | None, db: Session) -> User:
                 )
 
             existing_user.email = payload.email
-            existing_user.updated_at = datetime.now(timezone.utc)
+            existing_user.updated_at = datetime.now(UTC)
             db.add(existing_user)
             should_commit = True
 
@@ -253,9 +249,7 @@ def sync_user_workflow(authorization: str | None, db: Session) -> User:
         id=uuid.uuid4(),
         auth_user_id=payload.auth_user_id,
         email=payload.email,
-        email_verified_at=(
-            datetime.now(timezone.utc) if payload.email_verified else None
-        ),
+        email_verified_at=(datetime.now(UTC) if payload.email_verified else None),
         hosting_status=(
             HOSTING_STATUS_ELIGIBLE
             if payload.email_verified
@@ -295,10 +289,10 @@ def sync_user_workflow(authorization: str | None, db: Session) -> User:
 
 
 def cleanup_unfinished_account_workflow(
-    authorization: str | None,
+    identity: VerifiedFirebaseIdentity,
     db: Session,
 ) -> None:
-    auth_user_id = get_auth_user_id_from_token(authorization)
+    auth_user_id = identity.auth_user_id
     user = get_active_user_by_auth_id(auth_user_id, db)
     user_id = user.id if user is not None else None
 

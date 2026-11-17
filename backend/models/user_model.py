@@ -34,13 +34,7 @@ class User(Base):
             name="ck_users_account_status",
         ),
         CheckConstraint(
-            (
-                "hosting_status IN ("
-                "'not_eligible', "
-                "'eligible', "
-                "'restricted'"
-                ")"
-            ),
+            ("hosting_status IN ('not_eligible', 'eligible', 'restricted')"),
             name="ck_users_hosting_status",
         ),
         # Keep the important identity fields unique so each auth account,
@@ -107,9 +101,7 @@ class User(Base):
         Index(
             "ix_users_platform_notice_active_id",
             "id",
-            postgresql_where=text(
-                "account_status = 'active' AND deleted_at IS NULL"
-            ),
+            postgresql_where=text("account_status = 'active' AND deleted_at IS NULL"),
         ),
     )
 
@@ -135,9 +127,7 @@ class User(Base):
     hosting_status: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default=text("'not_eligible'")
     )
-    stripe_customer_id: Mapped[str | None] = mapped_column(
-        String(255), nullable=True
-    )
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # deleted_at keeps the internal user row available for historical records
     # while marking the account as removed.
     member_since: Mapped[datetime] = mapped_column(

@@ -2,7 +2,7 @@
 
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import BoundedSemaphore
 
 from fastapi import HTTPException, status
@@ -255,7 +255,7 @@ def clean_optional_text(value: str | None) -> str | None:
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def build_venue_image_audit_snapshot(venue_image: VenueImage) -> dict[str, object]:

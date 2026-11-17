@@ -3,7 +3,7 @@
 import uuid
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from binascii import Error as BinasciiError
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from json import JSONDecodeError, dumps, loads
 from zoneinfo import ZoneInfo
 
@@ -67,6 +67,10 @@ from backend.services.game_rules import (
     reject_official_location_change,
     require_game_not_started,
     validate_game_business_rules,
+)
+from backend.services.pagination_cursor import (
+    decode_signed_cursor,
+    encode_signed_cursor,
 )
 from backend.services.query_pagination import (
     DEFAULT_COLLECTION_LIMIT,
@@ -328,7 +332,7 @@ def get_public_game_or_404(
         db,
         db_game,
         current_user,
-        now=datetime.now(timezone.utc),
+        now=datetime.now(UTC),
     ):
         return db_game
 
@@ -471,7 +475,7 @@ def list_browse_game_cards(
     cursor: str | None = None,
 ) -> GameCardListRead:
     effective_limit = min(limit, BROWSE_GAME_CARD_MAX_LIMIT)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     (
         browse_today,
         minimum_browse_date,
@@ -479,8 +483,11 @@ def list_browse_game_cards(
         browse_date,
         browse_timezone,
     ) = get_browse_date_context(starts_on, now=now)
-    cursor_payload = decode_browse_game_card_cursor(cursor) if cursor else None
-    validate_browse_game_card_cursor_context(cursor_payload, starts_on=browse_date)
+    cursor_payload = (
+        decode_browse_game_card_cursor(cursor, starts_on=browse_date)
+        if cursor
+        else None
+    )
 
     eligibility_conditions = build_browse_game_eligibility_conditions(
         browse_date,
@@ -635,14 +642,12 @@ def load_game_card_metadata(
     if not games:
         return {}, {}, {}
 
-    captured_now = now or datetime.now(timezone.utc)
+    captured_now = now or datetime.now(UTC)
     game_ids = [game.id for game in games]
     venue_ids = {game.venue_id for game in games if game.venue_id is not None}
     participant_counts_by_game_id: dict[uuid.UUID, int] = {}
     primary_game_image_urls_by_game_id: dict[uuid.UUID, str] = {}
-    primary_venue_image_object_key_by_venue_id: dict[
-        uuid.UUID, R2ObjectReference
-    ] = {}
+    primary_venue_image_object_key_by_venue_id: dict[uuid.UUID, R2ObjectReference] = {}
 
     for game_id, participant_count in db.execute(
         select(GameParticipant.game_id, func.count(GameParticipant.id))
@@ -712,7 +717,7 @@ def build_game_card_read(
     browse_timezone: str | None = None,
     now: datetime | None = None,
 ) -> GameCardRead:
-    captured_now = now or datetime.now(timezone.utc)
+    captured_now = now or datetime.now(UTC)
     primary_image_url = primary_game_image_url
     if primary_image_url is None and primary_venue_image_object_key is not None:
         try:
@@ -873,59 +878,39 @@ def format_game_card_price(cents: int, currency: str) -> str:
     return f"${dollars:.2f}" if currency == "USD" else f"{dollars:.2f} {currency}"
 
 
-def encode_browse_game_card_cursor(*, game: Game, starts_on: date) -> str:
-    payload = {
+def browse_game_card_cursor_context(starts_on: date) -> dict[str, str]:
+    return {
+        "endpoint": "games.browse",
+        "sort": "starts_at,created_at,id:asc",
         "starts_on": starts_on.isoformat(),
-        "starts_at": game.starts_at.isoformat(),
-        "created_at": game.created_at.isoformat(),
-        "id": str(game.id),
     }
-    serialized = dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
-    return urlsafe_b64encode(serialized).decode("ascii")
 
 
-def decode_browse_game_card_cursor(cursor: str | None) -> dict[str, object] | None:
-    if cursor is None:
-        return None
+def encode_browse_game_card_cursor(*, game: Game, starts_on: date) -> str:
+    return encode_signed_cursor(
+        {
+            "starts_at": game.starts_at.isoformat(),
+            "created_at": game.created_at.isoformat(),
+            "id": str(game.id),
+        },
+        context=browse_game_card_cursor_context(starts_on),
+    )
 
-    try:
-        decoded = urlsafe_b64decode(cursor.encode("ascii"))
-        payload = loads(decoded.decode("utf-8"))
-    except (BinasciiError, JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="cursor is invalid.",
-        ) from exc
 
-    if not isinstance(payload, dict):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="cursor is invalid.",
-        )
-
-    required_keys = {"starts_on", "starts_at", "created_at", "id"}
-    if not required_keys.issubset(payload.keys()):
+def decode_browse_game_card_cursor(
+    cursor: str, *, starts_on: date
+) -> dict[str, object]:
+    payload = decode_signed_cursor(
+        cursor,
+        context=browse_game_card_cursor_context(starts_on),
+    )
+    if not {"starts_at", "created_at", "id"}.issubset(payload.keys()):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="cursor is invalid.",
         )
 
     return payload
-
-
-def validate_browse_game_card_cursor_context(
-    cursor_payload: dict[str, object] | None,
-    *,
-    starts_on: date,
-) -> None:
-    if cursor_payload is None:
-        return
-
-    if cursor_payload["starts_on"] != starts_on.isoformat():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="cursor does not match the current query.",
-        )
 
 
 def build_browse_game_card_cursor_filter(cursor_payload: dict[str, object]):
@@ -1000,7 +985,7 @@ def list_my_game_cards(
         view=normalized_view,
         sort_direction=sort_direction,
     )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     history_cutoff = now - timedelta(days=MY_GAMES_HISTORY_WINDOW_DAYS)
     is_host_relationship = Game.host_user_id == current_user.id
     has_confirmed_participant = exists().where(
@@ -1351,7 +1336,7 @@ def update_game_workflow(
     reject_official_location_change(db_game, update_data)
     reject_direct_official_host_change(db_game, update_data)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     require_game_not_started(db_game, now, "Games cannot be edited after start time.")
     structural_snapshot_before = capture_game_updated_structural_snapshot(db_game)
 
@@ -1559,7 +1544,7 @@ def delete_game_workflow(
             detail="Official games must be cancelled instead of deleted.",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     old_game_status = db_game.game_status
     db_game.updated_at = now
     db_game.deleted_at = now
@@ -1674,7 +1659,7 @@ def count_roster_players(
     *,
     now: datetime | None = None,
 ) -> int:
-    captured_now = now or datetime.now(timezone.utc)
+    captured_now = now or datetime.now(UTC)
     return (
         db.scalar(
             select(func.count())
@@ -1771,7 +1756,7 @@ def list_public_game_participants(
         db,
         db_game,
         current_user,
-        now=datetime.now(timezone.utc),
+        now=datetime.now(UTC),
     ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1799,7 +1784,7 @@ def list_public_game_participant_counts(
     limit: int = DEFAULT_COLLECTION_LIMIT,
     offset: int = 0,
 ) -> list[dict[str, object]]:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rows = db.execute(
         select(
             GameParticipant.game_id,

@@ -29,12 +29,14 @@ class AdminMoneyRefundRetryCreate(BaseModel):
     reason: str = Field(min_length=3, max_length=1000)
     idempotency_key: str = Field(min_length=8, max_length=160)
 
+
 class AdminMoneyRefundReconcileCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
     reason: str = Field(min_length=3, max_length=1000)
     idempotency_key: str = Field(min_length=8, max_length=160)
     provider_refund_id: str | None = Field(default=None, min_length=3, max_length=255)
+
 
 class AdminMoneyRefundEventRead(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
@@ -66,6 +68,7 @@ class AdminMoneyRefundEventRead(BaseModel):
     occurred_at: datetime
     created_at: datetime
 
+
 class AdminMoneyRefundEventListResponseRead(BaseModel):
     items: list[AdminMoneyRefundEventRead] = Field(default_factory=list)
     has_more: bool = False
@@ -76,6 +79,7 @@ class AdminMoneyRefundJobDiagnosticRead(BaseModel):
     status: str
     refund_attempt_number: int
     error_code: str | None
+
 
 class AdminMoneyRefundListRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -112,6 +116,7 @@ class AdminMoneyRefundListRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
 class AdminMoneyRefundListResponseRead(BaseModel):
     items: list[AdminMoneyRefundListRead] = Field(default_factory=list)
     has_more: bool = False
@@ -121,11 +126,13 @@ class AdminMoneyRefundListResponseRead(BaseModel):
 class AdminMoneyRefundDetailItemRead(AdminMoneyRefundListRead):
     pass
 
+
 class AdminMoneyRefundActionRead(BaseModel):
     action_code: str
     enabled: bool
     blockers: list[str] = Field(default_factory=list)
     confirmation_text: str | None = None
+
 
 class AdminMoneyRefundProviderSnapshotRead(BaseModel):
     provider: str
@@ -134,9 +141,11 @@ class AdminMoneyRefundProviderSnapshotRead(BaseModel):
     provider_refund_id: str | None
     provider_charge_id: str | None
 
+
 class AdminMoneyRefundCreditContextRead(BaseModel):
     credit_grants: list[AdminMoneyCreditGrantSummaryRead] = Field(default_factory=list)
     credit_usages: list[AdminMoneyCreditUsageSummaryRead] = Field(default_factory=list)
+
 
 class AdminMoneyRefundDetailRead(BaseModel):
     refund: AdminMoneyRefundDetailItemRead

@@ -149,9 +149,9 @@ class AdminUserHostingRestrictionPreviewRead(BaseModel):
     preview_token: str = Field(min_length=64, max_length=64)
     blocking_reasons: list[str] = Field(default_factory=list)
     future_community_game_count: int = 0
-    future_community_games: list[
-        AdminUserHostingRestrictionGameImpactRead
-    ] = Field(default_factory=list)
+    future_community_games: list[AdminUserHostingRestrictionGameImpactRead] = Field(
+        default_factory=list
+    )
 
 
 class AdminUserDeleteImpactGameRead(BaseModel):
@@ -173,13 +173,13 @@ class AdminUserDeleteImpactPreviewRead(BaseModel):
     preview_token: str = Field(min_length=64, max_length=64)
     blocking_reasons: list[str] = Field(default_factory=list)
     future_official_host_assignment_count: int = 0
-    future_official_host_assignments: list[
-        AdminUserDeleteImpactGameRead
-    ] = Field(default_factory=list)
+    future_official_host_assignments: list[AdminUserDeleteImpactGameRead] = Field(
+        default_factory=list
+    )
     future_community_hosted_game_count: int = 0
-    future_community_hosted_games: list[
-        AdminUserDeleteImpactGameRead
-    ] = Field(default_factory=list)
+    future_community_hosted_games: list[AdminUserDeleteImpactGameRead] = Field(
+        default_factory=list
+    )
     active_future_booking_count: int = 0
     active_future_official_booking_count: int = 0
     active_future_participation_count: int = 0
@@ -281,6 +281,4 @@ class AdminUserDetailRead(BaseModel):
     need_a_sub_activity: AdminUserNeedASubActivityRead = Field(
         default_factory=AdminUserNeedASubActivityRead
     )
-    audit_actions: list[AdminUserAuditActionSummaryRead] = Field(
-        default_factory=list
-    )
+    audit_actions: list[AdminUserAuditActionSummaryRead] = Field(default_factory=list)

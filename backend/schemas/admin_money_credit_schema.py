@@ -25,6 +25,7 @@ class AdminMoneyCreditGrantListRead(BaseModel):
     display: AdminMoneyDisplayRead | None = None
     created_at: datetime
 
+
 class AdminMoneyCreditGrantSummaryRead(AdminMoneyCreditGrantListRead):
     issued_by_user_id: UUID | None
     reversed_by_user_id: UUID | None
@@ -32,10 +33,12 @@ class AdminMoneyCreditGrantSummaryRead(AdminMoneyCreditGrantListRead):
     note: str | None
     updated_at: datetime
 
+
 class AdminMoneyCreditListResponseRead(BaseModel):
     items: list[AdminMoneyCreditGrantListRead] = Field(default_factory=list)
     has_more: bool = False
     next_cursor: str | None = None
+
 
 class AdminMoneyCreditUsageSummaryRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)

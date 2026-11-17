@@ -13,6 +13,7 @@ class AdminMoneyDisplayRead(BaseModel):
     refund_short_label: str | None = None
     credit_short_label: str | None = None
 
+
 class AdminMoneyBookingContextRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -34,6 +35,7 @@ class AdminMoneyBookingContextRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
 class AdminMoneyParticipantContextRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -52,6 +54,7 @@ class AdminMoneyParticipantContextRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
 class AdminMoneyGameContextRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -68,6 +71,7 @@ class AdminMoneyGameContextRead(BaseModel):
     price_per_player_cents: int
     currency: str
 
+
 class AdminMoneyPaymentUserContextRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -76,6 +80,7 @@ class AdminMoneyPaymentUserContextRead(BaseModel):
     first_name: str | None
     last_name: str | None
     account_status: str
+
 
 class AdminMoneyHostPublishFeeContextRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -91,6 +96,7 @@ class AdminMoneyHostPublishFeeContextRead(BaseModel):
     paid_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
 
 class AdminMoneyCommunityPublishAttemptContextRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -108,6 +114,7 @@ class AdminMoneyCommunityPublishAttemptContextRead(BaseModel):
     expires_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
 
 class AdminMoneyAuditActionSummaryRead(BaseModel):
     id: UUID

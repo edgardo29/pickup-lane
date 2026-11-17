@@ -13,6 +13,8 @@ from backend.schemas import (
 from backend.services.auth_service import get_current_app_user, require_active_admin
 from backend.services.game_participant_service import (
     get_game_participant_for_user_or_404,
+)
+from backend.services.game_participant_service import (
     list_game_participants as list_game_participants_workflow,
 )
 from backend.services.game_service import list_current_user_game_participants
@@ -78,7 +80,9 @@ def get_game_participant(
 
 
 # Admin-only endpoint for roster row queries.
-@router.get("", response_model=list[GameParticipantRead], status_code=status.HTTP_200_OK)
+@router.get(
+    "", response_model=list[GameParticipantRead], status_code=status.HTTP_200_OK
+)
 def list_game_participants(
     game_id: uuid.UUID | None = None,
     booking_id: uuid.UUID | None = None,

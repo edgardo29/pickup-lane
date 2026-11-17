@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -188,9 +188,7 @@ def get_public_community_game_detail(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Community game details not found.",
         )
-    db_community_game_detail = db.get(
-        CommunityGameDetail, community_game_detail_id
-    )
+    db_community_game_detail = db.get(CommunityGameDetail, community_game_detail_id)
 
     if db_community_game_detail is None:
         raise HTTPException(
@@ -210,7 +208,7 @@ def get_public_community_game_detail(
             db,
             db_game,
             current_user,
-            now=datetime.now(timezone.utc),
+            now=datetime.now(UTC),
         )
     ):
         raise HTTPException(
@@ -235,7 +233,7 @@ def user_can_view_community_game_details(
         db,
         db_game,
         current_user,
-        now=datetime.now(timezone.utc),
+        now=datetime.now(UTC),
     )
 
 
@@ -258,10 +256,15 @@ def list_public_community_game_details(
 
     if game_id is not None:
         game_ref = db.execute(
-            select(Game.id, Game.game_type, Game.public_visibility_status, Game.deleted_at)
-            .where(Game.id == game_id)
+            select(
+                Game.id, Game.game_type, Game.public_visibility_status, Game.deleted_at
+            ).where(Game.id == game_id)
         ).one_or_none()
-        if game_ref is None or game_ref.deleted_at is not None or game_ref.game_type != "community":
+        if (
+            game_ref is None
+            or game_ref.deleted_at is not None
+            or game_ref.game_type != "community"
+        ):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Community game details not found.",
@@ -342,7 +345,7 @@ def update_community_game_detail_workflow(
     for field_name, field_value in update_data.items():
         setattr(db_community_game_detail, field_name, field_value)
 
-    db_community_game_detail.updated_at = datetime.now(timezone.utc)
+    db_community_game_detail.updated_at = datetime.now(UTC)
 
     try:
         db.add(db_community_game_detail)
@@ -434,10 +437,8 @@ def upsert_host_community_game_detail_workflow(
             detail="Only published active games can be edited.",
         )
 
-    now = datetime.now(timezone.utc)
-    require_game_not_started(
-        db_game, now, "Games cannot be edited after start time."
-    )
+    now = datetime.now(UTC)
+    require_game_not_started(db_game, now, "Games cannot be edited after start time.")
 
     detail_data = {
         "game_id": game_id,
@@ -458,9 +459,9 @@ def upsert_host_community_game_detail_workflow(
             payment_instructions_snapshot=detail_update.payment_instructions_snapshot,
         )
     else:
-        db_community_game_detail.payment_methods_snapshot = (
-            [method.model_dump() for method in detail_update.payment_methods_snapshot]
-        )
+        db_community_game_detail.payment_methods_snapshot = [
+            method.model_dump() for method in detail_update.payment_methods_snapshot
+        ]
         db_community_game_detail.payment_instructions_snapshot = (
             detail_update.payment_instructions_snapshot
         )

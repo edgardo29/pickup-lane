@@ -26,7 +26,9 @@ def upcoming_saturday() -> datetime:
     if days_until_saturday == 0:
         days_until_saturday = 7
 
-    return datetime.combine(today + timedelta(days=days_until_saturday), time.min, CHICAGO_TZ)
+    return datetime.combine(
+        today + timedelta(days=days_until_saturday), time.min, CHICAGO_TZ
+    )
 
 
 def starts_at(day_offset: int, hour: int, minute: int = 0) -> datetime:
@@ -36,7 +38,9 @@ def starts_at(day_offset: int, hour: int, minute: int = 0) -> datetime:
 
 def relative_starts_at(day_offset: int, hour: int, minute: int = 0) -> datetime:
     today = datetime.now(CHICAGO_TZ).date()
-    return datetime.combine(today + timedelta(days=day_offset), time.min, CHICAGO_TZ).replace(
+    return datetime.combine(
+        today + timedelta(days=day_offset), time.min, CHICAGO_TZ
+    ).replace(
         hour=hour,
         minute=minute,
     )

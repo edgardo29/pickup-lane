@@ -2,7 +2,7 @@
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -330,7 +330,7 @@ def normalize_refund_lifecycle_fields(
     existing_refund: Refund | None = None,
 ) -> dict[str, object]:
     normalized_data = dict(refund_data)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     normalized_data["requested_at"] = (
         normalized_data.get("requested_at")
@@ -544,15 +544,11 @@ def get_refund_payment_ledger(
                     attempt=attempt,
                 )
             )
-            if (
-                identity_matches
-                and attempt.status in TERMINAL_REFUND_STATUSES
-            ):
+            if identity_matches and attempt.status in TERMINAL_REFUND_STATUSES:
                 continue
             # The active current attempt is already held by the Refund row.
-            if (
-                attempt_number == refund.current_attempt_number
-                and (current_is_reserved or excludes_current_attempt)
+            if attempt_number == refund.current_attempt_number and (
+                current_is_reserved or excludes_current_attempt
             ):
                 if attempt is not None and not identity_matches:
                     attempt_history_complete = False

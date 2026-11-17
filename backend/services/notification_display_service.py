@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import and_, or_, select
@@ -24,7 +24,7 @@ _MISSING = object()
 
 def ensure_aware_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
+        return value.replace(tzinfo=UTC)
 
     return value
 
@@ -63,7 +63,7 @@ def to_local_datetime(value: datetime, timezone_name: str) -> datetime:
     try:
         local_timezone = ZoneInfo(timezone_name)
     except ZoneInfoNotFoundError:
-        local_timezone = timezone.utc
+        local_timezone = UTC
 
     return aware_value.astimezone(local_timezone)
 
@@ -117,7 +117,7 @@ def build_sub_chat_message_action(
     closes_at = ensure_aware_utc(sub_post.ends_at) + timedelta(
         hours=SUB_CHAT_MESSAGE_ACTION_GRACE_HOURS
     )
-    if datetime.now(timezone.utc) > closes_at:
+    if datetime.now(UTC) > closes_at:
         return build_disabled_action_payload(
             action_key,
             "This Need a Sub chat is closed.",
@@ -168,7 +168,9 @@ def build_notification_action(
         ):
             return None
 
-        return build_action_payload(action_key, f"/games/{notification.related_game_id}")
+        return build_action_payload(
+            action_key, f"/games/{notification.related_game_id}"
+        )
 
     if action_key == "view_sub_post":
         if notification.related_sub_post_id is None:
@@ -193,7 +195,7 @@ def build_notification_action(
         starts_at = ensure_aware_utc(sub_post.starts_at)
         if (
             sub_post.post_status not in ACTIVE_VISIBLE_POST_STATUSES
-            or starts_at < datetime.now(timezone.utc)
+            or starts_at < datetime.now(UTC)
         ):
             return None
 
@@ -204,7 +206,9 @@ def build_notification_action(
 
     if action_key == "view_policy":
         return {
-            **build_action_payload(action_key, policy_path_for_notification(notification)),
+            **build_action_payload(
+                action_key, policy_path_for_notification(notification)
+            ),
             "state": {
                 "from": "/inbox",
                 "fromLabel": "Back to Inbox",
@@ -272,7 +276,9 @@ def serialize_notification(
         "notification_category": notification.notification_category,
         "notification_domain": notification.notification_domain,
         "source_type": notification.source_type,
-        "source_label": SOURCE_LABEL_BY_TYPE.get(notification.source_type, "Pickup Lane"),
+        "source_label": SOURCE_LABEL_BY_TYPE.get(
+            notification.source_type, "Pickup Lane"
+        ),
         "title": notification.title,
         "subject_label": notification.subject_label,
         "subject_starts_at": notification.subject_starts_at,
@@ -349,7 +355,9 @@ def load_notification_sub_posts(
         return {}
 
     return dict(
-        db.execute(select(SubPost.id, SubPost).where(SubPost.id.in_(sub_post_ids))).all()
+        db.execute(
+            select(SubPost.id, SubPost).where(SubPost.id.in_(sub_post_ids))
+        ).all()
     )
 
 

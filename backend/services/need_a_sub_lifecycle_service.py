@@ -15,10 +15,10 @@ from backend.models import (
     SubPostStatusHistory,
     User,
 )
-from backend.services.auth_service import user_is_active_admin
 from backend.services.admin_review_service import (
     close_open_content_moderation_case_for_sub_post_lifecycle,
 )
+from backend.services.auth_service import user_is_active_admin
 from backend.services.need_a_sub_notification_service import (
     resolve_owner_request_activity_notification,
 )
@@ -131,20 +131,25 @@ def list_lifecycle_positions(
         db.scalars(
             select(SubPostPosition)
             .where(SubPostPosition.sub_post_id == sub_post_id)
-            .order_by(SubPostPosition.sort_order.asc(), SubPostPosition.created_at.asc())
+            .order_by(
+                SubPostPosition.sort_order.asc(), SubPostPosition.created_at.asc()
+            )
         ).all()
     )
 
 
 def position_is_filled(db: Session, position: SubPostPosition) -> bool:
-    confirmed_count = db.scalar(
-        select(func.count())
-        .select_from(SubPostRequest)
-        .where(
-            SubPostRequest.sub_post_position_id == position.id,
-            SubPostRequest.request_status == "confirmed",
+    confirmed_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(SubPostRequest)
+            .where(
+                SubPostRequest.sub_post_position_id == position.id,
+                SubPostRequest.request_status == "confirmed",
+            )
         )
-    ) or 0
+        or 0
+    )
     return confirmed_count >= position.spots_needed
 
 
@@ -172,8 +177,10 @@ def recalculate_filled_status(
         sub_post.filled_at = current_time
         sub_post.updated_at = current_time
         db.add(sub_post)
-    elif not is_filled and sub_post.filled_at is not None and current_time < ensure_aware(
-        sub_post.starts_at
+    elif (
+        not is_filled
+        and sub_post.filled_at is not None
+        and current_time < ensure_aware(sub_post.starts_at)
     ):
         sub_post.filled_at = None
         sub_post.updated_at = current_time
@@ -217,9 +224,8 @@ def list_sub_post_status_history(
 ) -> list[SubPostStatusHistory]:
     sub_post = get_sub_post_for_history_or_404(db, sub_post_id)
 
-    if (
-        sub_post.owner_user_id != current_user.id
-        and not user_is_active_admin(current_user)
+    if sub_post.owner_user_id != current_user.id and not user_is_active_admin(
+        current_user
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -230,7 +236,9 @@ def list_sub_post_status_history(
         db.scalars(
             select(SubPostStatusHistory)
             .where(SubPostStatusHistory.sub_post_id == sub_post_id)
-            .order_by(SubPostStatusHistory.created_at.asc(), SubPostStatusHistory.id.asc())
+            .order_by(
+                SubPostStatusHistory.created_at.asc(), SubPostStatusHistory.id.asc()
+            )
             .offset(bounded_collection_offset(offset))
             .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
         ).all()
@@ -280,10 +288,12 @@ def expire_due_posts_and_requests(db: Session) -> dict[str, int]:
     expired_requests_count = 0
 
     posts = db.scalars(
-        select(SubPost).where(
+        select(SubPost)
+        .where(
             SubPost.post_status.in_(ACTIVE_VISIBLE_POST_STATUSES),
             SubPost.expires_at <= current_time,
-        ).with_for_update()
+        )
+        .with_for_update()
     ).all()
 
     for sub_post in posts:

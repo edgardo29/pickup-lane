@@ -1,7 +1,7 @@
 """Game image scaffold read and admin mutation workflows."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -179,7 +179,7 @@ def normalize_game_image_lifecycle_fields(
         normalized_data["is_primary"] = False
 
         if normalized_data.get("deleted_at") is None:
-            normalized_data["deleted_at"] = datetime.now(timezone.utc)
+            normalized_data["deleted_at"] = datetime.now(UTC)
 
     return normalized_data
 
@@ -358,7 +358,7 @@ def update_game_image_record(
     for field_name, field_value in effective_image_data.items():
         setattr(db_game_image, field_name, field_value)
 
-    db_game_image.updated_at = datetime.now(timezone.utc)
+    db_game_image.updated_at = datetime.now(UTC)
 
     try:
         db.add(db_game_image)

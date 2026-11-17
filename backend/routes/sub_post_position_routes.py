@@ -19,7 +19,9 @@ router = APIRouter(
 )
 
 
-@router.get("", response_model=list[SubPostPositionRead], status_code=status.HTTP_200_OK)
+@router.get(
+    "", response_model=list[SubPostPositionRead], status_code=status.HTTP_200_OK
+)
 def list_need_a_sub_positions(
     sub_post_id: uuid.UUID,
     offset: int = Query(default=0, ge=0),

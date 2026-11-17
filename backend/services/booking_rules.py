@@ -1,6 +1,6 @@
 """Booking constants, validation, and lifecycle normalization."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
@@ -157,11 +157,9 @@ def validate_booking_business_rules(booking_data: dict[str, object]) -> None:
             ),
         )
 
-    if (
-        booking_data["booking_status"] == "confirmed"
-        and booking_data["payment_status"]
-        not in {"paid", "not_required", *FINANCIAL_SUMMARY_PAYMENT_STATUSES}
-    ):
+    if booking_data["booking_status"] == "confirmed" and booking_data[
+        "payment_status"
+    ] not in {"paid", "not_required", *FINANCIAL_SUMMARY_PAYMENT_STATUSES}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Confirmed bookings require payment_status 'paid' or 'not_required'.",
@@ -207,7 +205,7 @@ def normalize_booking_lifecycle_fields(
     existing_booking: Booking | None = None,
 ) -> dict[str, object]:
     normalized_data = dict(booking_data)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if normalized_data["booking_status"] in BOOKED_BOOKING_STATUSES:
         normalized_data["booked_at"] = (
@@ -221,11 +219,7 @@ def normalize_booking_lifecycle_fields(
     if normalized_data["booking_status"] in CANCELLED_BOOKING_STATUSES:
         normalized_data["cancelled_at"] = (
             normalized_data.get("cancelled_at")
-            or (
-                existing_booking.cancelled_at
-                if existing_booking is not None
-                else None
-            )
+            or (existing_booking.cancelled_at if existing_booking is not None else None)
             or now
         )
     else:

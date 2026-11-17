@@ -1,7 +1,7 @@
 """Venue lookup and scaffold workflow helpers."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -128,7 +128,7 @@ def normalize_venue_approval_fields(
             )
 
         if approved_at is None:
-            approved_at = datetime.now(timezone.utc)
+            approved_at = datetime.now(UTC)
     else:
         approved_by_user_id = None
         approved_at = None
@@ -138,7 +138,9 @@ def normalize_venue_approval_fields(
 
 def create_venue_record(db: Session, venue: VenueCreate) -> Venue:
     if venue.created_by_user_id is not None:
-        get_active_user_or_404(db, venue.created_by_user_id, "Created-by user not found.")
+        get_active_user_or_404(
+            db, venue.created_by_user_id, "Created-by user not found."
+        )
 
     if venue.approved_by_user_id is not None:
         get_active_user_or_404(
@@ -260,7 +262,7 @@ def update_venue_record(
     for field_name, field_value in update_data.items():
         setattr(db_venue, field_name, field_value)
 
-    db_venue.updated_at = datetime.now(timezone.utc)
+    db_venue.updated_at = datetime.now(UTC)
 
     try:
         db.add(db_venue)
@@ -295,7 +297,7 @@ def delete_venue_record(
 
     prior_is_active = db_venue.is_active
     prior_venue_status = db_venue.venue_status
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     db_venue.is_active = False
     db_venue.venue_status = "inactive"

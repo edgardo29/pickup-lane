@@ -8,16 +8,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.models import Notification, SubPost, SubPostPosition, SubPostRequest
-from backend.services.notification_event_service import (
-    build_need_a_sub_notification_fields,
-    reopen_aggregated_notification,
-    resolve_aggregated_notification,
-)
 from backend.services.need_a_sub_rules import (
     SUB_POST_UPDATED_RECIPIENT_STATUSES,
     SUB_POST_UPDATED_STRUCTURAL_FIELDS,
     ensure_aware,
     now_utc,
+)
+from backend.services.notification_event_service import (
+    build_need_a_sub_notification_fields,
+    reopen_aggregated_notification,
+    resolve_aggregated_notification,
 )
 
 
