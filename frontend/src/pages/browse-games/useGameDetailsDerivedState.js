@@ -37,8 +37,8 @@ export function useGameDetailsDerivedState({
   )
 
   const participantSummary = useMemo(
-    () => getParticipantSummary(participants, game?.total_spots),
-    [game?.total_spots, participants],
+    () => getParticipantSummary(participants, game?.total_spots, game?.roster_counts),
+    [game?.roster_counts, game?.total_spots, participants],
   )
   const currentParticipant = useMemo(
     () =>

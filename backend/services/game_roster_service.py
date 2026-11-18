@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.models import Booking, Game, GameParticipant, Payment, User
+from backend.models import Booking, Game, GameParticipant, User
 from backend.schemas.game_schema import (
     GameGuestAddCreate,
     GameGuestAddRead,
@@ -83,71 +83,6 @@ def build_booking(
         price_per_player_snapshot_cents=db_game.price_per_player_cents,
         platform_fee_snapshot_cents=0,
         booked_at=now if is_confirmed else None,
-    )
-
-
-def create_booking_payment(
-    db_game: Game,
-    booking: Booking,
-    payer_user_id: uuid.UUID,
-    now: datetime,
-    *,
-    source: str,
-) -> Payment:
-    return Payment(
-        id=uuid.uuid4(),
-        payer_user_id=payer_user_id,
-        booking_id=booking.id,
-        game_id=None,
-        payment_type="booking",
-        provider="stripe",
-        provider_payment_intent_id=f"pi_demo_booking_{booking.id}",
-        provider_charge_id=f"ch_demo_booking_{booking.id}",
-        idempotency_key=f"booking:{booking.id}:succeeded",
-        creation_fingerprint=f"demo-booking-{booking.id.hex}"[:64],
-        provider_status="succeeded",
-        amount_cents=booking.total_cents,
-        currency=booking.currency,
-        payment_status="succeeded",
-        paid_at=now,
-        payment_metadata={
-            "source": source,
-            "game_id": str(db_game.id),
-            "demo": True,
-        },
-    )
-
-
-def create_booking_guest_add_payment(
-    db_game: Game,
-    booking: Booking,
-    payer_user_id: uuid.UUID,
-    added_count: int,
-    now: datetime,
-) -> Payment:
-    payment_id = uuid.uuid4()
-    return Payment(
-        id=payment_id,
-        payer_user_id=payer_user_id,
-        booking_id=booking.id,
-        game_id=None,
-        payment_type="booking",
-        provider="stripe",
-        provider_payment_intent_id=f"pi_demo_booking_add_guests_{payment_id}",
-        provider_charge_id=f"ch_demo_booking_add_guests_{payment_id}",
-        idempotency_key=f"booking:{booking.id}:add_guests:{payment_id}:succeeded",
-        creation_fingerprint=f"demo-guest-{payment_id.hex}"[:64],
-        provider_status="succeeded",
-        amount_cents=db_game.price_per_player_cents * added_count,
-        currency=booking.currency,
-        payment_status="succeeded",
-        paid_at=now,
-        payment_metadata={
-            "source": "booking_guest_add_demo",
-            "game_id": str(db_game.id),
-            "added_guest_count": added_count,
-            "demo": True,
-        },
     )
 
 
@@ -283,6 +218,11 @@ def join_game_roster_workflow(
     spots_left = max(db_game.total_spots - roster_count, 0)
 
     if party_size <= spots_left:
+        if game_requires_app_player_payment(db_game):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Joining this game is temporarily unavailable.",
+            )
         booking = build_booking(
             db_game,
             joining_user.id,
@@ -303,12 +243,6 @@ def join_game_roster_workflow(
 
         try:
             db.add(booking)
-            if game_requires_app_player_payment(db_game):
-                db.add(
-                    create_booking_payment(
-                        db_game, booking, joining_user.id, now, source="checkout_demo"
-                    )
-                )
             db.add_all(participants)
             db.add(db_game)
             db.commit()
@@ -526,6 +460,14 @@ def add_booking_game_guests_workflow(
         db_game, now, "Attendance changes are closed for this game."
     )
 
+    # The legacy direct mutation records a demo payment. Paid official guest
+    # additions must go through the real checkout charge and credit flow.
+    if game_requires_app_player_payment(db_game):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Guest additions for this game are temporarily unavailable.",
+        )
+
     if guest_request.guest_count <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -601,24 +543,12 @@ def add_booking_game_guests_workflow(
     booking.booking_status = "confirmed"
     booking.reservation_status = "confirmed"
     booking.expires_at = None
-    booking.payment_status = (
-        "paid" if game_requires_app_player_payment(db_game) else "not_required"
-    )
+    booking.payment_status = "not_required"
     booking.updated_at = now
     db_game.updated_at = now
 
     db.add_all(added_guests)
     db.add(booking)
-    if game_requires_app_player_payment(db_game):
-        db.add(
-            create_booking_guest_add_payment(
-                db_game,
-                booking,
-                acting_user.id,
-                len(added_guests),
-                now,
-            )
-        )
     db.flush()
     sync_game_capacity_status(db, db_game)
 

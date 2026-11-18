@@ -56,6 +56,7 @@ export function buildGameDetailsViewModel({
     { includeVenue: false },
   )
   const isCancelledGame = game.game_status === 'cancelled'
+  const isPausedGame = game.game_type === 'community' && game.join_enforcement_status === 'paused'
   const gameToneLabel = isCancelledGame
     ? 'Cancelled'
     : game.game_type === 'community'
@@ -124,6 +125,9 @@ export function buildGameDetailsViewModel({
     !['published'].includes(game.publish_status) ||
     game.game_status !== 'active' ||
     isJoinWindowClosed
+  // A suspended player keeps existing bookings and hosted games but cannot
+  // join or add guests through checkout.
+  const isSuspendedUser = currentUser?.account_status === 'suspended'
   const playerGuestMax = game.allow_guests ? game.max_guests_per_booking || 0 : 0
   const isConfirmedPlayer =
     Boolean(currentParticipant) &&
@@ -133,7 +137,8 @@ export function buildGameDetailsViewModel({
   const bookingGuestAddSlots = canShowBookingGuestAction
     ? Math.max(Math.min(playerGuestMax - currentGuestCount, participantSummary.spotsLeft), 0)
     : 0
-  const canAddBookingGuests = canShowBookingGuestAction && !isGameClosed && bookingGuestAddSlots > 0
+  const canAddBookingGuests =
+    canShowBookingGuestAction && !isGameClosed && !isPausedGame && !isSuspendedUser && bookingGuestAddSlots > 0
   const joinLabel = getJoinLabel({
     currentParticipant,
     gameStatus: game.game_status,
@@ -143,12 +148,16 @@ export function buildGameDetailsViewModel({
     isPublished: game.publish_status === 'published',
     isHost,
     isJoining,
+    isPaused: isPausedGame,
+    isSuspended: isSuspendedUser,
     participantSummary,
     waitlistEnabled: game.waitlist_enabled,
   })
-  const isJoinDisabled = Boolean(isHost || currentParticipant || isGameClosed || isJoining)
+  const isJoinDisabled = Boolean(
+    isHost || currentParticipant || isGameClosed || isPausedGame || isJoining || isSuspendedUser,
+  )
   const isClosedJoinStatus =
-    isJoinDisabled && ['Cancelled', 'Completed', 'Join Closed', 'Game Closed'].includes(joinLabel)
+    isJoinDisabled && ['Cancelled', 'Completed', 'Join Closed', 'Game Closed', 'Joining Temporarily Paused'].includes(joinLabel)
   const mobileActionCount = [
     canShowEditGame,
     isHost && hostGuestMax > 0,
@@ -180,6 +189,7 @@ export function buildGameDetailsViewModel({
     isHost,
     isJoinDisabled,
     isJoinWindowClosed,
+    isPausedGame,
     joinLabel,
     mapsUrl,
     mobileActionCount,

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ApiRequestError } from '../../lib/apiClient.js'
 import {
   loadGameDetails as loadGameDetailsData,
   refreshGameParticipants as refreshGameParticipantsData,
@@ -59,8 +60,12 @@ export function useGameDetailsData({
         }
       } catch (requestError) {
         if (!ignore) {
-          setError(requestError instanceof Error ? requestError.message : 'Unable to load game.')
-          setStatus('error')
+          if (requestError instanceof ApiRequestError && requestError.status === 404) {
+            setStatus('not-found')
+          } else {
+            setError(requestError instanceof Error ? requestError.message : 'Unable to load game.')
+            setStatus('error')
+          }
         }
       }
     }

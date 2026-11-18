@@ -16,6 +16,7 @@ export function GameDetailsSidebar({
   isHost,
   isJoinDisabled,
   isJoinWindowClosed,
+  isPausedGame,
   isUpdatingGuests,
   joinLabel,
   joinNotice,
@@ -60,7 +61,7 @@ export function GameDetailsSidebar({
         isUpdatingHostGuests={isUpdatingGuests}
         isCancellingGame={isCancellingGame}
         onManageHostGuests={isHost ? onOpenHostGuestModal : null}
-        manageHostGuestsDisabled={isCancelledGame || isJoinWindowClosed}
+        manageHostGuestsDisabled={isCancelledGame || isJoinWindowClosed || isPausedGame}
       />
     </aside>
   )

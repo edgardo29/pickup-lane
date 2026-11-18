@@ -1,7 +1,9 @@
 export const ACTIVE_ROSTER_STATUSES = new Set(['pending_payment', 'confirmed'])
 export const ACTIVE_JOIN_STATUSES = new Set(['pending_payment', 'confirmed', 'waitlisted'])
 
-export function getParticipantSummary(participants, totalSpots = 0) {
+// rosterCounts, when given, is the game's roster_counts from the API. It
+// supplies the totals, so they are right even without the player list.
+export function getParticipantSummary(participants, totalSpots = 0, rosterCounts = null) {
   const rosterParticipants = participants
     .filter((participant) => ACTIVE_ROSTER_STATUSES.has(participant.participant_status))
     .sort(
@@ -16,6 +18,18 @@ export function getParticipantSummary(participants, totalSpots = 0) {
   const waitlist = groupParticipantParties(waitlistParticipants)
   const host = roster.find((participant) => participant.participant_type === 'host') || null
   const spotsLeft = Math.max((totalSpots || 0) - rosterParticipants.length, 0)
+
+  if (rosterCounts) {
+    return {
+      host,
+      roster,
+      signedUpCount: rosterCounts.occupied_spots,
+      spotsLeft: rosterCounts.spots_remaining,
+      totalSpots: totalSpots || rosterCounts.occupied_spots,
+      waitlist,
+      waitlistCount: rosterCounts.waitlist_count,
+    }
+  }
 
   return {
     host,

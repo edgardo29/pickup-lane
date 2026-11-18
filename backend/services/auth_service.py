@@ -376,6 +376,23 @@ def require_active_user(
     return current_user
 
 
+def require_active_or_suspended_user(
+    current_user: User = Depends(get_current_app_user),
+) -> User:
+    """A signed-in user who may keep existing commitments.
+
+    A suspended player may still use bookings, games, and chats they already
+    have, but may not start new participation. Routes for new participation
+    use require_active_user or require_verified_user instead.
+    """
+    if current_user.account_status not in {"active", "suspended"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Active account required.",
+        )
+    return current_user
+
+
 def require_recent_app_user(
     current_user: User = Depends(get_current_app_user),
     _identity: VerifiedFirebaseIdentity = Depends(require_recent_authentication),
@@ -394,6 +411,23 @@ def require_verified_user(
     current_user: User = Depends(require_active_user),
     identity: VerifiedFirebaseIdentity = Depends(get_verified_firebase_identity),
     db: Session = Depends(get_db),
+) -> User:
+    return _require_verified_email(current_user, identity, db)
+
+
+def require_verified_user_allowing_suspended(
+    current_user: User = Depends(require_active_or_suspended_user),
+    identity: VerifiedFirebaseIdentity = Depends(get_verified_firebase_identity),
+    db: Session = Depends(get_db),
+) -> User:
+    """Verified email, for existing commitments a suspended player may keep."""
+    return _require_verified_email(current_user, identity, db)
+
+
+def _require_verified_email(
+    current_user: User,
+    identity: VerifiedFirebaseIdentity,
+    db: Session,
 ) -> User:
     if sync_firebase_identity_snapshots(current_user, identity, db):
         try:

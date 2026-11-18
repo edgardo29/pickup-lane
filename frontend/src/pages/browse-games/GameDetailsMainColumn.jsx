@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ArrowLeft, CircleDollarSign, CircleHelp, ClipboardList, Info, MapPin } from 'lucide-react'
 import { GameChatCard } from './GameDetailsChat.jsx'
+import { GameChangeReviewCard } from './GameChangeReviewCard.jsx'
 import { GameGallery } from './GameDetailsGallery.jsx'
 import { HostPaymentSection } from './GameDetailsHostPayment.jsx'
 import { WhereToGoCard } from './GameDetailsLocation.jsx'
@@ -18,6 +19,7 @@ export function GameDetailsMainColumn({
   canOpenGameChat,
   canShowCancelGame,
   canShowEditGame,
+  changeReview,
   chatMessages,
   chatSenderNames,
   currentGuestCount,
@@ -37,6 +39,7 @@ export function GameDetailsMainColumn({
   isCancellingGame,
   isHost,
   isJoinWindowClosed,
+  isPausedGame,
   isUpdatingGuests,
   latestChatMessage,
   mapsUrl,
@@ -105,6 +108,20 @@ export function GameDetailsMainColumn({
         <QuickFacts facts={facts} price={price} variant="mobile" />
       </section>
 
+      {game.game_type === 'community' && (
+        <p className="details-community-payment-notice">
+          Payment happens outside Pickup Lane, directly with the organizer. Payment disputes
+          and refunds remain between you and the original organizer; Pickup Lane does not
+          process or guarantee refunds.
+        </p>
+      )}
+
+      {isPausedGame && (
+        <p className="details-paused-notice" role="status">
+          Joining Temporarily Paused. Existing participants can view their booking and leave.
+        </p>
+      )}
+
       <GameDetailsMobileActions
         canCancelGame={canCancelGame}
         canEditGame={canEditGame}
@@ -118,6 +135,7 @@ export function GameDetailsMainColumn({
         isCancellingGame={isCancellingGame}
         isHost={isHost}
         isJoinWindowClosed={isJoinWindowClosed}
+        isPausedGame={isPausedGame}
         isUpdatingGuests={isUpdatingGuests}
         mobileActionCount={mobileActionCount}
         onOpenCancelGameModal={onOpenCancelGameModal}
@@ -160,6 +178,14 @@ export function GameDetailsMainColumn({
           senderNames={chatSenderNames}
         />
       </section>
+
+      {changeReview && (
+        <GameChangeReviewCard
+          {...changeReview}
+          onSubmit={changeReview.submit}
+          timeZone={game.timezone}
+        />
+      )}
 
       {shouldShowOptionalInfo && (
         <section

@@ -34,11 +34,11 @@ Game Details lets visitors review one official or community game before joining.
 
 ### 4.1. Visibility and Access
 
-Publicly visible game details can be opened without signing in. Hidden games are available only to authorized connected users or staff; unrelated visitors receive a not-found result. The player list remains a signed-in page action. Game chat requires an active host or confirmed player, never a guest, waitlisted player, or unrelated user. A verified email is required to join or change attendance, make host changes, start game chat, or send chat messages; public game details remain viewable without verification. Suspended players cannot initiate new participation or add guests, but may access existing bookings, fulfill accepted commitments, manage games they already host, and withdraw; see [User Detail](../admin/user-detail.md#410-suspended-player-experience).
+Publicly visible game details can be opened without signing in. Hidden games are available only to authorized connected users or staff; unrelated visitors receive a not-found result. The player list remains a signed-in page action. Game chat requires an active host or confirmed player, never a guest, waitlisted player, or unrelated user. A verified email is required to join or change attendance, make host changes, start game chat, or send chat messages; public game details remain viewable without verification. Suspended players cannot initiate new participation or add guests, but may access existing bookings, fulfill accepted commitments, manage games they already host, and withdraw; see [User Detail](../admin/user-detail.md#410-suspended-player-experience). Managing a hosted game includes adding host guests, so the roster stays accurate.
 
 ### 4.2. Joining Window
 
-Joining, waitlisting, attendance changes, guest changes, and promotion close exactly five minutes after scheduled start. A nonparticipant then sees **Join Closed**. A full game can offer **Join Waitlist** only while that window is open and the waitlist accepts players. Joining, guest pricing, payment, and promotion rules are owned by [Game Checkout](../player/game-checkout.md) and the established game/booking notes.
+Joining, waitlisting, attendance changes, guest changes, promotion, and requests to leave because official-game details changed close exactly five minutes after scheduled start. A nonparticipant then sees **Join Closed**. A full game can offer **Join Waitlist** only while that window is open and the waitlist accepts players. Joining, guest pricing, payment, and promotion rules are owned by [Game Checkout](../player/game-checkout.md) and the established game/booking notes.
 
 ### 4.3. Host and Player Changes
 

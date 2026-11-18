@@ -11,7 +11,7 @@ export async function loadGameDetails({ appUser, firebaseUser, gameId }) {
     game.game_type === 'official'
       ? apiRequest(`/venue-images?venue_id=${game.venue_id}`).catch(() => [])
       : Promise.resolve([]),
-    loadParticipantsForDetail(gameId, authHeaders),
+    firebaseUser ? loadParticipantsForDetail(gameId, authHeaders) : Promise.resolve([]),
     apiRequest(`/venues/${game.venue_id}`).catch(() => null),
   ])
   const displayImages =
@@ -48,7 +48,7 @@ export async function loadGameDetails({ appUser, firebaseUser, gameId }) {
 export async function refreshGameParticipants(gameId, firebaseUser) {
   const authHeaders = firebaseUser ? await getChatAuthHeaders(firebaseUser) : {}
   const [participants, game] = await Promise.all([
-    loadParticipantsForDetail(gameId, authHeaders),
+    firebaseUser ? loadParticipantsForDetail(gameId, authHeaders) : Promise.resolve([]),
     apiRequest(`/games/${gameId}`, { headers: authHeaders }),
   ])
 
@@ -159,6 +159,8 @@ async function getOrCreateGameChat(gameId, firebaseUser) {
   })
 }
 
+// The player list is for signed-in visitors; signed-out visitors get the
+// roster totals from the game's roster_counts instead.
 async function loadParticipantsForDetail(gameId, authHeaders) {
   try {
     return await apiRequest(`/games/${gameId}/participants`, { headers: authHeaders })
@@ -169,4 +171,21 @@ async function loadParticipantsForDetail(gameId, authHeaders) {
 
     throw error
   }
+}
+
+export async function loadGameChangeReview(gameId, firebaseUser) {
+  return apiRequest(`/games/${gameId}/change-review`, {
+    headers: await getChatAuthHeaders(firebaseUser),
+  })
+}
+
+export async function requestGameChangeRemoval(gameId, firebaseUser, reliefChoice) {
+  return apiRequest(`/games/${gameId}/change-removal-requests`, {
+    method: 'POST',
+    headers: {
+      ...(await getChatAuthHeaders(firebaseUser)),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ relief_choice: reliefChoice }),
+  })
 }

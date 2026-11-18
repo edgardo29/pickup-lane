@@ -31,6 +31,7 @@ from backend.schemas.game_schema import (
     GameCardRead,
     GameCreate,
     GameDetailRead,
+    GameRosterCountsRead,
     GameTimeGroupRead,
     GameUpdate,
     MyGameCardRead,
@@ -810,6 +811,40 @@ def build_capacity_holding_participant_condition(now: datetime):
             Booking.expires_at > now,
             Booking.payment_status.in_(ACTIVE_PAYMENT_HOLD_BOOKING_STATUSES),
         ),
+    )
+
+
+def build_game_roster_counts(
+    db: Session,
+    game: Game,
+    *,
+    now: datetime,
+) -> GameRosterCountsRead:
+    """Count filled spots the way Browse does, plus the waitlist, without names."""
+    occupied_spots = int(
+        db.scalar(
+            select(func.count(GameParticipant.id))
+            .outerjoin(Booking, GameParticipant.booking_id == Booking.id)
+            .where(
+                GameParticipant.game_id == game.id,
+                build_capacity_holding_participant_condition(now),
+            )
+        )
+        or 0
+    )
+    waitlist_count = int(
+        db.scalar(
+            select(func.count(GameParticipant.id)).where(
+                GameParticipant.game_id == game.id,
+                GameParticipant.participant_status == "waitlisted",
+            )
+        )
+        or 0
+    )
+    return GameRosterCountsRead(
+        occupied_spots=occupied_spots,
+        spots_remaining=max(game.total_spots - occupied_spots, 0),
+        waitlist_count=waitlist_count,
     )
 
 

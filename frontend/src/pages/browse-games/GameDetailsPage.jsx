@@ -16,12 +16,12 @@ function GameDetailsPage() {
     return <DetailsScaffold state={<DetailsState title="Could not load game" message={page.error} />} />
   }
 
-  if (!page.game || !page.viewModel || !page.layoutProps) {
+  if (page.status === 'not-found' || !page.game || !page.viewModel || !page.layoutProps) {
     return (
       <DetailsScaffold
         state={
           <>
-            <DetailsState title="Game not found" message="This game may no longer be available." />
+            <DetailsState title="Game Not Found" message="This game may no longer be available." />
             <Link className="details-back-link" to="/games/browse">
               Back to games
             </Link>

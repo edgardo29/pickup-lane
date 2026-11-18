@@ -13,8 +13,8 @@ from backend.schemas import (
 )
 from backend.services.auth_service import (
     require_active_admin,
-    require_active_user,
-    require_verified_user,
+    require_active_or_suspended_user,
+    require_verified_user_allowing_suspended,
 )
 from backend.services.game_chat_service import (
     ensure_game_chat_for_game_workflow,
@@ -49,7 +49,7 @@ def create_game_chat(
 def ensure_game_chat_for_game(
     game_id: uuid.UUID,
     payload: GameChatEnsureCreate,
-    current_user: User = Depends(require_verified_user),
+    current_user: User = Depends(require_verified_user_allowing_suspended),
     db: Session = Depends(get_db),
 ) -> GameChatRead:
     return ensure_game_chat_for_game_workflow(db, game_id, payload, current_user)
@@ -63,7 +63,7 @@ def ensure_game_chat_for_game(
 def get_game_chat_read_state(
     game_chat_id: uuid.UUID,
     acting_user_id: uuid.UUID | None = None,
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_active_or_suspended_user),
     db: Session = Depends(get_db),
 ) -> GameChatReadStateRead:
     return get_game_chat_read_state_record(
@@ -82,7 +82,7 @@ def get_game_chat_read_state(
 def mark_game_chat_read(
     game_chat_id: uuid.UUID,
     payload: GameChatEnsureCreate,
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_active_or_suspended_user),
     db: Session = Depends(get_db),
 ) -> GameChatReadStateRead:
     return mark_game_chat_read_workflow(db, game_chat_id, payload, current_user)

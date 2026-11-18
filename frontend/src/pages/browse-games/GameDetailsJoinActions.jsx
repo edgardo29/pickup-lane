@@ -36,7 +36,7 @@ export function JoinActionStack({
 }) {
   return (
     <>
-      {['Hosting', 'Joined', 'Waitlisted', 'Cancelled'].includes(joinLabel) ? (
+      {['Hosting', 'Joined', 'Waitlisted', 'Cancelled', 'Joining Temporarily Paused'].includes(joinLabel) ? (
         <JoinStatusDisplay joinLabel={joinLabel} />
       ) : (
         <button
