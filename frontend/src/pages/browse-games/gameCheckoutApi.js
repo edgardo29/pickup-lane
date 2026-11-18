@@ -14,7 +14,7 @@ async function getAuthHeaders(firebaseUser) {
 
 export async function loadGameCheckout({ firebaseUser, gameId }) {
   const game = await apiRequest(`/games/${gameId}`)
-  const [venue, gameImages, venueImages, participants, paymentMethods] = await Promise.all([
+  const [venue, gameImages, venueImages, participants, paymentMethodsResult] = await Promise.all([
     apiRequest(`/venues/${game.venue_id}`).catch(() => null),
     apiRequest(`/game-images?game_id=${gameId}&image_status=active`).catch(() => []),
     game.game_type === 'official'
@@ -24,7 +24,11 @@ export async function loadGameCheckout({ firebaseUser, gameId }) {
     firebaseUser
       ? apiRequest(`/games/${gameId}/participants`, { headers: await getAuthHeaders(firebaseUser) })
       : Promise.resolve([]),
-    firebaseUser ? listUserPaymentMethods(firebaseUser).catch(() => []) : Promise.resolve([]),
+    firebaseUser && game.game_type === 'official' && game.payment_collection_type === 'in_app'
+      ? listUserPaymentMethods(firebaseUser)
+        .then((methods) => ({ methods, error: '' }))
+        .catch(() => ({ methods: [], error: 'Saved cards could not be loaded. Try again.' }))
+      : Promise.resolve({ methods: [], error: '' }),
   ])
   const images =
     game.game_type === 'official' && gameImages.length === 0 ? venueImages : gameImages
@@ -33,7 +37,8 @@ export async function loadGameCheckout({ firebaseUser, gameId }) {
     game,
     images,
     participants,
-    paymentMethods,
+    paymentMethods: paymentMethodsResult.methods,
+    paymentMethodsError: paymentMethodsResult.error,
     venue,
   }
 }

@@ -1891,13 +1891,14 @@ def apply_guest_payment_failed_or_canceled(
     payment_intent: dict[str, Any],
     now: datetime,
     is_canceled: bool,
+    payment_status: str | None = None,
 ) -> str | None:
     """Drop the guests a failed payment was for and release their credit."""
     from backend.services.checkout_service import cancel_pending_guests
 
-    terminal_payment_status = "canceled" if is_canceled else "failed"
-    if payment.payment_status == terminal_payment_status:
-        return None
+    terminal_payment_status = payment_status or (
+        "canceled" if is_canceled else "failed"
+    )
 
     try:
         release_reserved_game_credits(
@@ -2100,6 +2101,28 @@ def apply_payment_intent_pending_observation(
         return
     if not provider_observation_can_advance(payment.payment_status, observed_status):
         mark_event_ignored(event, "Stripe observation would regress payment state.")
+        return
+    last_payment_error = payment_intent.get("last_payment_error")
+    if (
+        is_guest_checkout_payment(payment.payment_metadata)
+        and observed_status == "requires_payment_method"
+        and isinstance(last_payment_error, dict)
+        and isinstance(last_payment_error.get("code"), str)
+        and last_payment_error["code"]
+    ):
+        guest_payment_error = apply_guest_payment_failed_or_canceled(
+            db,
+            booking=booking,
+            payment=payment,
+            payment_intent=payment_intent,
+            now=now,
+            is_canceled=False,
+            payment_status=observed_status,
+        )
+        if guest_payment_error is not None:
+            mark_event_failed(event, guest_payment_error)
+            return
+        mark_event_processed(event, now)
         return
     expire_unresolved_checkout_hold_if_stale(db, booking, now)
     booking = get_locked_booking(db, payment.booking_id)

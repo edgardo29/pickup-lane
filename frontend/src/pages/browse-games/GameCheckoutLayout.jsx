@@ -38,12 +38,14 @@ function GameCheckoutLayout({
   onAutoChargeConsentChange,
   onBack,
   onChangePaymentMethod,
+  onRetryPaymentMethods,
   onConfirmBooking,
   onGuestCountChange,
   onOpenLegalPolicy,
   onSetAgreed,
   paymentMethod,
   paymentMethods,
+  paymentMethodsError,
   platformFee,
   price,
   primaryImage,
@@ -65,11 +67,13 @@ function GameCheckoutLayout({
     (isStripeCheckout && isStripeReady && !paymentMethod && quote?.payment_required === true) ||
     (isPaidWaitlistCheckout && !paymentMethod)
   const needsAutoChargeConsent = isPaidWaitlistCheckout && !autoChargeConsent
+  const needsLoadedCards = isPaidWaitlistCheckout || (isStripeCheckout && quote?.payment_required)
   const confirmDisabled =
     !agreed ||
     stripePaymentsDisabled ||
     isPriceUnavailable ||
     needsPaymentMethod ||
+    (needsLoadedCards && Boolean(paymentMethodsError)) ||
     needsAutoChargeConsent ||
     isSubmitting ||
     isBlockedByCapacity ||
@@ -83,6 +87,8 @@ function GameCheckoutLayout({
       ? 'Official game payments are disabled for this demo.'
       : isPriceUnavailable
         ? quoteError || 'Loading your price...'
+      : needsLoadedCards && paymentMethodsError
+        ? paymentMethodsError
       : needsPaymentMethod
         ? 'Add a payment method to continue.'
         : needsAutoChargeConsent
@@ -131,8 +137,10 @@ function GameCheckoutLayout({
               onAddPaymentMethod={onAddPaymentMethod}
               onAutoChargeConsentChange={onAutoChargeConsentChange}
               onChangePaymentMethod={onChangePaymentMethod}
+              onRetryPaymentMethods={onRetryPaymentMethods}
               paymentMethod={paymentMethod}
               paymentMethods={paymentMethods}
+              paymentMethodsError={paymentMethodsError}
               paymentRequired={quote ? quote.payment_required : true}
               setupError={setupError}
               stripePaymentsDisabled={stripePaymentsDisabled}
@@ -176,7 +184,7 @@ function GameCheckoutLayout({
             onConfirmBooking={onConfirmBooking}
             platformFee={platformFee}
             price={price}
-            quote={isStripeCheckout ? quote : null}
+            quote={isStripeCheckout || isWaitlistCheckout ? quote : null}
             total={total}
           />
         </div>

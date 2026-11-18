@@ -57,6 +57,7 @@ function GameDetailsLayout(props) {
         isHostGuestModalOpen={props.isHostGuestModalOpen}
         isLeaveModalOpen={props.isLeaveModalOpen}
         isLeaving={props.isLeaving}
+        isPausedGame={props.isPausedGame}
         isPlayerListOpen={props.isPlayerListOpen}
         isSendingChatMessage={props.isSendingChatMessage}
         isUpdatingGuests={props.isUpdatingGuests}

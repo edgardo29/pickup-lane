@@ -6,30 +6,30 @@ This is a read-only inventory of the **current repository schema declarations**,
 
 | Measure | Repository baseline |
 |---|---:|
-| Application tables | 64 |
-| Mapped columns | 1053 |
-| Declared foreign-key edges | 211 |
-| Declared indexes | 473 |
-| Named constraints | 431 |
-| CHECK constraints | 404 |
-| Alembic revisions | 65 (64 table revisions; one extension revision) |
+| Application tables | 65 |
+| Mapped columns | 1064 |
+| Declared foreign-key edges | 214 |
+| Declared indexes | 475 |
+| Named constraints | 432 |
+| CHECK constraints | 405 |
+| Alembic revisions | 66 (65 table revisions; one extension revision) |
 
-**Sources and authority.** [Database guidance](../coding-standards/database.md) defines PostgreSQL/Alembic as the schema-management path and the current editable, clean-rebuild migration policy. [Base](../../backend/database_metadata.py) owns mapped metadata; [model registration](../../backend/models/__init__.py) imports the mapped classes; [Alembic env](../../backend/alembic/env.py) sets that metadata as its comparison target and executes revisions against the configured database. The 64 current model files and 65 files in [`backend/alembic/versions/`](../../backend/alembic/versions/) were inspected. Application services and route code were consulted only to explain ownership or lifecycle where needed. The actual schema in any deployed or local database is a separate state and was not inspected.
+**Sources and authority.** [Database guidance](../coding-standards/database.md) defines PostgreSQL/Alembic as the schema-management path and the current editable, clean-rebuild migration policy. [Base](../../backend/database_metadata.py) owns mapped metadata; [model registration](../../backend/models/__init__.py) imports the mapped classes; [Alembic env](../../backend/alembic/env.py) sets that metadata as its comparison target and executes revisions against the configured database. The 65 current model files and 66 files in [`backend/alembic/versions/`](../../backend/alembic/versions/) were inspected. Application services and route code were consulted only to explain ownership or lifecycle where needed. The actual schema in any deployed or local database is a separate state and was not inspected.
 
-**Static reconciliation.** One canonical revision creates each mapped table. The migration chain has one base revision and one head. All 64 table names, 1,053 column names, 473 explicit index names, and 431 named constraint names match their corresponding model metadata. Static comparisons found no differences in compiled column types, declared nullability, primary-key flags, foreign-key targets and delete actions, server-default expressions, or index uniqueness, method, predicate, and operator-class options. CHECK expressions match after whitespace normalization except for one ordering difference in the allowed `admin_actions.action_type` values; the value sets match. The sole other syntactic difference is an unnamed uniqueness declaration on `user_payment_methods.stripe_payment_method_id`, expressed as a column flag in the model and a table constraint in its migration. These checks do not prove full index-expression parity or actual database state.
+**Static reconciliation.** One canonical revision creates each mapped table. The migration chain has one base revision and one head. All 65 table names, 1,064 column names, 475 explicit index names, and 432 named constraint names match their corresponding model metadata. Static comparisons found no differences in compiled column types, declared nullability, primary-key flags, foreign-key targets and delete actions, server-default expressions, or index uniqueness, method, predicate, and operator-class options. CHECK expressions match after whitespace normalization except for one ordering difference in the allowed `admin_actions.action_type` values; the value sets match. The sole other syntactic difference is an unnamed uniqueness declaration on `user_payment_methods.stripe_payment_method_id`, expressed as a column flag in the model and a table constraint in its migration. These checks do not prove full index-expression parity or actual database state.
 
 **Domains.** Accounts/authentication/settings; games/venues/hosting; bookings/guests/participants/waitlists; payments/refunds/credits/financial records; Need a Sub; notifications/communications; administration/moderation/auditing; and durable jobs/worker operations.
 
 **Structural observations.**
 
 - **Confirmed:** No model table lacks a table-creating migration, and no migration-created table lacks a model. No table, column-name, explicit-index-name, or named-constraint-name discrepancy was found in the static comparison. This is limited to repository declarations and naming/shape checks.
-- **Confirmed:** Relationships are represented by 211 foreign-key edges; the current mapped classes declare no SQLAlchemy `relationship()` properties. The inbound and outbound links below therefore describe database FKs, not ORM navigation attributes.
+- **Confirmed:** Relationships are represented by 214 foreign-key edges; the current mapped classes declare no SQLAlchemy `relationship()` properties. The inbound and outbound links below therefore describe database FKs, not ORM navigation attributes.
 - **Potential concern, not a confirmed defect:** `games.host_user_id` serves a required community owner and an optional official host designation. The different meanings share one column and are bounded by game-type CHECKs. Review its service use before changing this structure. See [game model](../../backend/models/game_model.py), [game migration](../../backend/alembic/versions/0013_create_games_table.py), and [official host service](../../backend/services/official_game_roster_service.py).
 - **Potential concern, not a confirmed defect:** Current-state rows coexist with status/history or event tables across games, bookings, participants, Need a Sub, money issues, refunds, and durable jobs. These structures appear to preserve transitions and provider/workflow evidence; they are not classified as redundant without a full use review. The history/event tables below list their own columns and constraints.
 - **Potential concern, not a confirmed defect:** Some historical `previous_status`/`new_status` values have no table-local value CHECK even where the parent current-status field is constrained. This may intentionally preserve historical/provider states. See [durable job events](../../backend/models/durable_job_event_model.py), [money issue events](../../backend/models/money_issue_event_model.py), and [refund events](../../backend/models/refund_event_model.py).
 - **Confirmed distinct structures:** User notifications, staff target notices, and platform notices have different target/read-state tables; payment, refund, compensation, and financial-outcome records have different lifecycle purposes. Similar names are not evidence of duplication. Their specific FKs and constraints appear below.
 
-**Non-table objects.** [Revision 0001](../../backend/alembic/versions/0001_enable_pg_trgm_extension.py) enables `pg_trgm`; [platform notices revision](../../backend/alembic/versions/0006_create_platform_notices_table.py) creates `platform_notice_global_sequence_seq`; [admin actions revision](../../backend/alembic/versions/0004_create_admin_actions_table.py) and [rejected attempts revision](../../backend/alembic/versions/0045_create_admin_rejected_attempts_table.py) create immutability functions/triggers. These objects are outside the 64-table count.
+**Non-table objects.** [Revision 0001](../../backend/alembic/versions/0001_enable_pg_trgm_extension.py) enables `pg_trgm`; [platform notices revision](../../backend/alembic/versions/0006_create_platform_notices_table.py) creates `platform_notice_global_sequence_seq`; [admin actions revision](../../backend/alembic/versions/0004_create_admin_actions_table.py) and [rejected attempts revision](../../backend/alembic/versions/0045_create_admin_rejected_attempts_table.py) create immutability functions/triggers. These objects are outside the 65-table count.
 
 **Verification limit.** No production, deployed, development, or test database was queried. Therefore this inventory cannot confirm which revision any database has applied, whether its schema was rebuilt after an edited canonical migration, or whether manually created objects or drift exist. The model-to-migration comparison above is static; full index-expression and live schema parity require a separate authorized verification step.
 
@@ -68,7 +68,7 @@ Account identity, profile, access state, and hosting eligibility. Sources: [mode
 - **Primary key:** `id`.
 - **Foreign keys:** None.
 - **Unique constraints:** `uq_users_auth_user_id`: `auth_user_id`; `uq_users_email`: `email`; `uq_users_phone`: `phone`; `uq_users_stripe_customer_id`: `stripe_customer_id`.
-- **Other table relationships:** Referenced by `admin_actions`, `admin_financial_outcomes`, `admin_rejected_attempts`, `admin_review_case_events`, `admin_review_case_notes`, `admin_review_cases`, `admin_review_signals`, `admin_target_notices`, `booking_status_history`, `bookings`, `chat_messages`, `community_game_details`, `community_publish_attempts`, `game_chat_reads`, `game_credits`, `game_images`, `game_participants`, `game_status_history`, `games`, `host_publish_entitlements`, `host_publish_fees`, `money_issue_events`, `money_issues`, `notifications`, `participant_status_history`, `payment_confirmation_attempts`, `payment_method_operations`, `payments`, `platform_notice_global_seen_states`, `platform_notice_recipients`, `platform_notice_selected_reads`, `platform_notices`, `policy_acceptances`, `refund_events`, `refunds`, `sub_post_chat_messages`, `sub_post_chat_reads`, `sub_post_request_status_history`, `sub_post_requests`, `sub_post_status_history`, `sub_posts`, `support_flags`, `user_payment_methods`, `user_settings`, `user_stats`, `venue_approval_requests`, `venue_images`, `venues`, `waitlist_entries`. Outbound references are listed under foreign keys.
+- **Other table relationships:** Referenced by `admin_actions`, `admin_financial_outcomes`, `admin_rejected_attempts`, `admin_review_case_events`, `admin_review_case_notes`, `admin_review_cases`, `admin_review_signals`, `admin_target_notices`, `booking_status_history`, `bookings`, `chat_messages`, `community_game_details`, `community_publish_attempts`, `game_change_removal_requests`, `game_chat_reads`, `game_credits`, `game_images`, `game_participants`, `game_status_history`, `games`, `host_publish_entitlements`, `host_publish_fees`, `money_issue_events`, `money_issues`, `notifications`, `participant_status_history`, `payment_confirmation_attempts`, `payment_method_operations`, `payments`, `platform_notice_global_seen_states`, `platform_notice_recipients`, `platform_notice_selected_reads`, `platform_notices`, `policy_acceptances`, `refund_events`, `refunds`, `sub_post_chat_messages`, `sub_post_chat_reads`, `sub_post_request_status_history`, `sub_post_requests`, `sub_post_status_history`, `sub_posts`, `support_flags`, `user_payment_methods`, `user_settings`, `user_stats`, `venue_approval_requests`, `venue_images`, `venues`, `waitlist_entries`. Outbound references are listed under foreign keys.
 - **Lifecycle/value fields:** `role`: `player`, `admin`; `account_status`: `active`, `suspended`, `pending_deletion`, `deleted`; `hosting_status`: `not_eligible`, `eligible`, `restricted`.
 - **CHECK constraints:**
   - `ck_users_account_status`: `account_status IN ('active', 'suspended', 'pending_deletion', 'deleted')`
@@ -756,7 +756,7 @@ Player booking parties and their financial/attendance state. Sources: [model](..
 - **Primary key:** `id`.
 - **Foreign keys:** `buyer_user_id` → `users.id` (ON DELETE RESTRICT); `cancelled_by_user_id` → `users.id` (ON DELETE SET NULL); `game_id` → `games.id` (ON DELETE RESTRICT).
 - **Unique constraints:** None; see UNIQUE indexes below if present.
-- **Other table relationships:** Referenced by `booking_policy_acceptances`, `booking_status_history`, `game_credit_usage`, `game_credits`, `game_participants`, `money_issues`, `notifications`, `payment_compensations`, `payment_confirmation_attempts`, `payments`, `refunds`, `support_flags`, `waitlist_entries`. Outbound references are listed under foreign keys.
+- **Other table relationships:** Referenced by `booking_policy_acceptances`, `booking_status_history`, `game_change_removal_requests`, `game_credit_usage`, `game_credits`, `game_participants`, `money_issues`, `notifications`, `payment_compensations`, `payment_confirmation_attempts`, `payments`, `refunds`, `support_flags`, `waitlist_entries`. Outbound references are listed under foreign keys.
 - **Lifecycle/value fields:** `booking_status`: `pending_payment`, `confirmed`, `waitlisted`, `partially_cancelled`, `cancelled`, `expired`, `failed`, `capacity_conflict`; `payment_status`: `not_required`, `unpaid`, `requires_action`, `processing`, `paid`, `failed`, `partially_refunded`, `refunded`, `credit_restored`, `disputed`; `reservation_status`: `not_required`, `held`, `confirmed`, `released`, `capacity_conflict`.
 - **CHECK constraints:**
   - `ck_bookings_booking_status`: `booking_status IN ('pending_payment', 'confirmed', 'waitlisted', 'partially_cancelled', 'cancelled', 'expired', 'failed', 'capacity_conflict')`
@@ -1000,6 +1000,36 @@ Waitlist order and promotion/payment state. Sources: [model](../../backend/model
   - `ix_waitlist_entries_waitlist_status`: `waitlist_entries.waitlist_status`
   - `ux_waitlist_entries_active_position_per_game`: `waitlist_entries.game_id, waitlist_entries.position` (`UNIQUE`; `WHERE waitlist_status = 'active'`)
   - `ux_waitlist_entries_active_user_per_game`: `waitlist_entries.game_id, waitlist_entries.user_id` (`UNIQUE`; `WHERE waitlist_status IN ('active', 'payment_processing')`)
+
+### `game_change_removal_requests`
+
+A player's request to leave an official game whose details staff changed after booking, with the chosen relief. Submitting a request changes no booking, roster, refund, or credit; staff processing does. Sources: [model](../../backend/models/game_change_removal_request_model.py), [canonical migration](../../backend/alembic/versions/0066_create_game_change_removal_requests_table.py#L14).
+
+| Column | PostgreSQL type | Null | Default | Flags / references |
+|---|---|:---:|---|---|
+| `id` | `UUID` | No | — | PK |
+| `booking_id` | `UUID` | No | — | FK → `bookings.id` |
+| `requester_user_id` | `UUID` | No | — | FK → `users.id` |
+| `processed_by_user_id` | `UUID` | Yes | — | FK → `users.id` |
+| `relief_choice` | `VARCHAR(30)` | No | — | — |
+| `request_status` | `VARCHAR(20)` | No | server `'pending'` | — |
+| `submitted_at` | `TIMESTAMP WITH TIME ZONE` | No | server `now()` | — |
+| `processing_started_at` | `TIMESTAMP WITH TIME ZONE` | Yes | — | — |
+| `processed_at` | `TIMESTAMP WITH TIME ZONE` | Yes | — | — |
+| `created_at` | `TIMESTAMP WITH TIME ZONE` | No | server `now()` | — |
+| `updated_at` | `TIMESTAMP WITH TIME ZONE` | No | server `now()` | — |
+
+- **Primary key:** `id`.
+- **Foreign keys:** `booking_id` → `bookings.id` (no delete action declared; PostgreSQL's default NO ACTION); `processed_by_user_id` → `users.id` (ON DELETE SET NULL); `requester_user_id` → `users.id` (no delete action declared; PostgreSQL's default NO ACTION).
+- **Unique constraints:** None; see UNIQUE indexes below if present.
+- **Other table relationships:** Referenced by no other mapped table. Outbound references are listed under foreign keys.
+- **Lifecycle/value fields:** `relief_choice`: `original_payment_method`, `game_credit`; `request_status`: `pending`, `processing`, `completed`, `rejected`, `failed`.
+- **CHECK constraints:**
+  - `ck_game_change_removal_requests_relief_choice`: `relief_choice IN ('original_payment_method', 'game_credit')`
+  - `ck_game_change_removal_requests_status`: `request_status IN ('pending', 'processing', 'completed', 'rejected', 'failed')`
+- **Indexes:**
+  - `ix_game_change_removal_requests_booking_submitted`: `game_change_removal_requests.booking_id, game_change_removal_requests.submitted_at`
+  - `uq_game_change_removal_requests_active_booking`: `game_change_removal_requests.booking_id` (`UNIQUE`; `WHERE request_status IN ('pending', 'processing', 'failed')`)
 
 ## Payments, refunds, credits, and financial records
 

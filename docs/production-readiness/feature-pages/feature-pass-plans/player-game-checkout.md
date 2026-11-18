@@ -90,4 +90,10 @@
 
 ## 3. Work to do
 
-None. All work is done.
+Items 1–5 were found in the 2026-11-18 review and are done.
+
+1. Apply available game credit when a paid official waitlist offer is promoted. Record the credit and any covered small balance, charge only the remaining amount, and confirm without a Stripe charge when none is due. Re-check waitlist failure and notification behavior.
+2. Release pending guest spots and their reserved credit when Stripe confirms the guest charge failed; retain holds only for unresolved payments. Re-check guest retry and late-payment compensation.
+3. Recognize a completed paid guest addition on an eligible partially cancelled booking in checkout, and return to Game Details.
+4. Report a saved-card list load failure as a checkout load error instead of an empty list.
+5. Add focused F17 regression coverage for these paths and a genuinely overlapping credit-checkout test. Re-run affected backend and frontend verification, then review the corrected pass.

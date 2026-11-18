@@ -27,6 +27,7 @@ function GameDetailsOverlays({
   isHostGuestModalOpen,
   isLeaveModalOpen,
   isLeaving,
+  isPausedGame,
   isPlayerListOpen,
   isSendingChatMessage,
   isUpdatingGuests,
@@ -98,6 +99,8 @@ function GameDetailsOverlays({
         <LeaveGameModal
           addableGuestCount={bookingGuestAddSlots}
           canAddGuests={canAddBookingGuests}
+          // A paused game accepts no guest changes until joining resumes.
+          canRemoveGuests={!isPausedGame}
           isLeaving={isLeaving}
           isUpdatingGuests={isUpdatingGuests}
           isWaitlisted={currentParticipant?.participant_status === 'waitlisted'}

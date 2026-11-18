@@ -105,6 +105,30 @@ describe('Game Checkout confirmation', () => {
     })
   })
 
+  it('F17-19: card-list failure does not block a fully covered booking', async () => {
+    const user = userEvent.setup()
+    fakePageApi(game(), {
+      'GET /user-payment-methods': new Error('Card service unavailable'),
+      'GET /checkout/games/{game_id}/quote': quote({
+        available_credit_cents: 1000, credit_applied_cents: 1000,
+        final_amount_due_cents: 0, payment_required: false,
+      }),
+      'POST /checkout/games/{game_id}/payment-intent': paymentIntent({
+        client_secret: null, payment_id: null, amount_cents: 0, stripe_status: null,
+        credit_applied_cents: 1000, final_amount_due_cents: 0, stripe_amount_cents: 0,
+        payment_required: false, booking_status: 'confirmed', booking_payment_status: 'paid',
+        reservation_status: 'confirmed', payment_status: null, provider_status: null,
+      }),
+    })
+    renderCheckout()
+
+    expect(await screen.findByText('Saved cards could not be loaded. Try again.')).toBeInTheDocument()
+    expect(await screen.findByText('Nothing is due, so no card is needed.')).toBeInTheDocument()
+    await agreeAndConfirm(user)
+
+    expect(await screen.findByRole('heading', { name: 'Game Details' })).toBeInTheDocument()
+  })
+
   it('F17-4: choosing another saved card pays with that card', async () => {
     const user = userEvent.setup()
     fakePageApi(game(), {
@@ -196,6 +220,25 @@ describe('Game Checkout confirmation', () => {
     expect(screen.getByRole('link', { name: 'Back to game' })).toHaveAttribute(
       'href', expect.stringMatching(/\/games\/.+$/),
     )
+  })
+
+  it('F17-14: a saved-card load error is shown and can be retried', async () => {
+    const user = userEvent.setup()
+    fakePageApi(game(), {
+      'GET /user-payment-methods': new Error('Card service unavailable'),
+    })
+    renderCheckout()
+
+    expect(await screen.findByText('Saved cards could not be loaded. Try again.')).toBeInTheDocument()
+    expect(screen.queryByText('No payment method')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('checkbox', { name: 'Agree to Pickup Lane terms' }))
+    expect(screen.getAllByRole('button', { name: 'Confirm Spot' })[0]).toBeDisabled()
+
+    fakePageApi(game())
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+
+    expect(await screen.findByText('Selected for this booking', { exact: false })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Confirm Spot' })[0]).toBeEnabled()
   })
 
   it('F17-14: a second click while confirming sends only one request', async () => {

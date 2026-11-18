@@ -14,8 +14,10 @@ export function GameCheckoutPaymentCard({
   onAddPaymentMethod,
   onAutoChargeConsentChange,
   onChangePaymentMethod,
+  onRetryPaymentMethods,
   paymentMethod,
   paymentMethods = [],
+  paymentMethodsError = '',
   paymentRequired = true,
   setupError = '',
   stripePaymentsDisabled,
@@ -51,6 +53,14 @@ export function GameCheckoutPaymentCard({
             Secure payment is not configured.
           </FormErrorMessage>
         )}
+        {paymentMethodsError && (
+          <FormErrorMessage className="checkout-payment-error">
+            {paymentMethodsError}{' '}
+            <button className="checkout-payment-change" type="button" onClick={onRetryPaymentMethods}>
+              Retry
+            </button>
+          </FormErrorMessage>
+        )}
         {!stripePaymentsDisabled && !stripeUnavailable && hasSavedCards && paymentMethod && (
           <div
             className={`checkout-selected-payment${
@@ -69,7 +79,8 @@ export function GameCheckoutPaymentCard({
         {!stripePaymentsDisabled && !stripeUnavailable && !hasSavedCards && !paymentRequired && (
           <p className="checkout-payment-note">Nothing is due, so no card is needed.</p>
         )}
-        {!stripePaymentsDisabled && !stripeUnavailable && !hasSavedCards && paymentRequired && (
+        {!stripePaymentsDisabled && !stripeUnavailable && !paymentMethodsError &&
+          !hasSavedCards && paymentRequired && (
           <div className="checkout-payment-empty">
             <div>
               <strong>No payment method</strong>
@@ -93,9 +104,9 @@ export function GameCheckoutPaymentCard({
               onChange={(event) => onAutoChargeConsentChange(event.target.checked)}
             />
             <span>
-              If a spot opens for your whole party, Pickup Lane will charge this card{' '}
-              {formatMoney(waitlistChargeCents)}. You won't be charged now, and leaving the
-              waitlist before a spot opens costs nothing.
+              If a spot opens for your whole party, Pickup Lane may charge this card up to{' '}
+              {formatMoney(waitlistChargeCents)} after applying any available game credit.
+              You won't be charged now, and leaving the waitlist before a spot opens costs nothing.
             </span>
           </label>
         )}

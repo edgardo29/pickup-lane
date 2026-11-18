@@ -38,6 +38,9 @@ frontend/tests_archive/
 # Playwright workflows, kept locally while Playwright is on hold
 frontend/e2e/
 
+# Local demo-data scripts, for the developer's own use only
+backend/scripts/
+
 # Platform tests, kept locally until the production launch passes
 backend/tests/platform/
 

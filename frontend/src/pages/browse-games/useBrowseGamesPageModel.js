@@ -33,6 +33,7 @@ export function useBrowseGamesPageModel() {
   const listGenerationRef = useRef(0)
   const rawDateKeyRef = useRef(rawDateKey)
   const requestVersionRef = useRef(0)
+  const wasAwayRef = useRef(document.visibilityState === 'hidden')
 
   const activeDateKey = requestedDateKey || browseMeta?.browse_date || ''
 
@@ -221,18 +222,35 @@ export function useBrowseGamesPageModel() {
       loadFirstPage({ dateKey: activeDateKey, silent: true })
     }
 
+    function refreshOnReturn() {
+      if (!wasAwayRef.current || document.visibilityState === 'hidden') {
+        return
+      }
+
+      wasAwayRef.current = false
+      refreshCurrentDate()
+    }
+
     function handleVisibilityChange() {
-      if (document.visibilityState === 'visible') {
-        refreshCurrentDate()
+      if (document.visibilityState === 'hidden') {
+        wasAwayRef.current = true
+      } else {
+        refreshOnReturn()
       }
     }
 
-    window.addEventListener('focus', refreshCurrentDate)
+    function handleBlur() {
+      wasAwayRef.current = true
+    }
+
+    window.addEventListener('blur', handleBlur)
+    window.addEventListener('focus', refreshOnReturn)
     document.addEventListener('visibilitychange', handleVisibilityChange)
     const intervalId = window.setInterval(refreshCurrentDate, BROWSE_REFRESH_INTERVAL_MS)
 
     return () => {
-      window.removeEventListener('focus', refreshCurrentDate)
+      window.removeEventListener('blur', handleBlur)
+      window.removeEventListener('focus', refreshOnReturn)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.clearInterval(intervalId)
     }

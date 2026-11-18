@@ -38,6 +38,7 @@ async function waitOneMinute() {
 
 async function returnToPage() {
   await act(async () => {
+    fireEvent.blur(window)
     fireEvent.focus(window)
   })
 }
@@ -82,15 +83,43 @@ describe('Browse keeps the list current', () => {
     expect(loadBrowseGamesPage).toHaveBeenCalledTimes(1)
   })
 
-  it('F15-29: returning to the page refreshes it', async () => {
+  it('F15-29: returning to a visible window refreshes once', async () => {
     loadBrowseGamesPage.mockResolvedValue(page({ games: [card()] }))
     renderBrowse(`/games/browse?date=${TODAY}`)
     await waitForCards()
 
-    await act(async () => setVisibility('visible'))
     await returnToPage()
+    fireEvent.focus(window)
 
+    expect(loadBrowseGamesPage).toHaveBeenCalledTimes(2)
+
+    await returnToPage()
     expect(loadBrowseGamesPage).toHaveBeenCalledTimes(3)
+  })
+
+  it('F15-29: returning to a hidden tab refreshes once when it becomes visible', async () => {
+    loadBrowseGamesPage.mockResolvedValue(page({ games: [card()] }))
+    renderBrowse(`/games/browse?date=${TODAY}`)
+    await waitForCards()
+
+    setVisibility('hidden')
+    await act(async () => setVisibility('visible'))
+    fireEvent.focus(window)
+
+    expect(loadBrowseGamesPage).toHaveBeenCalledTimes(2)
+  })
+
+  it('F15-29: focus before a hidden tab becomes visible refreshes once on visibility', async () => {
+    loadBrowseGamesPage.mockResolvedValue(page({ games: [card()] }))
+    renderBrowse(`/games/browse?date=${TODAY}`)
+    await waitForCards()
+
+    setVisibility('hidden')
+    fireEvent.focus(window)
+    expect(loadBrowseGamesPage).toHaveBeenCalledTimes(1)
+
+    await act(async () => setVisibility('visible'))
+    expect(loadBrowseGamesPage).toHaveBeenCalledTimes(2)
   })
 
   it('F15-30: an expanded list stays visible while refreshing, then returns to the first batch', async () => {

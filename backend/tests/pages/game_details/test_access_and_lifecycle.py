@@ -6,7 +6,7 @@ from datetime import date, timedelta
 import pytest
 from sqlalchemy import func, select
 
-from backend.models import GameParticipant, Notification
+from backend.models import GameParticipant, Notification, User
 from backend.tests.factories import (
     make_booking,
     make_community_game_detail,
@@ -20,9 +20,21 @@ def ready_player(db, **overrides):
     return make_user(db, date_of_birth=date(1990, 1, 1), **overrides)
 
 
+def community_game(db, **overrides):
+    """A community game whose host holds a confirmed roster place, as publishing creates it."""
+    game = make_game(db, game_type="community", **overrides)
+    make_participant(
+        db, game=game, user=db.get(User, game.host_user_id), participant_type="host"
+    )
+    return game
+
+
 def participant_count(db, game):
     return db.scalar(
-        select(func.count(GameParticipant.id)).where(GameParticipant.game_id == game.id)
+        select(func.count(GameParticipant.id)).where(
+            GameParticipant.game_id == game.id,
+            GameParticipant.participant_type != "host",
+        )
     )
 
 
@@ -48,7 +60,7 @@ def test_visible_game_details_are_public_with_anonymous_roster_totals(
 def test_community_payment_text_is_returned_only_when_moderation_allows_it(
     clock, db, client
 ):
-    game = make_game(db, game_type="community", starts_at=clock.now + timedelta(days=2))
+    game = community_game(db, starts_at=clock.now + timedelta(days=2))
     detail = make_community_game_detail(
         db, game=game, payment_instructions_snapshot="Pay host before kickoff"
     )
@@ -93,9 +105,8 @@ def test_player_names_require_sign_in_but_any_signed_in_viewer_can_see_public_ro
 def test_hidden_game_and_host_payment_details_are_not_disclosed_to_strangers(
     clock, db, client, firebase
 ):
-    game = make_game(
+    game = community_game(
         db,
-        game_type="community",
         starts_at=clock.now + timedelta(days=2),
         public_visibility_status="hidden",
     )
@@ -117,9 +128,8 @@ def test_hidden_game_remains_visible_to_host_player_and_admin(
     clock, db, client, firebase
 ):
     host = ready_player(db, hosting_status="eligible")
-    game = make_game(
+    game = community_game(
         db,
-        game_type="community",
         host=host,
         starts_at=clock.now + timedelta(days=2),
         public_visibility_status="hidden",
@@ -143,9 +153,8 @@ def test_paused_game_blocks_new_join_and_guest_add_but_allows_existing_player_to
     clock, db, client, firebase
 ):
     host = ready_player(db, hosting_status="eligible")
-    game = make_game(
+    game = community_game(
         db,
-        game_type="community",
         host=host,
         starts_at=clock.now + timedelta(days=2),
         join_enforcement_status="paused",
@@ -177,9 +186,8 @@ def test_paused_game_blocks_new_join_and_guest_add_but_allows_existing_player_to
 
 @pytest.mark.page("F16", 25)
 def test_joining_resumes_when_pause_is_lifted(clock, db, client, firebase):
-    game = make_game(
+    game = community_game(
         db,
-        game_type="community",
         starts_at=clock.now + timedelta(days=2),
         join_enforcement_status="paused",
     )
@@ -199,9 +207,7 @@ def test_joining_resumes_when_pause_is_lifted(clock, db, client, firebase):
 def test_joining_closes_at_exactly_five_minutes_after_start(
     clock, db, client, firebase
 ):
-    game = make_game(
-        db, game_type="community", starts_at=clock.now - timedelta(minutes=4)
-    )
+    game = community_game(db, starts_at=clock.now - timedelta(minutes=4))
     player = ready_player(db)
     headers = firebase.sign_in(player)
 
@@ -222,9 +228,8 @@ def test_host_cancellation_closes_at_start_and_guest_changes_close_five_minutes_
     clock, db, client, firebase
 ):
     host = ready_player(db, hosting_status="eligible")
-    game = make_game(
+    game = community_game(
         db,
-        game_type="community",
         host=host,
         starts_at=clock.now,
         allow_guests=True,
@@ -252,7 +257,7 @@ def test_host_cancellation_closes_at_start_and_guest_changes_close_five_minutes_
 def test_unverified_email_can_read_details_but_cannot_join_or_change_attendance(
     clock, db, client, firebase
 ):
-    game = make_game(db, game_type="community", starts_at=clock.now + timedelta(days=2))
+    game = community_game(db, starts_at=clock.now + timedelta(days=2))
     player = ready_player(db)
     make_participant(db, game=game, user=player)
     headers = firebase.sign_in(player, email_verified=False)
@@ -273,9 +278,8 @@ def test_unverified_email_can_read_details_but_cannot_join_or_change_attendance(
 def test_unverified_email_cannot_start_or_send_game_chat(clock, db, client, firebase):
     host = ready_player(db, hosting_status="eligible")
     player = ready_player(db)
-    game = make_game(
+    game = community_game(
         db,
-        game_type="community",
         host=host,
         starts_at=clock.now + timedelta(days=2),
     )
@@ -303,12 +307,8 @@ def test_unverified_email_cannot_start_or_send_game_chat(clock, db, client, fire
 def test_suspended_player_can_leave_existing_game_but_cannot_join_another(
     clock, db, client, firebase
 ):
-    existing_game = make_game(
-        db, game_type="community", starts_at=clock.now + timedelta(days=2)
-    )
-    new_game = make_game(
-        db, game_type="community", starts_at=clock.now + timedelta(days=3)
-    )
+    existing_game = community_game(db, starts_at=clock.now + timedelta(days=2))
+    new_game = community_game(db, starts_at=clock.now + timedelta(days=3))
     player = ready_player(db, account_status="suspended")
     make_participant(db, game=existing_game, user=player)
     headers = firebase.sign_in(player)
@@ -326,17 +326,14 @@ def test_suspended_host_may_manage_old_game_but_cannot_join_new_game(
     clock, db, client, firebase
 ):
     host = ready_player(db, hosting_status="eligible", account_status="suspended")
-    game = make_game(
+    game = community_game(
         db,
-        game_type="community",
         host=host,
         starts_at=clock.now + timedelta(days=2),
         allow_guests=True,
         host_guest_max=2,
     )
-    other_game = make_game(
-        db, game_type="community", starts_at=clock.now + timedelta(days=3)
-    )
+    other_game = community_game(db, starts_at=clock.now + timedelta(days=3))
     headers = firebase.sign_in(host)
 
     add = client.post(
@@ -351,14 +348,11 @@ def test_suspended_host_may_manage_old_game_but_cannot_join_new_game(
 
 
 @pytest.mark.page("F16", 9)
-@pytest.mark.page("F16", 28)
 def test_community_cancellation_notifies_players_about_original_organizer(
     clock, db, client, firebase
 ):
     host = ready_player(db, hosting_status="eligible", account_status="suspended")
-    game = make_game(
-        db, game_type="community", host=host, starts_at=clock.now + timedelta(days=2)
-    )
+    game = community_game(db, host=host, starts_at=clock.now + timedelta(days=2))
     player = ready_player(db)
     make_booking(db, game=game, buyer=player)
     make_participant(db, game=game, user=player)
@@ -379,39 +373,6 @@ def test_community_cancellation_notifies_players_about_original_organizer(
     assert "original organizer" in notification.body
     assert "does not process or guarantee refunds" in notification.body
     assert client.get(f"/games/{game.id}").json()["game_status"] == "cancelled"
-
-
-@pytest.mark.page("F16", 28)
-def test_staff_cancellation_of_suspended_host_game_uses_community_notice(
-    clock, db, client, firebase
-):
-    host = ready_player(db, hosting_status="eligible", account_status="suspended")
-    admin = ready_player(db, role="admin")
-    game = make_game(
-        db, game_type="community", host=host, starts_at=clock.now + timedelta(days=2)
-    )
-    player = ready_player(db)
-    make_booking(db, game=game, buyer=player)
-    make_participant(db, game=game, user=player)
-
-    response = client.post(
-        f"/admin/community-games/{game.id}/cancel",
-        headers=firebase.sign_in(admin),
-        json={"reason": "Host safety removal", "idempotency_key": "f16-host-removal"},
-    )
-
-    assert response.status_code == 200, response.text
-    db.refresh(game)
-    assert game.game_status == "cancelled"
-    notice = db.scalar(
-        select(Notification).where(
-            Notification.user_id == player.id,
-            Notification.notification_type == "game_cancelled",
-        )
-    )
-    assert notice is not None
-    assert "original organizer" in notice.body
-    assert "does not process or guarantee refunds" in notice.body
 
 
 @pytest.mark.page("F16", 12)

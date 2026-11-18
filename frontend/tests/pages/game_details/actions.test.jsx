@@ -68,7 +68,7 @@ describe('Game Details actions', () => {
     const user = userEvent.setup()
     fakePageApi(communityGame({ is_chat_enabled: false }), {
       'GET /games/{game_id}/participants': [participant()],
-      'POST /games/{game_id}/leave': new ApiRequestError('Verify your email before changing attendance', { status: 403 }),
+      'POST /games/{game_id}/leave': new ApiRequestError('Verified email required.', { status: 403 }),
     })
     renderGame()
 
@@ -76,7 +76,7 @@ describe('Game Details actions', () => {
     await user.click(screen.getAllByRole('button', { name: 'Edit Attendance' })[0])
     await user.click(within(screen.getByRole('dialog', { name: 'Edit attendance?' })).getByRole('button', { name: 'Leave Game' }))
 
-    expect(await screen.findByText('Verify your email before changing attendance')).toBeInTheDocument()
+    expect(await screen.findByText('Verified email required.')).toBeInTheDocument()
     expect(screen.getAllByLabelText('Joined status').length).toBeGreaterThan(0)
   })
 
@@ -215,6 +215,37 @@ describe('Game Details actions', () => {
     expect(apiRequest).toHaveBeenCalledWith(`/games/${GAME_ID}/guests/add`, expect.objectContaining({
       method: 'POST', body: JSON.stringify({ guest_count: 1 }),
     }))
+  })
+
+  it('F16-15: a host guest addition rejected after the last spot was taken shows the error and changes nothing', async () => {
+    const user = userEvent.setup()
+    vi.mocked(useAuth).mockReturnValue({
+      appUser: { id: HOST_ID, first_name: 'Host', last_name: 'User',
+        date_of_birth: '1990-01-01', account_status: 'active' },
+      currentUser: { getIdToken: vi.fn().mockResolvedValue('test-token') },
+      isLoading: false,
+    })
+    const hostParticipant = participant({
+      participant_type: 'host', user_id: HOST_ID, booking_id: null,
+    })
+    // The page still shows open spots, but a player took the last one first.
+    fakePageApi(communityGame({ is_chat_enabled: false }), {
+      'GET /games/{game_id}/participants': [hostParticipant],
+      'POST /games/{game_id}/guests/add': new ApiRequestError(
+        'Not enough spots are available for host guests.', { status: 400 },
+      ),
+    })
+    renderGame()
+
+    await screen.findByRole('heading', { name: 'Evening Pickup' })
+    await user.click(screen.getAllByRole('button', { name: /Manage Guests/ })[0])
+    const dialog = screen.getByRole('dialog', { name: 'Manage Guests' })
+    await user.click(within(dialog).getByRole('button', { name: 'Add one guest' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Save Changes' }))
+
+    expect(await screen.findByText('Not enough spots are available for host guests.')).toBeInTheDocument()
+    expect(screen.queryByLabelText('1 of 2 host guests added')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Evening Pickup' })).toBeInTheDocument()
   })
 
   it('F16-11: Share Game copies the game link and the policy opens in a dismissible modal', async () => {

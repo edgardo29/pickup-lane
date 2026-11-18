@@ -3,8 +3,15 @@
 import pytest
 from sqlalchemy import select
 
-from backend.models import Booking, GameParticipant, Payment, WaitlistEntry
-from backend.tests.factories import make_booking, make_participant
+from backend.models import (
+    Booking,
+    GameCreditUsage,
+    GameParticipant,
+    Notification,
+    Payment,
+    WaitlistEntry,
+)
+from backend.tests.factories import make_booking, make_game_credit, make_participant
 from backend.tests.pages.game_checkout.conftest import paying_player, upcoming_game
 
 CONSENT = {
@@ -13,9 +20,9 @@ CONSENT = {
 }
 
 
-def full_paid_game(db, stripe):
+def full_paid_game(db, stripe, **overrides):
     """A paid official game with one spot, held by a player who can leave."""
-    game = upcoming_game(db, total_spots=1, waitlist_enabled=True)
+    game = upcoming_game(db, total_spots=1, waitlist_enabled=True, **overrides)
     holder, _card = paying_player(db, stripe)
     booking = make_booking(db, game=game, buyer=holder)
     make_participant(db, game=game, booking=booking, user=holder)
@@ -149,6 +156,145 @@ def test_failed_automatic_charge_does_not_register_the_player(
         )
     ).one()
     assert booking.booking_status != "confirmed"
+
+
+@pytest.mark.page("F17", 16)
+def test_waitlist_promotion_applies_credit_available_when_the_spot_opens(
+    db, client, firebase, stripe
+):
+    game, holder = full_paid_game(db, stripe)
+    user, card = paying_player(db, stripe)
+    assert join_waitlist(client, firebase, game, user, card).status_code == 201
+    credit = make_game_credit(db, user=user, amount_cents=300)
+
+    response = client.post(
+        f"/games/{game.id}/leave", headers=firebase.sign_in(holder), json={}
+    )
+
+    assert response.status_code == 200, response.text
+    booking = db.scalars(
+        select(Booking).where(
+            Booking.game_id == game.id, Booking.buyer_user_id == user.id
+        )
+    ).one()
+    payment = db.scalars(select(Payment).where(Payment.booking_id == booking.id)).one()
+    usage = db.scalars(
+        select(GameCreditUsage).where(GameCreditUsage.booking_id == booking.id)
+    ).one()
+    db.refresh(credit)
+    assert (booking.booking_status, booking.discount_cents, booking.total_cents) == (
+        "confirmed",
+        300,
+        700,
+    )
+    assert (payment.payment_status, payment.amount_cents) == ("succeeded", 700)
+    assert (usage.amount_cents, usage.usage_status) == (300, "redeemed")
+    assert credit.available_cents == 0
+    assert [item["amount_cents"] for item in stripe.created] == [700]
+
+
+@pytest.mark.page("F17", 16)
+def test_credit_covered_waitlist_offer_confirms_without_a_stripe_charge(
+    db, client, firebase, stripe
+):
+    game, holder = full_paid_game(db, stripe)
+    user, card = paying_player(db, stripe)
+    credit = make_game_credit(db, user=user, amount_cents=1000)
+    assert join_waitlist(client, firebase, game, user, card).status_code == 201
+    db.refresh(credit)
+    assert credit.available_cents == 1000
+
+    response = client.post(
+        f"/games/{game.id}/leave", headers=firebase.sign_in(holder), json={}
+    )
+
+    assert response.status_code == 200, response.text
+    booking = db.scalars(
+        select(Booking).where(
+            Booking.game_id == game.id, Booking.buyer_user_id == user.id
+        )
+    ).one()
+    entry = db.scalars(
+        select(WaitlistEntry).where(WaitlistEntry.user_id == user.id)
+    ).one()
+    usage = db.scalars(
+        select(GameCreditUsage).where(GameCreditUsage.booking_id == booking.id)
+    ).one()
+    notice = db.scalars(
+        select(Notification).where(
+            Notification.related_booking_id == booking.id,
+            Notification.notification_type == "waitlist_promoted",
+        )
+    ).one()
+    db.refresh(credit)
+    assert (booking.booking_status, booking.payment_status, booking.total_cents) == (
+        "confirmed",
+        "paid",
+        0,
+    )
+    assert entry.waitlist_status == "accepted"
+    assert participant_status(db, game, user) == ["confirmed"]
+    assert (usage.amount_cents, usage.usage_status) == (1000, "redeemed")
+    assert credit.available_cents == 0
+    assert "without a card charge" in notice.body
+    assert payments_for(db, user) == []
+    assert stripe.created == []
+
+
+@pytest.mark.page("F17", 16)
+def test_waitlist_promotion_covers_a_balance_below_stripes_minimum(
+    db, client, firebase, stripe
+):
+    game, holder = full_paid_game(db, stripe, price_per_player_cents=1000)
+    user, card = paying_player(db, stripe)
+    make_game_credit(db, user=user, amount_cents=970)
+    assert join_waitlist(client, firebase, game, user, card).status_code == 201
+
+    response = client.post(
+        f"/games/{game.id}/leave", headers=firebase.sign_in(holder), json={}
+    )
+
+    assert response.status_code == 200, response.text
+    booking = db.scalars(
+        select(Booking).where(
+            Booking.game_id == game.id, Booking.buyer_user_id == user.id
+        )
+    ).one()
+    usage = db.scalars(
+        select(GameCreditUsage).where(GameCreditUsage.booking_id == booking.id)
+    ).one()
+    assert (booking.discount_cents, booking.total_cents) == (1000, 0)
+    assert (usage.amount_cents, usage.usage_status) == (970, "redeemed")
+    assert payments_for(db, user) == []
+    assert stripe.created == []
+
+
+@pytest.mark.page("F17", 16)
+def test_failed_waitlist_charge_restores_reserved_credit(db, client, firebase, stripe):
+    game, holder = full_paid_game(db, stripe)
+    user, card = paying_player(db, stripe)
+    credit = make_game_credit(db, user=user, amount_cents=300)
+    assert join_waitlist(client, firebase, game, user, card).status_code == 201
+    stripe.confirm_status = "requires_payment_method"
+
+    response = client.post(
+        f"/games/{game.id}/leave", headers=firebase.sign_in(holder), json={}
+    )
+
+    assert response.status_code == 200, response.text
+    booking = db.scalars(
+        select(Booking).where(
+            Booking.game_id == game.id, Booking.buyer_user_id == user.id
+        )
+    ).one()
+    usage = db.scalars(
+        select(GameCreditUsage).where(GameCreditUsage.booking_id == booking.id)
+    ).one()
+    db.refresh(credit)
+    assert booking.booking_status == "failed"
+    assert (usage.amount_cents, usage.usage_status) == (300, "released")
+    assert credit.available_cents == 300
+    assert participant_status(db, game, user) != ["confirmed"]
 
 
 @pytest.mark.page("F17", 17)

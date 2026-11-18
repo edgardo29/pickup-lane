@@ -65,7 +65,7 @@ describe('Game Checkout waitlist and guests', () => {
     renderCheckout()
 
     await user.click(await screen.findByRole('checkbox', {
-      name: /If a spot opens for your whole party, Pickup Lane will charge this card \$10\.00/,
+      name: /If a spot opens for your whole party, Pickup Lane may charge this card up to \$10\.00 after applying any available game credit/,
     }))
     await agree(user)
     await user.click(screen.getAllByRole('button', { name: 'Join Waitlist' })[0])
@@ -125,6 +125,24 @@ describe('Game Checkout waitlist and guests', () => {
     expect(sentBody('/guest-payment-intent')).toMatchObject({
       guest_count: 1, payment_method_id: CARD_ID,
     })
+  })
+
+  it('F17-6: paid guests on a partially cancelled booking return to Game Details', async () => {
+    const user = userEvent.setup()
+    fakePageApi(game(), {
+      'GET /games/{game_id}/participants': [participant()],
+      'POST /checkout/games/{game_id}/guest-payment-intent': paymentIntent(),
+      'GET /checkout/bookings/{booking_id}/status': checkoutStatus({
+        booking_status: 'partially_cancelled',
+        booking_payment_status: 'partially_refunded',
+      }),
+    })
+    renderCheckout('?mode=add-guests&guest_count=1')
+
+    await agree(user)
+    await user.click(screen.getAllByRole('button', { name: 'Confirm Guests' })[0])
+
+    expect(await screen.findByRole('heading', { name: 'Game Details' })).toBeInTheDocument()
   })
 
   it('F17-18: a failed guest charge is shown without confirming the guests', async () => {

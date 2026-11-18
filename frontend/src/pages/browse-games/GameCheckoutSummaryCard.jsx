@@ -46,13 +46,16 @@ export function GameCheckoutSummaryCard({
       )}
       {isWaitlistCheckout && <p className="checkout-summary-note">No charge now</p>}
       <div className="checkout-total">
-        <span>{quote ? 'Amount due' : 'Total'}</span>
+        <span>{isWaitlistCheckout ? 'Estimated later charge' : quote ? 'Amount due' : 'Total'}</span>
         <strong>{formatMoney(quote ? quote.final_amount_due_cents : total)}</strong>
       </div>
       {quote?.available_credit_cents > 0 && (
         <p className="checkout-summary-note">
           Available game credit: {formatMoney(quote.available_credit_cents)}
         </p>
+      )}
+      {isWaitlistCheckout && quote && (
+        <p className="checkout-summary-note">Credit is applied when a spot opens; your balance may change.</p>
       )}
 
       {isWaitlistCheckout && (

@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import pytest
 from sqlalchemy import func, select
 
-from backend.models import GameParticipant, Payment
+from backend.models import GameParticipant, Payment, User
 from backend.tests.conftest import database_now
 from backend.tests.factories import (
     make_booking,
@@ -20,10 +20,20 @@ def player(db, **overrides):
     return make_user(db, date_of_birth=date(1990, 1, 1), **overrides)
 
 
+def community_game(db, **overrides):
+    """A community game whose host holds a confirmed roster place, as publishing creates it."""
+    game = make_game(db, game_type="community", **overrides)
+    make_participant(
+        db, game=game, user=db.get(User, game.host_user_id), participant_type="host"
+    )
+    return game
+
+
 def active_count(db, game):
     return db.scalar(
         select(func.count(GameParticipant.id)).where(
             GameParticipant.game_id == game.id,
+            GameParticipant.participant_type != "host",
             GameParticipant.participant_status.in_(("confirmed", "waitlisted")),
         )
     )
@@ -36,9 +46,8 @@ def active_count(db, game):
 def test_full_community_game_waitlist_policy(
     clock, db, client, firebase, waitlist_enabled, expected_status
 ):
-    game = make_game(
+    game = community_game(
         db,
-        game_type="community",
         starts_at=clock.now + timedelta(days=2),
         total_spots=1,
         waitlist_enabled=waitlist_enabled,
@@ -60,9 +69,8 @@ def test_full_community_game_waitlist_policy(
 
 @pytest.mark.page("F16", 7)
 def test_booked_player_removes_guest_without_leaving(clock, db, client, firebase):
-    game = make_game(
+    game = community_game(
         db,
-        game_type="community",
         starts_at=clock.now + timedelta(days=2),
         allow_guests=True,
         max_guests_per_booking=2,
@@ -92,9 +100,8 @@ def test_booked_player_removes_guest_without_leaving(clock, db, client, firebase
 def test_community_checkout_guest_addition_updates_booking_and_roster(
     clock, db, client, firebase
 ):
-    game = make_game(
+    game = community_game(
         db,
-        game_type="community",
         starts_at=clock.now + timedelta(days=2),
         allow_guests=True,
         max_guests_per_booking=2,
@@ -120,9 +127,8 @@ def test_community_checkout_guest_addition_updates_booking_and_roster(
 @pytest.mark.page("F16", 8)
 def test_host_guest_limit_and_capacity_are_checked_by_api(clock, db, client, firebase):
     host = player(db)
-    game = make_game(
+    game = community_game(
         db,
-        game_type="community",
         host=host,
         starts_at=clock.now + timedelta(days=2),
         total_spots=2,
@@ -152,9 +158,8 @@ def test_stale_guest_addition_after_capacity_change_creates_no_guest(
     clock, db, client, firebase
 ):
     host = player(db)
-    game = make_game(
+    game = community_game(
         db,
-        game_type="community",
         host=host,
         starts_at=clock.now + timedelta(days=2),
         total_spots=1,
@@ -177,9 +182,8 @@ def test_stale_guest_addition_after_capacity_change_creates_no_guest(
 def test_cancelled_game_stays_visible_but_rejects_join_and_chat(
     clock, db, client, firebase
 ):
-    game = make_game(
+    game = community_game(
         db,
-        game_type="community",
         starts_at=clock.now + timedelta(days=2),
         game_status="cancelled",
         cancelled_at=clock.now,
@@ -194,7 +198,8 @@ def test_cancelled_game_stays_visible_but_rejects_join_and_chat(
     assert detail.status_code == 200
     assert detail.json()["game_status"] == "cancelled"
     assert join.status_code == 400
-    assert chat.status_code in (400, 403, 404)
+    assert chat.status_code == 400, chat.text
+    assert chat.json()["detail"] == "Only active games can create chat rooms."
     assert active_count(db, game) == 0
 
 
@@ -202,9 +207,8 @@ def test_cancelled_game_stays_visible_but_rejects_join_and_chat(
 def test_suspended_player_cannot_add_checkout_guests_to_existing_booking(
     clock, db, client, firebase
 ):
-    game = make_game(
+    game = community_game(
         db,
-        game_type="community",
         starts_at=clock.now + timedelta(days=2),
         allow_guests=True,
         max_guests_per_booking=2,

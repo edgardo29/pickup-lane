@@ -1,6 +1,8 @@
 """F17 official checkout: credit first, small balances covered, Stripe for the rest."""
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from threading import Barrier
 
 import pytest
 from sqlalchemy import select
@@ -13,6 +15,7 @@ from backend.models import (
     Payment,
     PaymentCompensation,
 )
+from backend.services import checkout_service
 from backend.tests.conftest import database_now
 from backend.tests.factories import make_game_credit, make_saved_card
 from backend.tests.pages.game_checkout.conftest import paying_player, upcoming_game
@@ -313,30 +316,57 @@ def test_partial_credit_is_released_when_the_payment_fails(
 
 @pytest.mark.page("F17", 21)
 def test_overlapping_checkouts_cannot_spend_the_same_credit_twice(
-    db, client, firebase, stripe
+    committed_db, client, firebase, stripe, monkeypatch
 ):
-    first_game = upcoming_game(db, price_per_player_cents=1000)
-    second_game = upcoming_game(db, price_per_player_cents=1000)
-    user, card = paying_player(db, stripe)
-    make_game_credit(db, user=user, amount_cents=500)
+    first_game = upcoming_game(committed_db, price_per_player_cents=1000)
+    second_game = upcoming_game(committed_db, price_per_player_cents=1000)
+    user, card = paying_player(committed_db, stripe)
+    credit = make_game_credit(committed_db, user=user, amount_cents=500)
+    committed_db.commit()
     stripe.confirm_status = "requires_action"
     headers = firebase.sign_in(user)
     body = {"guest_count": 0, "payment_method_id": str(card.id)}
+    both_at_reservation = Barrier(2)
+    reserve = checkout_service.reserve_game_credits
 
-    first = client.post(
-        f"/checkout/games/{first_game.id}/payment-intent", headers=headers, json=body
-    )
-    second = client.post(
-        f"/checkout/games/{second_game.id}/payment-intent", headers=headers, json=body
-    )
+    def reserve_after_both_priced(*args, **kwargs):
+        both_at_reservation.wait(timeout=10)
+        return reserve(*args, **kwargs)
 
-    assert first.json()["credit_applied_cents"] == 500
-    assert second.json()["credit_applied_cents"] == 0
-    assert second.json()["final_amount_due_cents"] == 1000
-    used = db.scalars(
+    monkeypatch.setattr(
+        checkout_service, "reserve_game_credits", reserve_after_both_priced
+    )
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(
+            client.post,
+            f"/checkout/games/{first_game.id}/payment-intent",
+            headers=headers,
+            json=body,
+        )
+        second = pool.submit(
+            client.post,
+            f"/checkout/games/{second_game.id}/payment-intent",
+            headers=headers,
+            json=body,
+        )
+        responses = [first.result(timeout=30), second.result(timeout=30)]
+
+    assert sorted(response.status_code for response in responses) == [201, 409]
+    assert [
+        response.json()["credit_applied_cents"]
+        for response in responses
+        if response.status_code == 201
+    ] == [500]
+    committed_db.expire_all()
+    used = committed_db.scalars(
         select(GameCreditUsage).where(GameCreditUsage.usage_status == "reserved")
     ).all()
     assert sum(usage.amount_cents for usage in used) == 500
+    assert committed_db.get(GameCredit, credit.id).available_cents == 0
+    bookings = committed_db.scalars(
+        select(Booking).where(Booking.buyer_user_id == user.id)
+    ).all()
+    assert len(bookings) == 1
 
 
 @pytest.mark.page("F17", 24)
