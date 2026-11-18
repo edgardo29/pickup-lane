@@ -12,7 +12,7 @@ import {
   skillLevelOptions,
   timeOptions,
 } from './createGameData.js'
-import { clampDate, getTodayDate } from './createGameSchedule.js'
+import { clampDate, getLatestScheduleDate, getTodayDate } from './createGameSchedule.js'
 import { getMinimumSpotsForFormat } from './createGameValidation.js'
 
 export function BasicsStep({ form, updateField }) {
@@ -60,8 +60,10 @@ export function BasicsStep({ form, updateField }) {
         <div className="create-game-grid create-game-grid--basics">
           <FormField label="Date">
             <input
+              aria-label="Date"
               value={form.date}
               min={getTodayDate()}
+              max={getLatestScheduleDate()}
               type="date"
               onChange={(event) => updateField('date', clampDate(event.target.value))}
             />

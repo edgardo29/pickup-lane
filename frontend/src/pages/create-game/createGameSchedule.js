@@ -27,6 +27,16 @@ export function getTodayDate() {
   return toDateInputValue(new Date())
 }
 
+// A community game can start no more than this many days ahead; the backend
+// enforces the same limit in the game's own time zone.
+export const COMMUNITY_SCHEDULE_DAYS_AHEAD = 21
+
+export function getLatestScheduleDate() {
+  const latest = new Date()
+  latest.setDate(latest.getDate() + COMMUNITY_SCHEDULE_DAYS_AHEAD)
+  return toDateInputValue(latest)
+}
+
 export function toDateInputValue(date) {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')

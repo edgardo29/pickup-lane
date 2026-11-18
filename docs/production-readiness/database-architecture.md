@@ -278,13 +278,12 @@ does not prove identity. Reuse one unambiguous active, nondeleted facility
 without changing its approval status. Inactive, soft-deleted, duplicate, or
 ambiguous candidates require explicit administrative resolution.
 
-The current [venue lookup](../../backend/services/venue_service.py) excludes
-inactive and deleted records, while
-[official-game creation](../../backend/services/official_game_service.py)
-rejects a matching venue unless approved. The shared process must resolve
-these application differences without silently reactivating, merging,
-replacing, or creating a duplicate facility. Check existing duplicate
-candidates before rollout.
+The shared [venue routine](../../backend/services/venue_service.py) serves
+official-game creation, community publishing, host editing, and direct venue
+creation. It reuses a matching facility whatever its approval status and
+refuses an inactive, soft-deleted, or duplicated match for staff to resolve,
+without silently reactivating, merging, replacing, or creating a duplicate
+facility. Check existing duplicate candidates before rollout.
 
 Before rechecking and inserting, writers using the shared routine acquire a
 transaction-level advisory lock on a normalized location bucket based on

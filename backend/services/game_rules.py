@@ -92,16 +92,18 @@ LOCATION_FIELDS = {
     "postal_code",
     "neighborhood",
 }
+# Fields a host can no longer change once a non-host player is active. Location
+# is locked separately; player group and skill level stay editable.
 MAJOR_HOST_EDIT_FIELDS = {
     "starts_at",
     "ends_at",
     "format_label",
-    "game_player_group",
-    "skill_level",
     "environment_type",
     "price_per_player_cents",
 }
 NON_NULL_HOST_EDIT_FIELDS = MAJOR_HOST_EDIT_FIELDS | {
+    "game_player_group",
+    "skill_level",
     "total_spots",
     "venue_name",
     "address_line_1",
@@ -173,6 +175,28 @@ def get_game_local_date(starts_at: datetime, timezone_name: str) -> date:
     return (
         ensure_timezone(starts_at).astimezone(get_valid_timezone(timezone_name)).date()
     )
+
+
+# A community game may start no more than this many days ahead, counted in the
+# game's own local calendar, when it is published or its start is edited.
+COMMUNITY_SCHEDULE_DAYS_AHEAD = 21
+
+
+def require_community_start_within_schedule_window(
+    starts_at: datetime, timezone_name: str, now: datetime
+) -> None:
+    local_today = ensure_timezone(now).astimezone(get_valid_timezone(timezone_name))
+    latest_start_date = local_today.date() + timedelta(
+        days=COMMUNITY_SCHEDULE_DAYS_AHEAD
+    )
+    if get_game_local_date(starts_at, timezone_name) > latest_start_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Community games can start no more than "
+                f"{COMMUNITY_SCHEDULE_DAYS_AHEAD} days ahead."
+            ),
+        )
 
 
 def get_join_window_closes_at(db_game: Game) -> datetime:

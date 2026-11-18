@@ -21,7 +21,8 @@ export function mapGameToForm(game, venue, communityDetails = null) {
     city: venue?.city || game.city_snapshot || '',
     state: normalizeUsStateCode(venue?.state || game.state_snapshot),
     zip: venue?.postal_code || '',
-    neighborhood: venue?.neighborhood || game.neighborhood_snapshot || '',
+    // The game's own neighborhood, which the host may have set apart from the venue's.
+    neighborhood: game.neighborhood_snapshot || '',
     parkingNote: game.parking_notes || '',
     gameNotes: game.game_notes || '',
     hostRules: game.custom_rules_text || '',

@@ -35,7 +35,7 @@ from backend.services.payment_rules import PENDING_PAYMENT_STATUSES
 from backend.services.status_history_service import (
     add_participant_status_history_if_changed,
 )
-from backend.services.venue_service import find_matching_active_venue
+from backend.services.venue_service import find_or_create_facility_venue
 
 ADMIN_EDIT_NON_NULL_FIELDS = {
     "title",
@@ -139,7 +139,9 @@ def get_or_create_admin_venue_from_sources(
             detail="country_code must be two letters.",
         )
 
-    matching_venue = find_matching_active_venue(
+    # An existing facility is reused as it is: scheduling an official game does
+    # not change its approval status (database architecture, Section 3.6).
+    return find_or_create_facility_venue(
         db,
         name=clean_required_text(venue_data["name"], "venue.name"),
         address_line_1=clean_required_text(
@@ -154,41 +156,14 @@ def get_or_create_admin_venue_from_sources(
         ),
         country_code=country_code.upper(),
         neighborhood=(venue_data.get("neighborhood") or "").strip() or None,
+        new_venue_fields={
+            "venue_status": "approved",
+            "created_by_user_id": admin_user_id,
+            "approved_by_user_id": admin_user_id,
+            "approved_at": datetime.now(UTC),
+            "is_active": True,
+        },
     )
-
-    if matching_venue is not None:
-        if matching_venue.venue_status != "approved":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Official games require an approved venue.",
-            )
-        return matching_venue
-
-    now = datetime.now(UTC)
-    venue = Venue(
-        id=uuid.uuid4(),
-        name=clean_required_text(venue_data["name"], "venue.name"),
-        address_line_1=clean_required_text(
-            venue_data["address_line_1"],
-            "venue.address_line_1",
-        ),
-        city=clean_required_text(venue_data["city"], "venue.city"),
-        state=clean_required_text(venue_data["state"], "venue.state"),
-        postal_code=clean_required_text(
-            venue_data["postal_code"],
-            "venue.postal_code",
-        ),
-        country_code=country_code.upper(),
-        neighborhood=(venue_data.get("neighborhood") or "").strip() or None,
-        venue_status="approved",
-        created_by_user_id=admin_user_id,
-        approved_by_user_id=admin_user_id,
-        approved_at=now,
-        is_active=True,
-    )
-    db.add(venue)
-    db.flush()
-    return venue
 
 
 def get_or_create_admin_venue(
@@ -227,7 +202,13 @@ def build_official_game_data(
         "address_snapshot": build_address_snapshot(venue),
         "city_snapshot": venue.city,
         "state_snapshot": venue.state,
-        "neighborhood_snapshot": venue.neighborhood,
+        # A typed neighborhood labels this game even when an existing facility
+        # with another neighborhood is reused.
+        "neighborhood_snapshot": (
+            (create_request.venue.neighborhood or "").strip() or None
+            if create_request.venue is not None
+            else venue.neighborhood
+        ),
         "host_user_id": None,
         "created_by_user_id": admin_user_id,
         "starts_at": create_request.starts_at,
