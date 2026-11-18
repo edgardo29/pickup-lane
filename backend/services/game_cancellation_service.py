@@ -3,7 +3,7 @@
 import hashlib
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -509,8 +509,7 @@ def build_official_cancellation_booking_impact(
         and payment_ledgers[payment.id].available_cents > 0
     ]
     cash_refundable_cents = sum(
-        payment_ledgers[payment.id].available_cents
-        for payment in refundable_payments
+        payment_ledgers[payment.id].available_cents for payment in refundable_payments
     )
     credit_restorable_cents = sum_credit_usage_cents(credit_usages, {"redeemed"})
     credit_releasable_cents = sum_credit_usage_cents(credit_usages, {"reserved"})
@@ -667,7 +666,7 @@ def build_official_game_cancellation_preview(
     validate_game_cancellation_request(
         db_game,
         admin_user,
-        now=datetime.now(timezone.utc),
+        now=datetime.now(UTC),
     )
 
     bookings = list_cancellable_bookings(db, db_game)
@@ -920,9 +919,7 @@ def create_official_cancellation_refunds(
             .limit(1)
         ).first()
         if existing_refund is not None:
-            if authoritative_succeeded_amount_for_refunds(
-                db, (existing_refund,)
-            ) > 0:
+            if authoritative_succeeded_amount_for_refunds(db, (existing_refund,)) > 0:
                 summary["successful_refunds"].append((payment, existing_refund))
             elif existing_refund.refund_status == "approved":
                 summary["refund_approved_count"] += 1
@@ -1511,7 +1508,7 @@ def apply_game_cancellation_state(
 ) -> tuple[
     Game, dict[str, object], list[uuid.UUID], AdminAction | None, list[uuid.UUID]
 ]:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     cancellation_type = validate_game_cancellation_request(
         db_game,
         current_user,
@@ -1585,7 +1582,9 @@ def apply_game_cancellation_state(
         db_game=db_game,
         payment_summary=payment_summary,
     )
-    money_issue_ids = list(dict.fromkeys([*money_issue_ids, *resolved_origin_issue_ids]))
+    money_issue_ids = list(
+        dict.fromkeys([*money_issue_ids, *resolved_origin_issue_ids])
+    )
 
     db_game.game_status = "cancelled"
     db_game.cancelled_at = now

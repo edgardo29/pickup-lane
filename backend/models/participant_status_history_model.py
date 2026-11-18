@@ -83,13 +83,9 @@ class ParticipantStatusHistory(Base):
 
     new_participant_status: Mapped[str] = mapped_column(String(30), nullable=False)
 
-    old_attendance_status: Mapped[str | None] = mapped_column(
-        String(30), nullable=True
-    )
+    old_attendance_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
-    new_attendance_status: Mapped[str | None] = mapped_column(
-        String(30), nullable=True
-    )
+    new_attendance_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
     changed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

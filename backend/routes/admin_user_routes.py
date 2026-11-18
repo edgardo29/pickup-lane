@@ -14,10 +14,10 @@ from backend.schemas import (
     AdminUserHostingRestrictionPreviewRead,
     AdminUserListPageRead,
     AdminUserNeedASubActivityRead,
-    AdminUserRestrictHostingCreate,
-    AdminUserRestrictHostingResultRead,
     AdminUserRestoreHostingCreate,
     AdminUserRestoreHostingResultRead,
+    AdminUserRestrictHostingCreate,
+    AdminUserRestrictHostingResultRead,
     AdminUserRoleChangeCreate,
     AdminUserRoleChangeResultRead,
     AdminUserSuspendCreate,
@@ -35,20 +35,23 @@ from backend.services.admin_user_delete_service import (
     delete_admin_user,
     preview_admin_user_delete_impact,
 )
+from backend.services.admin_user_hosting_service import (
+    preview_admin_user_hosting_restriction,
+    restore_admin_user_hosting,
+    restrict_admin_user_hosting,
+)
+from backend.services.admin_user_role_service import change_user_role
 from backend.services.admin_user_service import (
-    get_admin_user_game_activity,
     get_admin_user_detail,
+    get_admin_user_game_activity,
     get_admin_user_need_a_sub_activity,
     get_admin_user_or_404,
     list_admin_users,
 )
-from backend.services.admin_user_hosting_service import (
-    preview_admin_user_hosting_restriction,
-    restrict_admin_user_hosting,
-    restore_admin_user_hosting,
+from backend.services.auth_service import (
+    require_active_admin,
+    require_recent_active_admin,
 )
-from backend.services.admin_user_role_service import change_user_role
-from backend.services.auth_service import require_active_admin, require_recent_active_admin
 
 router = APIRouter(prefix="/admin/users", tags=["admin_users"])
 

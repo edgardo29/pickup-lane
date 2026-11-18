@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from fastapi import HTTPException, status
@@ -258,12 +258,13 @@ def validate_notification_business_rules(
                     "game activity domain."
                 ),
             )
-    elif notification_type in GAME_NOTIFICATION_TYPES:
-        if notification_category != "game_activity" or notification_domain != "game":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Game notification types must use the game activity domain.",
-            )
+    elif notification_type in GAME_NOTIFICATION_TYPES and (
+        notification_category != "game_activity" or notification_domain != "game"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Game notification types must use the game activity domain.",
+        )
 
     if not str(notification_data["title"]).strip():
         raise HTTPException(
@@ -411,7 +412,7 @@ def normalize_notification_lifecycle_fields(
                 if existing_notification is not None
                 else None
             )
-            or datetime.now(timezone.utc)
+            or datetime.now(UTC)
         )
     else:
         normalized_data["read_at"] = None
@@ -1138,7 +1139,7 @@ def apply_notification_update(
     for field_name, field_value in update_data.items():
         setattr(db_notification, field_name, field_value)
 
-    db_notification.updated_at = datetime.now(timezone.utc)
+    db_notification.updated_at = datetime.now(UTC)
 
     try:
         db.add(db_notification)

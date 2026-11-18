@@ -36,7 +36,9 @@ class PublicErrorDescriptor:
                     validate_correlation_id(self.correlation_id),
                 )
             if self.details is not None:
-                object.__setattr__(self, "details", _validate_public_details(self.details))
+                object.__setattr__(
+                    self, "details", _validate_public_details(self.details)
+                )
         except (TelemetryLabelError, ValueError) as exc:
             raise PublicErrorError(str(exc)) from exc
 
@@ -97,7 +99,9 @@ def _validate_detail_value(value: Any) -> Any:
 
 
 def _is_non_string_sequence(value: Any) -> bool:
-    return isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray)
+    return isinstance(value, Sequence) and not isinstance(
+        value, str | bytes | bytearray
+    )
 
 
 def _to_plain_public_value(value: Any) -> Any:

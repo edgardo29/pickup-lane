@@ -1,7 +1,7 @@
 """Game participant reads and protected create/update workflows."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -170,12 +170,8 @@ def get_game_participant_for_user_or_404(
     )
     if db_participant.booking_id is not None:
         db_booking = db.get(Booking, db_participant.booking_id)
-        can_read_participant = (
-            can_read_participant
-            or (
-                db_booking is not None
-                and db_booking.buyer_user_id == current_user.id
-            )
+        can_read_participant = can_read_participant or (
+            db_booking is not None and db_booking.buyer_user_id == current_user.id
         )
 
     if not can_read_participant:
@@ -214,7 +210,9 @@ def list_game_participants(
 
     if attendance_status is not None:
         validate_game_participant_attendance_status(attendance_status)
-        statement = statement.where(GameParticipant.attendance_status == attendance_status)
+        statement = statement.where(
+            GameParticipant.attendance_status == attendance_status
+        )
 
     participants = db.scalars(
         statement.order_by(
@@ -309,7 +307,7 @@ def update_game_participant_workflow(
     for field_name, field_value in update_data.items():
         setattr(db_participant, field_name, field_value)
 
-    db_participant.updated_at = datetime.now(timezone.utc)
+    db_participant.updated_at = datetime.now(UTC)
 
     try:
         db.add(db_participant)

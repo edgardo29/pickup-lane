@@ -155,7 +155,10 @@ export function useBrowseGamesPageModel() {
       && browseMeta?.browse_date
       && browseMeta.browse_date === browseMeta.browse_today
     ) {
+      // Today's games are already shown; only the missing or invalid link needs
+      // correcting, without adding a history entry.
       activeDateKeyRef.current = browseMeta.browse_date
+      replaceUrlDate(browseMeta.browse_date, { replace: true })
       return undefined
     }
 
@@ -176,7 +179,14 @@ export function useBrowseGamesPageModel() {
     return () => {
       controller.abort()
     }
-  }, [browseMeta?.browse_date, browseMeta?.browse_today, loadFirstPage, requestedDateKey])
+  }, [
+    browseMeta?.browse_date,
+    browseMeta?.browse_today,
+    loadFirstPage,
+    rawDateKey,
+    replaceUrlDate,
+    requestedDateKey,
+  ])
 
   useEffect(() => {
     let ignore = false

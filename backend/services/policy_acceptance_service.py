@@ -1,7 +1,7 @@
 """Policy acceptance admin scaffold workflows."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -90,7 +90,7 @@ def normalize_policy_acceptance_fields(
     normalized_data = dict(acceptance_data)
 
     if normalized_data["accepted_at"] is None:
-        normalized_data["accepted_at"] = datetime.now(timezone.utc)
+        normalized_data["accepted_at"] = datetime.now(UTC)
 
     return normalized_data
 
@@ -105,7 +105,7 @@ def validate_policy_acceptance_references(
         acceptance_data["policy_document_id"],
     )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if (
         not db_policy_document.is_active
         or db_policy_document.retired_at is not None
@@ -132,9 +132,7 @@ def create_policy_acceptance_record(
     db: Session,
     policy_acceptance: PolicyAcceptanceCreate,
 ) -> PolicyAcceptance:
-    acceptance_data = normalize_policy_acceptance_fields(
-        policy_acceptance.model_dump()
-    )
+    acceptance_data = normalize_policy_acceptance_fields(policy_acceptance.model_dump())
     validate_policy_acceptance_business_rules(acceptance_data)
     validate_policy_acceptance_references(db, acceptance_data)
 
@@ -183,7 +181,9 @@ def list_policy_acceptance_records(
         )
 
     policy_acceptances = db.scalars(
-        statement.order_by(PolicyAcceptance.accepted_at.desc(), PolicyAcceptance.id.desc())
+        statement.order_by(
+            PolicyAcceptance.accepted_at.desc(), PolicyAcceptance.id.desc()
+        )
         .offset(bounded_collection_offset(offset))
         .limit(
             bounded_collection_limit(

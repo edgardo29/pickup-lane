@@ -13,7 +13,10 @@ from backend.schemas.platform_notice_schema import (
     PlatformNoticeRead,
     PlatformNoticeRecipientListRead,
 )
-from backend.services.auth_service import require_active_admin, require_recent_active_admin
+from backend.services.auth_service import (
+    require_active_admin,
+    require_recent_active_admin,
+)
 from backend.services.platform_notice_service import (
     cancel_platform_notice,
     create_platform_notice,

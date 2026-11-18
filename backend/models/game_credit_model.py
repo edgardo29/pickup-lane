@@ -64,8 +64,12 @@ class GameCredit(Base):
         ),
         UniqueConstraint("idempotency_key", name="uq_game_credits_idempotency_key"),
         Index("ix_game_credits_user_created", "user_id", "created_at", "id"),
-        Index("ix_game_credits_credit_status_created", "credit_status", "created_at", "id"),
-        Index("ix_game_credits_credit_reason_created", "credit_reason", "created_at", "id"),
+        Index(
+            "ix_game_credits_credit_status_created", "credit_status", "created_at", "id"
+        ),
+        Index(
+            "ix_game_credits_credit_reason_created", "credit_reason", "created_at", "id"
+        ),
         Index("ix_game_credits_source_game_id", "source_game_id"),
         Index("ix_game_credits_source_booking_id", "source_booking_id"),
         Index("ix_game_credits_source_payment_id", "source_payment_id"),

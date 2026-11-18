@@ -71,9 +71,7 @@ class CommunityGameDetail(Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    payment_text_hidden_reason: Mapped[str | None] = mapped_column(
-        Text, nullable=True
-    )
+    payment_text_hidden_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")
     )

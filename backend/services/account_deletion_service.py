@@ -2,7 +2,7 @@
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import or_, select
@@ -27,7 +27,6 @@ from backend.services.admin_review_service import (
     close_open_content_moderation_case_for_game_lifecycle,
     close_open_content_moderation_case_for_sub_post_lifecycle,
 )
-from backend.services.auth_service import get_authenticated_user_from_token
 from backend.services.game_rules import (
     ACTIVE_BOOKING_STATUSES,
     ACTIVE_JOIN_STATUSES,
@@ -164,7 +163,7 @@ def record_account_delete_partial_failure(
     if user is None:
         return
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     user.account_status = "pending_deletion"
     if clear_auth_link:
         user.auth_user_id = None
@@ -227,7 +226,7 @@ def detach_account_saved_payment_methods(
     )
     failures: list[SavedPaymentMethodCleanupFailure] = []
     detached_payment_method_ids: list[uuid.UUID] = []
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     for payment_method in payment_methods:
         if payment_method.method_status != ACTIVE_SAVED_PAYMENT_METHOD_STATUS:
@@ -605,14 +604,12 @@ def reconcile_booking_after_account_deletion(
         booking.reservation_status = "confirmed"
         booking.expires_at = None
         booking.participant_count = len(remaining_participants)
-        booking.subtotal_cents = (
-            booking.price_per_player_snapshot_cents * len(remaining_participants)
+        booking.subtotal_cents = booking.price_per_player_snapshot_cents * len(
+            remaining_participants
         )
         booking.discount_cents = min(booking.discount_cents, booking.subtotal_cents)
         booking.total_cents = (
-            booking.subtotal_cents
-            + booking.platform_fee_cents
-            - booking.discount_cents
+            booking.subtotal_cents + booking.platform_fee_cents - booking.discount_cents
         )
     else:
         booking.booking_status = "cancelled"
@@ -791,12 +788,8 @@ def cancel_future_community_hosted_games(
     ).all()
 
     trigger_actor_user_id = changed_by_user_id or user.id
-    trigger_actor_type = (
-        "admin" if trigger_actor_user_id != user.id else "owner"
-    )
-    closed_by_user_id = (
-        trigger_actor_user_id if trigger_actor_type == "admin" else None
-    )
+    trigger_actor_type = "admin" if trigger_actor_user_id != user.id else "owner"
+    closed_by_user_id = trigger_actor_user_id if trigger_actor_type == "admin" else None
 
     for game in games:
         old_game_status = game.game_status
@@ -883,12 +876,8 @@ def cancel_owned_need_a_sub_posts(
     ).all()
 
     trigger_actor_user_id = changed_by_user_id or user_id
-    trigger_actor_type = (
-        "admin" if trigger_actor_user_id != user_id else "owner"
-    )
-    closed_by_user_id = (
-        trigger_actor_user_id if trigger_actor_type == "admin" else None
-    )
+    trigger_actor_type = "admin" if trigger_actor_user_id != user_id else "owner"
+    closed_by_user_id = trigger_actor_user_id if trigger_actor_type == "admin" else None
 
     for sub_post in posts:
         old_status = sub_post.post_status
@@ -1166,7 +1155,7 @@ def restore_self_delete_staged_account_after_firebase_failure(
     response_detail: str,
 ) -> None:
     user.account_status = previous_account_status
-    user.updated_at = datetime.now(timezone.utc)
+    user.updated_at = datetime.now(UTC)
     db.add(user)
     try:
         db.commit()
@@ -1204,7 +1193,7 @@ def restore_self_delete_staged_account_after_firebase_failure(
 
 def delete_account_workflow(
     payload: AuthDeleteAccountRequest,
-    authorization: str | None,
+    current_user: User,
     db: Session,
 ) -> User:
     if payload.confirmation.strip().upper() != "DELETE":
@@ -1213,16 +1202,15 @@ def delete_account_workflow(
             detail='Type "delete" to confirm account deletion.',
         )
 
-    authenticated_user = get_authenticated_user_from_token(authorization, db)
     user, active_admin_count = lock_user_and_active_admins_for_account_removal(
         db,
-        user_id=authenticated_user.id,
+        user_id=current_user.id,
     )
     require_account_removal_preserves_active_admin(
         user,
         active_admin_count=active_admin_count,
     )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     auth_user_id = user.auth_user_id
     previous_account_status = user.account_status
 
@@ -1281,7 +1269,7 @@ def delete_account_workflow(
             response_detail="Firebase could not delete this account. Please try again.",
         )
 
-    checkpoint_at = datetime.now(timezone.utc)
+    checkpoint_at = datetime.now(UTC)
     user.auth_user_id = None
     user.updated_at = checkpoint_at
     db.add(user)
@@ -1300,8 +1288,7 @@ def delete_account_workflow(
                 "failure_type": "auth_unlink_checkpoint_commit_error",
             },
             summary=(
-                "Firebase deletion succeeded, but the app auth unlink did not "
-                "commit."
+                "Firebase deletion succeeded, but the app auth unlink did not commit."
             ),
         )
         raise HTTPException(
@@ -1321,9 +1308,7 @@ def delete_account_workflow(
             db,
             user_id=user.id,
             created_by_user_id=user.id,
-            metadata=payment_method_result.support_metadata(
-                auth_identity_deleted=True
-            ),
+            metadata=payment_method_result.support_metadata(auth_identity_deleted=True),
             detached_payment_method_ids=(
                 payment_method_result.detached_saved_payment_method_ids
             ),
@@ -1350,9 +1335,7 @@ def delete_account_workflow(
             user_id=user.id,
             created_by_user_id=user.id,
             metadata={
-                **payment_method_result.support_metadata(
-                    auth_identity_deleted=True
-                ),
+                **payment_method_result.support_metadata(auth_identity_deleted=True),
                 "failure_type": "saved_payment_method_checkpoint_commit_error",
             },
             detached_payment_method_ids=(
@@ -1371,7 +1354,7 @@ def delete_account_workflow(
             ),
         ) from exc
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     try:
         cancel_future_user_activity(
             user,

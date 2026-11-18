@@ -2,8 +2,8 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import (
-    Boolean,
     CHAR,
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -201,8 +201,7 @@ class Game(Base):
             "created_at",
             "id",
             postgresql_where=text(
-                "publish_status = 'published' "
-                "AND deleted_at IS NULL"
+                "publish_status = 'published' AND deleted_at IS NULL"
             ),
         ),
         Index(
@@ -284,50 +283,35 @@ class Game(Base):
             "starts_at",
             "created_at",
             "id",
-            postgresql_where=text(
-                "game_type = 'community' "
-                "AND deleted_at IS NULL"
-            ),
+            postgresql_where=text("game_type = 'community' AND deleted_at IS NULL"),
         ),
         Index(
             "ix_games_admin_community_title_trgm",
             "title",
             postgresql_using="gin",
             postgresql_ops={"title": "gin_trgm_ops"},
-            postgresql_where=text(
-                "game_type = 'community' "
-                "AND deleted_at IS NULL"
-            ),
+            postgresql_where=text("game_type = 'community' AND deleted_at IS NULL"),
         ),
         Index(
             "ix_games_admin_community_venue_name_trgm",
             "venue_name_snapshot",
             postgresql_using="gin",
             postgresql_ops={"venue_name_snapshot": "gin_trgm_ops"},
-            postgresql_where=text(
-                "game_type = 'community' "
-                "AND deleted_at IS NULL"
-            ),
+            postgresql_where=text("game_type = 'community' AND deleted_at IS NULL"),
         ),
         Index(
             "ix_games_admin_community_city_trgm",
             "city_snapshot",
             postgresql_using="gin",
             postgresql_ops={"city_snapshot": "gin_trgm_ops"},
-            postgresql_where=text(
-                "game_type = 'community' "
-                "AND deleted_at IS NULL"
-            ),
+            postgresql_where=text("game_type = 'community' AND deleted_at IS NULL"),
         ),
         Index(
             "ix_games_admin_community_state_trgm",
             "state_snapshot",
             postgresql_using="gin",
             postgresql_ops={"state_snapshot": "gin_trgm_ops"},
-            postgresql_where=text(
-                "game_type = 'community' "
-                "AND deleted_at IS NULL"
-            ),
+            postgresql_where=text("game_type = 'community' AND deleted_at IS NULL"),
         ),
     )
 

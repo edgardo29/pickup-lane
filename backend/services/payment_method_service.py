@@ -1,7 +1,7 @@
 """Saved payment method validation shared by checkout-style flows."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -81,8 +81,7 @@ def begin_payment_method_operation(
     )
     operation = db.scalars(
         select(PaymentMethodOperation).where(
-            PaymentMethodOperation.provider_idempotency_key
-            == provider_idempotency_key
+            PaymentMethodOperation.provider_idempotency_key == provider_idempotency_key
         )
     ).first()
     if operation is not None:
@@ -148,7 +147,9 @@ def get_unresolved_payment_method_operation(
             PaymentMethodOperation.user_id == current_user.id,
             PaymentMethodOperation.status.in_(ACTIVE_PAYMENT_METHOD_OPERATION_STATUSES),
         )
-        .order_by(PaymentMethodOperation.created_at.asc(), PaymentMethodOperation.id.asc())
+        .order_by(
+            PaymentMethodOperation.created_at.asc(), PaymentMethodOperation.id.asc()
+        )
     )
     if allow_operation_ids:
         statement = statement.where(
@@ -258,7 +259,7 @@ def apply_payment_method_operation_unknown(
         return
     operation.status = "provider_unknown"
     operation.error_code = error_code[:100]
-    operation.updated_at = datetime.now(timezone.utc)
+    operation.updated_at = datetime.now(UTC)
     db.add(operation)
     if enqueue_reconciliation:
         enqueue_payment_method_reconcile_job(db, operation.id)
@@ -271,7 +272,7 @@ def apply_payment_method_operation_failed(
 ) -> None:
     if operation is None or operation.status == "succeeded":
         return
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     operation.status = "failed"
     operation.error_code = error_code[:100]
     operation.resolved_at = now
@@ -286,7 +287,7 @@ def apply_payment_method_operation_succeeded(
     provider_object_id: str | None = None,
     payment_method_id: uuid.UUID | None = None,
 ) -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     operation.status = "succeeded"
     operation.provider_object_id = provider_object_id or operation.provider_object_id
     operation.payment_method_id = payment_method_id or operation.payment_method_id
@@ -367,7 +368,7 @@ def ensure_stripe_customer_id(db: Session, current_user: User) -> str:
         ) from exc
 
     current_user.stripe_customer_id = stripe_customer.id
-    current_user.updated_at = datetime.now(timezone.utc)
+    current_user.updated_at = datetime.now(UTC)
     db.add(current_user)
 
     try:
@@ -476,7 +477,7 @@ def unset_other_active_defaults(
             continue
 
         payment_method.is_default = False
-        payment_method.updated_at = datetime.now(timezone.utc)
+        payment_method.updated_at = datetime.now(UTC)
         db.add(payment_method)
 
 
@@ -503,9 +504,7 @@ def list_active_payment_methods(
     )
 
     if excluding_payment_method_id is not None:
-        statement = statement.where(
-            UserPaymentMethod.id != excluding_payment_method_id
-        )
+        statement = statement.where(UserPaymentMethod.id != excluding_payment_method_id)
 
     return list(
         db.scalars(
@@ -628,9 +627,7 @@ def sync_saved_payment_method(
         )
 
     try:
-        stripe_payment_method = retrieve_payment_method(
-            setup_intent.payment_method_id
-        )
+        stripe_payment_method = retrieve_payment_method(setup_intent.payment_method_id)
     except StripeConfigError as exc:
         mark_payment_method_operation_failed(db, operation, "stripe_not_configured")
         raise HTTPException(
@@ -643,14 +640,18 @@ def sync_saved_payment_method(
         )
         raise
     except Exception as exc:
-        mark_payment_method_operation_failed(db, operation, "payment_method_read_failed")
+        mark_payment_method_operation_failed(
+            db, operation, "payment_method_read_failed"
+        )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Stripe could not retrieve this payment method.",
         ) from exc
 
     if stripe_payment_method.customer_id != current_user.stripe_customer_id:
-        mark_payment_method_operation_failed(db, operation, "payment_method_owner_mismatch")
+        mark_payment_method_operation_failed(
+            db, operation, "payment_method_owner_mismatch"
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This payment method does not belong to the current user.",
@@ -671,11 +672,12 @@ def sync_saved_payment_method(
             detail="This Stripe payment method is already saved.",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     existing_card = db.scalar(
         select(UserPaymentMethod).where(
             UserPaymentMethod.user_id == current_user.id,
-            UserPaymentMethod.card_fingerprint == stripe_payment_method.card_fingerprint,
+            UserPaymentMethod.card_fingerprint
+            == stripe_payment_method.card_fingerprint,
         )
     )
 
@@ -838,7 +840,7 @@ def set_default_saved_payment_method(
         db,
         payment_method,
         current_user,
-        datetime.now(timezone.utc),
+        datetime.now(UTC),
     )
     payment_method = get_owned_payment_method_or_404(
         db,
@@ -902,7 +904,7 @@ def set_default_saved_payment_method(
         ) from exc
 
     payment_method.is_default = True
-    payment_method.updated_at = datetime.now(timezone.utc)
+    payment_method.updated_at = datetime.now(UTC)
 
     try:
         db.add(payment_method)
@@ -951,7 +953,7 @@ def detach_saved_payment_method(
             db,
             payment_method,
             current_user,
-            datetime.now(timezone.utc),
+            datetime.now(UTC),
         )
         payment_method = get_owned_payment_method_or_404(
             db,
@@ -997,7 +999,7 @@ def detach_saved_payment_method(
             detail="Stripe could not detach this payment method.",
         ) from exc
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     was_default = bool(payment_method.is_default)
     payment_method.method_status = DETACHED_PAYMENT_METHOD_STATUS
     payment_method.is_default = False
@@ -1012,7 +1014,7 @@ def detach_saved_payment_method(
         )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-                detail=SAVED_CARD_DETACH_RECORDING_FAILED_DETAIL,
+            detail=SAVED_CARD_DETACH_RECORDING_FAILED_DETAIL,
         ) from exc
     next_default_payment_method: UserPaymentMethod | None = None
     default_operation: PaymentMethodOperation | None = None
@@ -1030,7 +1032,9 @@ def detach_saved_payment_method(
             remaining_payment_methods[0] if remaining_payment_methods else None
         )
         default_operation_kind = (
-            "set_default" if next_default_payment_method is not None else "clear_default"
+            "set_default"
+            if next_default_payment_method is not None
+            else "clear_default"
         )
         default_operation_key = uuid.uuid5(
             uuid.NAMESPACE_URL,
@@ -1156,12 +1160,8 @@ def is_saved_payment_method_expired(
     payment_method: UserPaymentMethod,
     now: datetime,
 ) -> bool:
-    return (
-        payment_method.exp_year < now.year
-        or (
-            payment_method.exp_year == now.year
-            and payment_method.exp_month < now.month
-        )
+    return payment_method.exp_year < now.year or (
+        payment_method.exp_year == now.year and payment_method.exp_month < now.month
     )
 
 
@@ -1392,7 +1392,7 @@ def _reconcile_setup_create(
         return _fail_operation(db, operation, "payment_method_customer_conflict")
     if not user.stripe_customer_id:
         user.stripe_customer_id = customer_id
-        user.updated_at = datetime.now(timezone.utc)
+        user.updated_at = datetime.now(UTC)
         db.add(user)
     apply_payment_method_operation_succeeded(
         db,
@@ -1488,7 +1488,7 @@ def _reconcile_sync(
     if should_default:
         unset_other_active_defaults(db, user.id)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if existing_card is None:
         payment_method = UserPaymentMethod(
             id=uuid.uuid4(),
@@ -1583,13 +1583,13 @@ def _reconcile_set_default(
             payment_method,
             user,
             stripe_payment_method,
-            datetime.now(timezone.utc),
+            datetime.now(UTC),
         )
     except HTTPException:
         return _fail_operation(db, operation, "payment_method_provider_mismatch")
     unset_other_active_defaults(db, user.id, keep_payment_method_id=payment_method.id)
     payment_method.is_default = True
-    payment_method.updated_at = datetime.now(timezone.utc)
+    payment_method.updated_at = datetime.now(UTC)
     db.add(payment_method)
     apply_payment_method_operation_succeeded(
         db,
@@ -1649,7 +1649,7 @@ def _reconcile_clear_default(
         .with_for_update()
     ).all():
         payment_method.is_default = False
-        payment_method.updated_at = datetime.now(timezone.utc)
+        payment_method.updated_at = datetime.now(UTC)
         db.add(payment_method)
 
     apply_payment_method_operation_succeeded(db, operation)
@@ -1681,9 +1681,9 @@ def _reconcile_detach(
             excluding_payment_method_id=payment_method.id,
         )
         if remaining_payment_methods:
-            next_default_provider_id = (
-                remaining_payment_methods[0].stripe_payment_method_id
-            )
+            next_default_provider_id = remaining_payment_methods[
+                0
+            ].stripe_payment_method_id
         default_operation_kind = (
             "set_default" if next_default_provider_id is not None else "clear_default"
         )
@@ -1736,7 +1736,7 @@ def _reconcile_detach(
     )
     if user is None or payment_method is None or payment_method.user_id != user.id:
         return _fail_operation(db, operation, "payment_method_not_found")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payment_method.method_status = DETACHED_PAYMENT_METHOD_STATUS
     payment_method.is_default = False
     payment_method.detached_at = payment_method.detached_at or now

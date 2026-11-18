@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import UserSettings, User
+from backend.models import User, UserSettings
 from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import UserSettingsRead, UserSettingsUpdate
 from backend.services.auth_service import get_current_app_user, require_active_admin

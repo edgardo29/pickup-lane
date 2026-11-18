@@ -1,7 +1,7 @@
 """Community game host-edit workflow and venue handling."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
@@ -81,7 +81,7 @@ def create_host_edit_venue(
         venue_status="approved",
         created_by_user_id=db_game.host_user_id,
         approved_by_user_id=db_game.host_user_id,
-        approved_at=datetime.now(timezone.utc),
+        approved_at=datetime.now(UTC),
         is_active=True,
     )
     db.add(new_venue)
@@ -182,7 +182,7 @@ def host_edit_game_workflow(
             detail="Only published active games can be edited.",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     require_game_not_started(db_game, now, "Games cannot be edited after start time.")
     structural_snapshot_before = capture_game_updated_structural_snapshot(db_game)
 

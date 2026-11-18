@@ -66,7 +66,9 @@ class GameCreditUsage(Base):
             "(usage_type <> 'restore' OR original_usage_id IS NOT NULL)",
             name="ck_game_credit_usage_restore_requires_original_usage",
         ),
-        UniqueConstraint("idempotency_key", name="uq_game_credit_usage_idempotency_key"),
+        UniqueConstraint(
+            "idempotency_key", name="uq_game_credit_usage_idempotency_key"
+        ),
         Index("ix_game_credit_usage_game_credit_id", "game_credit_id"),
         Index(
             "ix_game_credit_usage_credit_created",

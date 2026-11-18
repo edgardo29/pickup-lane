@@ -5,17 +5,17 @@
 **Parent pass:** [Pass NN — official Production Launch Requirements name]  
 **Executable unit:** [Whole parent, or child name and bounded outcome]  
 **Assigned production-launch requirements:** [Exact requirement IDs]  
-**Parent pass record:** [Link to `docs/production-readiness/pass-records/pass-NN.md`, including its Stage 0 scope decision]
+**Stage 0 file:** [Link to `docs/production-readiness/pass-records/pass-NN/pass-NN-stage-0.md`]
 
-A plan may be written in the parent pass record or in a document linked from it. Every executable unit needs a written, independently reviewed plan; a separate planning file is optional. A child plan covers its assigned work while the parent record retains ownership and coverage of the whole pass.
+Save this plan as its own file in the pass folder: `pass-NN-plan.md` for an unsplit pass, or `pass-NNa-plan.md`, `pass-NNb-plan.md`, and so on for each minor pass. The file contains only the plan: no Stage 0 assessment, gate headings, review findings, or verification evidence. Every executable unit needs a written, independently reviewed plan. A child plan covers its assigned work while the pass record (`pass-NN-record.md`) tracks the whole pass.
 
 ## 1. Purpose, scope, and starting point
 
 [Establish enough context for a developer to understand the work before reading the design. Summarize the relevant user, system, or operational workflow in ordinary language.]
 
-Describe what starts the workflow, how it currently works, and the specific result the unit must deliver. Identify the exact Production Launch Requirements owned here. Cite each controlling product specification or approved decision by file and section; confirm that it describes the current application and does not conflict with the Production Launch Requirements. Link to the parent record's Stage 0 assessment rather than copying its full requirement inventory.
+Describe what starts the workflow, how it currently works, and the specific result the unit must deliver. Identify the exact Production Launch Requirements owned here. Cite each controlling product specification or approved decision by file and section; confirm that it describes the current application and does not conflict with the Production Launch Requirements. Link to the Stage 0 file rather than copying its full requirement inventory.
 
-Identify what current source, configuration, and verified evidence already establish. Distinguish observed behavior from an existing implementation that has not been verified against the Production Launch Requirements. State the remaining work and its prerequisites. Explain what the unit will add, change, or preserve; name affected interfaces or consumers and specific work outside its boundary. For a child, cite the parent record's ownership map and any upstream requirement on which it depends by exact ID.
+Identify what current source, configuration, and verified evidence already establish. Distinguish observed behavior from an existing implementation that has not been verified against the Production Launch Requirements. State the remaining work and its prerequisites. Explain what the unit will add, change, or preserve; name affected interfaces or consumers and specific work outside its boundary. For a child, cite the Stage 0 file's split table and any upstream requirement on which it depends by exact ID.
 
 If an essential fact or decision is missing, identify the precise question, its owner, and which work it blocks. Do not design around a guessed production service, business rule, provider setting, or limit. If only a final setting can wait, show that all conditions for that exception in Production Launch Requirements Section 3.3 apply.
 
@@ -69,7 +69,7 @@ Consider invalid inputs, unavailable or malformed responses, provider failures a
 
 ## 5. Verification plan
 
-[Plan the proof; do not report checks as passed here. Actual methods, observations, and evidence belong in the parent pass record or linked evidence.]
+[Plan the proof; do not report checks as passed here. Actual methods, observations, and evidence belong in the pass record or linked evidence.]
 
 For each applicable requirement and numbered verification scenario, specify:
 
@@ -87,7 +87,7 @@ Cover materially different outcomes, failure paths, and preserved behavior. Choo
 
 Identify the delivered result, safeguards, compatibility, and verification due now. Point to the parent pass completion condition and explain how this unit contributes to it. A child finishing does not by itself complete its parent.
 
-For each permitted later obligation, state the exact requirement, missing prerequisite, receiving pass or owner, event that makes it executable, required result, and latest completion boundary. Link to the obligation in the parent record and name the handoff. Distinguish a later check expressly allowed by the Production Launch Requirements from an unresolved prerequisite that prevents this unit's design or result from being completed. Leave any unfinished obligation visibly unfinished; do not claim completion from an unrun check.
+For each permitted later obligation, state the exact requirement, missing prerequisite, receiving pass or owner, event that makes it executable, required result, and latest completion boundary. Link to the obligation in the Stage 0 file or pass record and name the handoff. Distinguish a later check expressly allowed by the Production Launch Requirements from an unresolved prerequisite that prevents this unit's design or result from being completed. Leave any unfinished obligation visibly unfinished; do not claim completion from an unrun check.
 
 ---
 

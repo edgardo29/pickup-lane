@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
@@ -38,14 +38,15 @@ AGGREGATED_NOTIFICATION_ASSIGNABLE_FIELDS = {
     "related_refund_id",
     "actor_user_id",
 }
-RESOLVED_NOTIFICATION_ASSIGNABLE_FIELDS = (
-    AGGREGATED_NOTIFICATION_ASSIGNABLE_FIELDS - {"event_at", "aggregation_key"}
-)
+RESOLVED_NOTIFICATION_ASSIGNABLE_FIELDS = AGGREGATED_NOTIFICATION_ASSIGNABLE_FIELDS - {
+    "event_at",
+    "aggregation_key",
+}
 
 
 def ensure_aware_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
+        return value.replace(tzinfo=UTC)
 
     return value
 
@@ -68,11 +69,7 @@ def subject_label_for_game(game: Game) -> str:
 
 
 def subject_label_for_sub_post(sub_post: SubPost) -> str:
-    base_label = (
-        sub_post.team_name
-        or sub_post.location_name
-        or "Need a Sub post"
-    )
+    base_label = sub_post.team_name or sub_post.location_name or "Need a Sub post"
 
     if sub_post.format_label:
         return f"{base_label} {sub_post.format_label}"
@@ -303,7 +300,7 @@ def reopen_aggregated_notification(
     effective_now = (
         ensure_aware_utc(now_value)
         if isinstance(now_value, datetime)
-        else datetime.now(timezone.utc)
+        else datetime.now(UTC)
     )
     if is_new:
         notification.created_at = effective_now
@@ -347,7 +344,7 @@ def resolve_aggregated_notification(
             allowed_fields=RESOLVED_NOTIFICATION_ASSIGNABLE_FIELDS,
         )
 
-    effective_read_at = ensure_aware_utc(read_at or datetime.now(timezone.utc))
+    effective_read_at = ensure_aware_utc(read_at or datetime.now(UTC))
     notification.is_read = True
     if notification.read_at is None:
         notification.read_at = effective_read_at

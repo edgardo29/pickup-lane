@@ -1,7 +1,7 @@
 """Shared payment event helpers for routes and webhook processing."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -115,9 +115,7 @@ def validate_payment_event_business_rules(event_data: dict[str, Any]) -> None:
     if event_data["processing_status"] not in VALID_PROCESSING_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "processing_status is not supported."
-            ),
+            detail=("processing_status is not supported."),
         )
 
     if not event_data["provider_event_id"].strip():
@@ -132,7 +130,10 @@ def validate_payment_event_business_rules(event_data: dict[str, Any]) -> None:
             detail="event_type must not be empty.",
         )
 
-    if event_data["processing_status"] == "failed" and not event_data["processing_error_code"]:
+    if (
+        event_data["processing_status"] == "failed"
+        and not event_data["processing_error_code"]
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Failed payment events require processing_error_code.",
@@ -147,9 +148,9 @@ def normalize_payment_event_lifecycle_fields(
     # processed_at is derived when an event is marked processed so clients do
     # not have to keep processing_status and timestamp fields aligned.
     if normalized_data["processing_status"] == "processed":
-        normalized_data["processed_at"] = (
-            normalized_data.get("processed_at") or datetime.now(timezone.utc)
-        )
+        normalized_data["processed_at"] = normalized_data.get(
+            "processed_at"
+        ) or datetime.now(UTC)
     elif normalized_data["processing_status"] != "processed":
         normalized_data["processed_at"] = None
 
@@ -236,9 +237,7 @@ def list_payment_event_records(
         if processing_status not in VALID_PROCESSING_STATUSES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    "processing_status is not supported."
-                ),
+                detail=("processing_status is not supported."),
             )
         statement = statement.where(PaymentEvent.processing_status == processing_status)
 

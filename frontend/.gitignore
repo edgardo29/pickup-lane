@@ -24,3 +24,9 @@ test-results
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

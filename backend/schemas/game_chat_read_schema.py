@@ -12,4 +12,3 @@ class GameChatReadStateRead(BaseModel):
     last_read_at: datetime | None
     last_read_message_id: UUID | None
     unread_count: int
-

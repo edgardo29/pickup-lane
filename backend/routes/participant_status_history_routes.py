@@ -10,13 +10,13 @@ from backend.schemas import (
     ParticipantStatusHistoryRead,
 )
 from backend.services.auth_service import require_active_admin
-from backend.services.status_history_service import (
-    get_participant_status_history_record,
-    list_participant_status_history_records,
-)
 from backend.services.query_pagination import (
     DEFAULT_ADMIN_COLLECTION_LIMIT,
     MAX_ADMIN_COLLECTION_LIMIT,
+)
+from backend.services.status_history_service import (
+    get_participant_status_history_record,
+    list_participant_status_history_records,
 )
 
 router = APIRouter(

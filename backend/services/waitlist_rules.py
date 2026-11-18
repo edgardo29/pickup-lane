@@ -1,6 +1,6 @@
 """Waitlist entry constants, validation, and lifecycle normalization."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
@@ -36,7 +36,7 @@ JOIN_WINDOW_MINUTES = 5
 
 def ensure_timezone(value: datetime) -> datetime:
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
+        return value.replace(tzinfo=UTC)
 
     return value
 
@@ -150,7 +150,7 @@ def validate_game_accepts_waitlist_status(
     )
     if (
         waitlist_status in {"active", "promoted", "payment_processing"}
-        and datetime.now(timezone.utc) >= join_window_closes_at
+        and datetime.now(UTC) >= join_window_closes_at
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -163,7 +163,7 @@ def normalize_waitlist_entry_lifecycle_fields(
     existing_waitlist_entry: WaitlistEntry | None = None,
 ) -> dict[str, object]:
     normalized_data = dict(waitlist_entry_data)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     normalized_data["joined_at"] = (
         normalized_data.get("joined_at")

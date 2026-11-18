@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy import case, select
@@ -81,9 +81,7 @@ TERMINAL_PUBLISH_ATTEMPT_STATUSES = {
 
 
 def get_verified_community_host_or_404(db: Session, user_id: uuid.UUID) -> User:
-    db_user = db.scalar(
-        select(User).where(User.id == user_id).with_for_update()
-    )
+    db_user = db.scalar(select(User).where(User.id == user_id).with_for_update())
 
     if db_user is None or db_user.deleted_at is not None:
         raise HTTPException(
@@ -152,7 +150,7 @@ def get_or_create_approved_venue(
         venue_status="approved",
         created_by_user_id=host_user_id,
         approved_by_user_id=host_user_id,
-        approved_at=datetime.now(timezone.utc),
+        approved_at=datetime.now(UTC),
         is_active=True,
     )
     db.add(new_venue)
@@ -419,7 +417,7 @@ def create_published_community_game_records(
             price_cents=0,
             currency="USD",
             roster_order=1,
-            confirmed_at=datetime.now(timezone.utc),
+            confirmed_at=datetime.now(UTC),
         )
     )
 
@@ -428,7 +426,8 @@ def create_published_community_game_records(
             id=uuid.uuid4(),
             game_id=game_id,
             payment_methods_snapshot=[
-                method.model_dump() for method in publish_request.payment_methods_snapshot
+                method.model_dump()
+                for method in publish_request.payment_methods_snapshot
             ],
             payment_instructions_snapshot=(
                 publish_request.payment_instructions_snapshot
@@ -598,9 +597,8 @@ def build_publish_attempt_response(
         payment_id=attempt.payment_id,
         attempt_status=attempt.attempt_status,
         payment_status=payment.payment_status if payment is not None else None,
-        stripe_status=stripe_status or (
-            payment.payment_status if payment is not None else None
-        ),
+        stripe_status=stripe_status
+        or (payment.payment_status if payment is not None else None),
         client_secret=client_secret,
         created_game_id=attempt.created_game_id,
         error_message=attempt.failure_message,
@@ -655,9 +653,7 @@ def create_paid_publish_attempt(
             detail=str(exc),
         ) from exc
 
-    expires_at = now + timedelta(
-        minutes=COMMUNITY_PUBLISH_ATTEMPT_EXPIRATION_MINUTES
-    )
+    expires_at = now + timedelta(minutes=COMMUNITY_PUBLISH_ATTEMPT_EXPIRATION_MINUTES)
     saved_payment_method = get_current_user_saved_payment_method_for_checkout(
         db,
         publish_request.payment_method_id,
@@ -825,9 +821,7 @@ def create_paid_publish_attempt(
             .with_for_update()
         ).one()
         locked_payment = db.scalars(
-            select(Payment)
-            .where(Payment.id == payment.id)
-            .with_for_update()
+            select(Payment).where(Payment.id == payment.id).with_for_update()
         ).one()
         if locked_attempt.attempt_status not in TERMINAL_PUBLISH_ATTEMPT_STATUSES:
             locked_attempt.attempt_status = "failed"
@@ -835,7 +829,7 @@ def create_paid_publish_attempt(
             locked_attempt.failure_message = (
                 "Stripe could not confirm this saved payment method."
             )
-            locked_attempt.updated_at = datetime.now(timezone.utc)
+            locked_attempt.updated_at = datetime.now(UTC)
             locked_payment.payment_status = "failed"
             locked_payment.failure_code = "publish_fee_confirm_failed"
             locked_payment.failure_message = (
@@ -878,7 +872,7 @@ def create_paid_publish_attempt(
 
             locked_attempt.failure_code = failure_code
             locked_attempt.failure_message = failure_message
-            locked_attempt.updated_at = datetime.now(timezone.utc)
+            locked_attempt.updated_at = datetime.now(UTC)
             locked_payment.payment_status = payment_status
             locked_payment.provider_charge_id = confirmed_intent.latest_charge_id
             locked_payment.failure_code = failure_code
@@ -1064,7 +1058,7 @@ def publish_community_game_workflow(
     publish_request: CommunityGamePublishCreate,
     current_user: User,
 ) -> CommunityGamePublishRead:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     host = get_verified_community_host_or_404(db, current_user.id)
     validated_game_data = validate_community_publish_payload(publish_request, host)
     starts_on_local = validated_game_data["starts_on_local"]
@@ -1129,7 +1123,7 @@ def get_community_publish_attempt_status_workflow(
             detail="You cannot view this publish attempt.",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expire_abandoned_community_publish_attempts(
         db,
         host_user_id=attempt.host_user_id,

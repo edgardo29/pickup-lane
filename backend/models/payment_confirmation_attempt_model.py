@@ -36,10 +36,14 @@ class PaymentConfirmationAttempt(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     payment_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("payments.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("payments.id", ondelete="CASCADE"),
+        nullable=False,
     )
     booking_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("bookings.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("bookings.id", ondelete="CASCADE"),
+        nullable=False,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
@@ -47,7 +51,9 @@ class PaymentConfirmationAttempt(Base):
     provider_customer_id: Mapped[str] = mapped_column(String(255), nullable=False)
     provider_payment_method_id: Mapped[str] = mapped_column(String(255), nullable=False)
     confirmation_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
-    confirmation_idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    confirmation_idempotency_key: Mapped[str] = mapped_column(
+        String(255), nullable=False
+    )
     outcome: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default=text("'pending'")
     )

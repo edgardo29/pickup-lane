@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from re import Pattern
-from typing import Iterable
 
 from fastapi import status
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from backend.observability.http_errors import public_error_response
-
 
 DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES = 64 * 1024
 DEFAULT_PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES = 160 * 1024

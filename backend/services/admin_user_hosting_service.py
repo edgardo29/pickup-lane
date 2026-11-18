@@ -4,7 +4,7 @@ import hashlib
 import json
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -211,7 +211,7 @@ def preview_admin_user_hosting_restriction(
     future_games = list_future_community_hosted_games(
         db,
         user_id=user.id,
-        now=datetime.now(timezone.utc),
+        now=datetime.now(UTC),
     )
     return build_admin_user_hosting_restriction_preview(
         user=user,
@@ -434,7 +434,7 @@ def restrict_admin_user_hosting(
             expected_reason=reason,
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     future_games = list_future_community_hosted_games(
         db,
         user_id=target_user.id,
@@ -591,7 +591,7 @@ def restore_admin_user_hosting(
             detail=HOSTING_RESTORATION_BLOCKING_MESSAGES[blocking_reason_codes[0]],
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     notification = Notification(
         id=uuid.uuid4(),
         user_id=target_user.id,

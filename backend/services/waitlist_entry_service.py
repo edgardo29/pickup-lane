@@ -1,7 +1,7 @@
 """Waitlist entry reads and protected create/update workflows."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -158,8 +158,9 @@ def get_waitlist_entry_for_user_or_404(
     current_user: User,
 ) -> WaitlistEntry:
     entry_ref = db.execute(
-        select(WaitlistEntry.id, WaitlistEntry.user_id)
-        .where(WaitlistEntry.id == waitlist_entry_id)
+        select(WaitlistEntry.id, WaitlistEntry.user_id).where(
+            WaitlistEntry.id == waitlist_entry_id
+        )
     ).one_or_none()
     if entry_ref is None:
         raise HTTPException(
@@ -221,7 +222,9 @@ def list_waitlist_entries(
             )
         )
     )
-    selected_ids = list(db.scalars(page_query.with_only_columns(WaitlistEntry.id)).all())
+    selected_ids = list(
+        db.scalars(page_query.with_only_columns(WaitlistEntry.id)).all()
+    )
     if selected_ids:
         record_sensitive_admin_read_batch(
             authenticated_admin_id=authenticated_admin_id,
@@ -261,9 +264,7 @@ def update_waitlist_entry_workflow(
         ),
         "joined_at": update_data.get("joined_at", db_waitlist_entry.joined_at),
         "promoted_at": update_data.get("promoted_at", db_waitlist_entry.promoted_at),
-        "cancelled_at": update_data.get(
-            "cancelled_at", db_waitlist_entry.cancelled_at
-        ),
+        "cancelled_at": update_data.get("cancelled_at", db_waitlist_entry.cancelled_at),
         "expired_at": update_data.get("expired_at", db_waitlist_entry.expired_at),
     }
 
@@ -295,7 +296,7 @@ def update_waitlist_entry_workflow(
     for field_name, field_value in update_data.items():
         setattr(db_waitlist_entry, field_name, field_value)
 
-    db_waitlist_entry.updated_at = datetime.now(timezone.utc)
+    db_waitlist_entry.updated_at = datetime.now(UTC)
 
     try:
         db.add(db_waitlist_entry)

@@ -92,7 +92,9 @@ def get_community_game_detail(
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_optional_current_app_user),
 ) -> CommunityGameDetailPublicRead:
-    detail = get_public_community_game_detail(db, community_game_detail_id, current_user)
+    detail = get_public_community_game_detail(
+        db, community_game_detail_id, current_user
+    )
     db_detail = db.get(CommunityGameDetail, community_game_detail_id)
     game = db.get(Game, db_detail.game_id) if db_detail is not None else None
     if game is not None and game.public_visibility_status == "hidden":

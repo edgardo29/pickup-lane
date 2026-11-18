@@ -1,7 +1,7 @@
 """Booking policy acceptance admin scaffold workflows."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -93,7 +93,7 @@ def normalize_booking_policy_acceptance_fields(
     normalized_data = dict(acceptance_data)
 
     if normalized_data["accepted_at"] is None:
-        normalized_data["accepted_at"] = datetime.now(timezone.utc)
+        normalized_data["accepted_at"] = datetime.now(UTC)
 
     return normalized_data
 
@@ -108,7 +108,7 @@ def validate_booking_policy_acceptance_references(
         acceptance_data["policy_document_id"],
     )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if (
         not db_policy_document.is_active
         or db_policy_document.retired_at is not None
@@ -123,7 +123,9 @@ def validate_booking_policy_acceptance_references(
         )
 
 
-def validate_booking_policy_acceptance_update_rules(update_data: dict[str, Any]) -> None:
+def validate_booking_policy_acceptance_update_rules(
+    update_data: dict[str, Any],
+) -> None:
     if "accepted_at" in update_data and update_data["accepted_at"] is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

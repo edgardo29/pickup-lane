@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
 import re
+from collections.abc import Mapping, Sequence
 from typing import Any
 from urllib.parse import parse_qsl, urlsplit
-
 
 REDACTION_MARKER = "[REDACTED]"
 
 _EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
-_PHONE_RE = re.compile(r"(?<!\d)(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}(?!\d)")
+_PHONE_RE = re.compile(
+    r"(?<!\d)(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}(?!\d)"
+)
 _UUID_RE = re.compile(
     r"(?<![0-9A-Fa-f])"
     r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-"
@@ -182,12 +183,12 @@ def is_sensitive_key(key: object) -> bool:
     normalized = _normalize_key(key)
     if normalized in _EXACT_SENSITIVE_KEYS:
         return True
-    if normalized.endswith("_token") or normalized.endswith("_secret"):
+    if normalized.endswith(("_token", "_secret")):
         return True
     return any(fragment in normalized for fragment in _SENSITIVE_KEY_FRAGMENTS)
 
 
-def contains_sensitive_text(value: str) -> bool:
+def contains_sensitive_text(value: str, *, include_object_keys: bool = True) -> bool:
     """Detect sensitive text that must not be emitted in diagnostics."""
 
     if (
@@ -197,7 +198,7 @@ def contains_sensitive_text(value: str) -> bool:
         or _SECRET_VALUE_RE.search(value)
         or _SECRET_NAME_RE.search(value)
         or _INTERNAL_ERROR_RE.search(value)
-        or _OBJECT_KEY_RE.search(value)
+        or (include_object_keys and _OBJECT_KEY_RE.search(value))
     ):
         return True
 
@@ -257,7 +258,9 @@ def _redact_value(value: Any, *, seen: set[int]) -> Any:
 
 
 def _is_non_string_sequence(value: Any) -> bool:
-    return isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray)
+    return isinstance(value, Sequence) and not isinstance(
+        value, str | bytes | bytearray
+    )
 
 
 def _normalize_key(key: object) -> str:

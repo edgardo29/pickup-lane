@@ -1,6 +1,6 @@
 """Pure game constants, validation rules, and lifecycle normalization."""
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import HTTPException, status
@@ -152,14 +152,13 @@ def build_game_conflict_detail(exc: IntegrityError) -> str:
 
 def game_requires_app_player_payment(db_game: Game) -> bool:
     return (
-        db_game.game_type == "official"
-        and db_game.payment_collection_type == "in_app"
+        db_game.game_type == "official" and db_game.payment_collection_type == "in_app"
     )
 
 
 def ensure_timezone(value: datetime) -> datetime:
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
+        return value.replace(tzinfo=UTC)
 
     return value
 
@@ -175,7 +174,9 @@ def get_valid_timezone(timezone_name: str) -> ZoneInfo:
 
 
 def get_game_local_date(starts_at: datetime, timezone_name: str) -> date:
-    return ensure_timezone(starts_at).astimezone(get_valid_timezone(timezone_name)).date()
+    return (
+        ensure_timezone(starts_at).astimezone(get_valid_timezone(timezone_name)).date()
+    )
 
 
 def get_join_window_closes_at(db_game: Game) -> datetime:
@@ -251,8 +252,7 @@ def validate_game_business_rules(game_data: dict[str, object]) -> None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "payment_collection_type must be 'in_app', "
-                "'external_host', or 'none'."
+                "payment_collection_type must be 'in_app', 'external_host', or 'none'."
             ),
         )
 
@@ -271,7 +271,10 @@ def validate_game_business_rules(game_data: dict[str, object]) -> None:
             ),
         )
 
-    if game_data.get("public_visibility_status") not in VALID_PUBLIC_VISIBILITY_STATUSES:
+    if (
+        game_data.get("public_visibility_status")
+        not in VALID_PUBLIC_VISIBILITY_STATUSES
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="public_visibility_status must be 'visible' or 'hidden'.",
@@ -342,9 +345,7 @@ def validate_game_business_rules(game_data: dict[str, object]) -> None:
             detail="ends_at must be greater than starts_at.",
         )
 
-    if game_data["game_status"] == "active" and starts_at <= datetime.now(
-        timezone.utc
-    ):
+    if game_data["game_status"] == "active" and starts_at <= datetime.now(UTC):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Game start time must be in the future.",
@@ -476,10 +477,9 @@ def validate_game_business_rules(game_data: dict[str, object]) -> None:
             detail="Community games require policy_mode 'custom_hosted'.",
         )
 
-    if (
-        game_data["game_type"] == "community"
-        and game_data["payment_collection_type"] not in {"external_host", "none"}
-    ):
+    if game_data["game_type"] == "community" and game_data[
+        "payment_collection_type"
+    ] not in {"external_host", "none"}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -493,7 +493,7 @@ def normalize_game_lifecycle_fields(
     game_data: dict[str, object], existing_game: Game | None = None
 ) -> dict[str, object]:
     normalized_data = dict(game_data)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     normalized_data["starts_at"] = ensure_timezone(normalized_data["starts_at"])
     normalized_data["ends_at"] = ensure_timezone(normalized_data["ends_at"])
     normalized_data["starts_on_local"] = get_game_local_date(
@@ -518,7 +518,9 @@ def normalize_game_lifecycle_fields(
         )
         normalized_data["cancellation_source"] = (
             normalized_data.get("cancellation_source")
-            or (existing_game.cancellation_source if existing_game is not None else None)
+            or (
+                existing_game.cancellation_source if existing_game is not None else None
+            )
             or "host"
         )
         normalized_data["completed_at"] = None
@@ -632,11 +634,14 @@ def require_minimum_age(user: User, minimum_age: int | None) -> None:
     if minimum_age is None or user.date_of_birth is None:
         return
 
-    today = date.today()
+    today = datetime.now(UTC).date()
     user_age = (
         today.year
         - user.date_of_birth.year
-        - ((today.month, today.day) < (user.date_of_birth.month, user.date_of_birth.day))
+        - (
+            (today.month, today.day)
+            < (user.date_of_birth.month, user.date_of_birth.day)
+        )
     )
 
     if user_age < minimum_age:

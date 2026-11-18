@@ -22,13 +22,17 @@ def active_publish_fee_sibling_outcome(
         select(AdminFinancialOutcome)
         .where(
             AdminFinancialOutcome.host_publish_fee_id == refund.host_publish_fee_id,
-            AdminFinancialOutcome.applied_status.in_(ACTIVE_FINANCIAL_DECISION_STATUSES),
+            AdminFinancialOutcome.applied_status.in_(
+                ACTIVE_FINANCIAL_DECISION_STATUSES
+            ),
             or_(
                 AdminFinancialOutcome.refund_id.is_(None),
                 AdminFinancialOutcome.refund_id != refund.id,
             ),
         )
-        .order_by(AdminFinancialOutcome.created_at.desc(), AdminFinancialOutcome.id.desc())
+        .order_by(
+            AdminFinancialOutcome.created_at.desc(), AdminFinancialOutcome.id.desc()
+        )
     ).first()
 
 

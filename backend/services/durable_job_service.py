@@ -659,7 +659,9 @@ def operator_cancel_job(
     if job.status in TERMINAL_STATUSES:
         return False
     if job.job_type == "stripe_refund_fulfillment":
-        raise DurableJobError("refund fulfillment jobs require financial reconciliation")
+        raise DurableJobError(
+            "refund fulfillment jobs require financial reconciliation"
+        )
     previous_status = job.status
     job.status = CANCELLED
     job.lease_token = None

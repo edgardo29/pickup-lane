@@ -8,6 +8,8 @@ from fastapi import HTTPException, status
 from backend.models import SubPost
 from backend.services.game_rules import (
     VALID_ENVIRONMENT_TYPES as GAME_VALID_ENVIRONMENT_TYPES,
+)
+from backend.services.game_rules import (
     VALID_SKILL_LEVELS as GAME_VALID_SKILL_LEVELS,
 )
 

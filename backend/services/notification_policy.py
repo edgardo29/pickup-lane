@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-
 VALID_NOTIFICATION_PREFERENCE_CLASSES = {
     "mandatory",
     "preference_controlled",

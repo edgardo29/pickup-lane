@@ -286,6 +286,7 @@ MIGRATION_RAW_SQL_ALLOWLIST: tuple[RawSqlAllowance, ...] = (
     ),
 )
 
+
 def raw_sql_allowlist_keys() -> set[tuple[str, str, str]]:
     return {
         (entry.source_path, entry.constructor, entry.expression)

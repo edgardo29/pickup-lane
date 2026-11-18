@@ -1,6 +1,6 @@
 """Shared user helpers used by user-adjacent routes and services."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -119,7 +119,7 @@ def update_current_user_profile(
     for field_name, field_value in update_data.items():
         setattr(db_user, field_name, field_value)
 
-    db_user.updated_at = datetime.now(timezone.utc)
+    db_user.updated_at = datetime.now(UTC)
 
     try:
         db.add(db_user)

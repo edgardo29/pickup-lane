@@ -1,7 +1,7 @@
 import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from ipaddress import IPv4Address, IPv6Address
 from urllib.parse import quote, urlsplit
 
@@ -401,9 +401,7 @@ def create_object_upload_url(
     except R2StorageConfigError:
         record_provider_outcome(operation, "configuration_error")
         raise
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        minutes=config.upload_url_minutes
-    )
+    expires_at = datetime.now(UTC) + timedelta(minutes=config.upload_url_minutes)
 
     try:
         upload_url = _validated_presigned_url(

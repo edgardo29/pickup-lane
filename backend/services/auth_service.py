@@ -2,9 +2,9 @@
 
 import math
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -24,6 +24,7 @@ from backend.settings import get_settings
 ADMIN_ROLE = "admin"
 RECENT_AUTH_REQUIRED_CODE = "AUTH.RECENT_AUTH_REQUIRED"
 RECENT_AUTH_REQUIRED_MESSAGE = "Confirm your identity to continue."
+VERIFIED_FIREBASE_IDENTITY_STATE_KEY = "_pickup_lane_verified_firebase_identity"
 
 
 @dataclass(frozen=True)
@@ -114,8 +115,12 @@ def get_verified_firebase_identity_from_authorization(
 
 
 def get_verified_firebase_identity(
+    request: Request,
     authorization: str | None = Header(default=None),
 ) -> VerifiedFirebaseIdentity:
+    identity = request.scope.get("state", {}).get(VERIFIED_FIREBASE_IDENTITY_STATE_KEY)
+    if isinstance(identity, VerifiedFirebaseIdentity):
+        return identity
     return get_verified_firebase_identity_from_authorization(authorization)
 
 
@@ -136,7 +141,7 @@ def parse_firebase_authenticated_at(decoded_token: dict) -> datetime | None:
         return None
 
     try:
-        authenticated_at = datetime.fromtimestamp(auth_time, tz=timezone.utc)
+        authenticated_at = datetime.fromtimestamp(auth_time, tz=UTC)
     except (OverflowError, OSError, ValueError):
         return None
 
@@ -156,8 +161,8 @@ def is_recent_authentication(
     if authenticated_at.tzinfo is None:
         return False
 
-    authenticated_at = authenticated_at.astimezone(timezone.utc)
-    now = now.astimezone(timezone.utc)
+    authenticated_at = authenticated_at.astimezone(UTC)
+    now = now.astimezone(UTC)
     age = now - authenticated_at
     return timedelta(0) <= age <= window
 
@@ -178,7 +183,7 @@ def require_recent_authentication(
 ) -> VerifiedFirebaseIdentity:
     if not is_recent_authentication(
         identity,
-        now=datetime.now(timezone.utc),
+        now=datetime.now(UTC),
         window=recent_authentication_window(),
     ):
         raise HTTPException(
@@ -187,10 +192,6 @@ def require_recent_authentication(
         )
 
     return identity
-
-
-def get_auth_user_id_from_token(authorization: str | None) -> str:
-    return get_verified_firebase_identity_from_authorization(authorization).auth_user_id
 
 
 def sync_primary_email_from_firebase(
@@ -218,7 +219,7 @@ def sync_primary_email_from_firebase(
         )
 
     user.email = normalized_email
-    user.updated_at = datetime.now(timezone.utc)
+    user.updated_at = datetime.now(UTC)
     db.add(user)
     return True
 
@@ -259,11 +260,11 @@ def sync_email_verification_from_firebase(
             return False
 
         user.email_verified_at = None
-        user.updated_at = datetime.now(timezone.utc)
+        user.updated_at = datetime.now(UTC)
         db.add(user)
         return True
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     did_change = False
 
     if user.email_verified_at is None:
@@ -271,9 +272,7 @@ def sync_email_verification_from_firebase(
         user.updated_at = now
         did_change = True
 
-    did_change = (
-        apply_verified_hosting_eligibility(user, verified_at=now) or did_change
-    )
+    did_change = apply_verified_hosting_eligibility(user, verified_at=now) or did_change
     if did_change:
         db.add(user)
 
@@ -405,7 +404,11 @@ def require_verified_user(
                 detail=build_user_conflict_detail(exc),
             ) from exc
 
-    if not identity.firebase_account_active or not identity.email or not identity.email_verified:
+    if (
+        not identity.firebase_account_active
+        or not identity.email
+        or not identity.email_verified
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Verified email required.",

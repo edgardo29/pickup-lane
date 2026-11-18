@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from backend.services.moderation_evidence_service import exact_source_hash
 from backend.services.moderation_taxonomy import (
@@ -217,12 +217,12 @@ def build_scan_provenance(
     *,
     profile: ScannerProfileDefinition,
     target_context: str,
-    wall_clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+    wall_clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> ScanProvenance:
     scanned_at = wall_clock()
     if scanned_at.tzinfo is None or scanned_at.utcoffset() is None:
         raise ValueError("Moderation scan wall clock must be timezone-aware.")
-    scanned_at = scanned_at.astimezone(timezone.utc)
+    scanned_at = scanned_at.astimezone(UTC)
     return ScanProvenance(
         scanner_id=profile.scanner_id,
         scanner_version=profile.scanner_version,
@@ -237,7 +237,7 @@ def build_scan_provenance(
 
 
 def scanner_timestamp() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 # Compatibility exports remain registry-owned rather than independently defined.

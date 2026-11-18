@@ -1,7 +1,7 @@
 """User settings reads and protected create/update workflows."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
@@ -117,7 +117,7 @@ def update_user_settings_instance(
     for field_name, field_value in update_data.items():
         setattr(db_user_settings, field_name, field_value)
 
-    db_user_settings.updated_at = datetime.now(timezone.utc)
+    db_user_settings.updated_at = datetime.now(UTC)
 
     try:
         db.add(db_user_settings)

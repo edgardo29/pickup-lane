@@ -29,8 +29,9 @@ def escape_like_search_term(value: str) -> str:
 def normalize_user_lookup_terms(query: str | None) -> list[str]:
     return [
         term
-        for term in " ".join((query or "").strip().lower().split())
-        .split()[:USER_LOOKUP_MAX_TERMS]
+        for term in " ".join((query or "").strip().lower().split()).split()[
+            :USER_LOOKUP_MAX_TERMS
+        ]
         if len(term) >= USER_LOOKUP_MIN_TERM_LENGTH
     ]
 
@@ -45,9 +46,7 @@ def user_lookup_condition(term: str):
 
 
 def user_lookup_display_name(user: User) -> str:
-    name = " ".join(
-        part for part in (user.first_name, user.last_name) if part
-    ).strip()
+    name = " ".join(part for part in (user.first_name, user.last_name) if part).strip()
     return name or user.email or str(user.id)
 
 
@@ -91,9 +90,7 @@ def list_admin_lookup_users(
     terms = normalize_user_lookup_terms(normalized_query)
     lookup_conditions = []
     if terms:
-        lookup_conditions.append(
-            and_(*(user_lookup_condition(term) for term in terms))
-        )
+        lookup_conditions.append(and_(*(user_lookup_condition(term) for term in terms)))
     if exact_user_id is not None:
         lookup_conditions.append(User.id == exact_user_id)
     if not lookup_conditions:

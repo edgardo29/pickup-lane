@@ -2,7 +2,7 @@
 
 import hashlib
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -1015,7 +1015,7 @@ def record_financial_outcome_actions(
         )
         if entitlement is not None and entitlement.source_admin_action_id is None:
             entitlement.source_admin_action_id = create_action.id
-            entitlement.updated_at = datetime.now(timezone.utc)
+            entitlement.updated_at = datetime.now(UTC)
             db.add(entitlement)
 
     if financial_outcome.outcome in {"refund", "credit", "forfeit"}:
@@ -1119,9 +1119,7 @@ def reclassify_superseded_publish_refund_issues(
             Refund.id != financial_outcome.refund_id
         )
     prior_refunds = list(
-        db.scalars(
-            prior_refund_query.order_by(Refund.id.asc()).with_for_update()
-        ).all()
+        db.scalars(prior_refund_query.order_by(Refund.id.asc()).with_for_update()).all()
     )
     if not prior_refunds:
         return
@@ -1138,8 +1136,11 @@ def reclassify_superseded_publish_refund_issues(
     )
     issues = list(
         db.scalars(
-            select(MoneyIssue).where(
-                MoneyIssue.target_refund_id.in_([refund.id for refund in prior_refunds]),
+            select(MoneyIssue)
+            .where(
+                MoneyIssue.target_refund_id.in_(
+                    [refund.id for refund in prior_refunds]
+                ),
                 MoneyIssue.status == "open",
             )
             .order_by(MoneyIssue.id.asc())
@@ -1166,9 +1167,7 @@ def reclassify_superseded_publish_refund_issues(
             summary=issue.latest_summary,
             previous_recommended_action_code=previous_action,
             new_recommended_action_code=issue.recommended_action_code,
-            metadata={
-                "replacement_financial_outcome_id": str(financial_outcome.id)
-            },
+            metadata={"replacement_financial_outcome_id": str(financial_outcome.id)},
         )
 
 
@@ -1184,14 +1183,17 @@ def recompute_superseded_publish_refund_issues(
         select(AdminFinancialOutcome).where(
             AdminFinancialOutcome.host_publish_fee_id
             == financial_outcome.host_publish_fee_id,
-            AdminFinancialOutcome.applied_status.in_(ACTIVE_FINANCIAL_DECISION_STATUSES),
+            AdminFinancialOutcome.applied_status.in_(
+                ACTIVE_FINANCIAL_DECISION_STATUSES
+            ),
         )
     ).first()
     if authoritative is not None:
         return
     prior_refunds = list(
         db.scalars(
-            select(Refund).where(
+            select(Refund)
+            .where(
                 Refund.host_publish_fee_id == financial_outcome.host_publish_fee_id,
                 Refund.refund_status.in_({"failed", "cancelled"}),
             )
@@ -1215,7 +1217,7 @@ def recompute_superseded_publish_refund_issues(
             .with_for_update()
         ).all()
     )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for issue in issues:
         refund = refunds_by_id.get(issue.target_refund_id)
         if refund is None:
@@ -1272,7 +1274,7 @@ def create_admin_financial_outcome(
     if existing_outcome is not None:
         return AdminMoneyFinancialOutcomeRead.model_validate(existing_outcome)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     (
         host_user_id,
         target_game_id,
@@ -1281,7 +1283,10 @@ def create_admin_financial_outcome(
         amount_cents,
     ) = resolve_outcome_context(db, payload=payload, outcome=outcome)
 
-    if outcome in {"refund", "credit", "forfeit", "manual_review"} and amount_cents <= 0:
+    if (
+        outcome in {"refund", "credit", "forfeit", "manual_review"}
+        and amount_cents <= 0
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"{outcome} outcomes require amount_cents greater than 0.",
@@ -1459,7 +1464,9 @@ def resolve_admin_manual_review(
     replay_identity = {
         "outcome": payload.outcome.strip().lower(),
         "reason": normalize_required_text(payload.reason, "reason"),
-        "internal_note": normalize_optional_text(payload.internal_note, "internal_note"),
+        "internal_note": normalize_optional_text(
+            payload.internal_note, "internal_note"
+        ),
         "amount_cents": payload.amount_cents,
     }
     existing_action = db.scalars(
@@ -1477,9 +1484,7 @@ def resolve_admin_manual_review(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Manual-review idempotency key was replayed with different resolution data.",
             )
-        replacement_id = existing_metadata.get(
-            "replacement_financial_outcome_id"
-        )
+        replacement_id = existing_metadata.get("replacement_financial_outcome_id")
         try:
             replacement_uuid = uuid.UUID(replacement_id)
         except (TypeError, ValueError):
@@ -1558,7 +1563,7 @@ def resolve_admin_manual_review(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="An uncollected publish fee can resolve only to no_fee_charged.",
         )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     manual_review.applied_status = "superseded"
     manual_review.superseded_at = now
     manual_review.applied_at = None
@@ -1606,6 +1611,4 @@ def resolve_admin_manual_review(
         },
     )
     db.commit()
-    return get_admin_financial_outcome_detail(
-        db, financial_outcome_id=replacement.id
-    )
+    return get_admin_financial_outcome_detail(db, financial_outcome_id=replacement.id)

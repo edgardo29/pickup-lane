@@ -136,7 +136,9 @@ class AdminTargetNotice(Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    read_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     dismissed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,

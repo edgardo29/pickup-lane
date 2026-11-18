@@ -176,9 +176,7 @@ def load_official_game_list_card_data(
     game_ids = [game.id for game in games]
     venue_ids = {game.venue_id for game in games if game.venue_id is not None}
     booked_spots_by_game_id: dict[uuid.UUID, int] = {}
-    primary_venue_image_object_key_by_venue_id: dict[
-        uuid.UUID, R2ObjectReference
-    ] = {}
+    primary_venue_image_object_key_by_venue_id: dict[uuid.UUID, R2ObjectReference] = {}
 
     for game_id, booked_spots in db.execute(
         select(GameParticipant.game_id, func.count(GameParticipant.id))

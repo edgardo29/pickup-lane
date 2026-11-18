@@ -1,7 +1,7 @@
 """Admin money issue staging, resolution, and retry workflows."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -126,7 +126,10 @@ def get_money_issue_with_financial_context_for_update_or_404(
         if reference.target_refund_id is not None
         else None
     )
-    if refund_reference is not None and refund_reference.host_publish_fee_id is not None:
+    if (
+        refund_reference is not None
+        and refund_reference.host_publish_fee_id is not None
+    ):
         db.scalar(
             select(HostPublishFee)
             .where(HostPublishFee.id == refund_reference.host_publish_fee_id)
@@ -137,8 +140,7 @@ def get_money_issue_with_financial_context_for_update_or_404(
             db.scalars(
                 select(Refund)
                 .where(
-                    Refund.host_publish_fee_id
-                    == refund_reference.host_publish_fee_id
+                    Refund.host_publish_fee_id == refund_reference.host_publish_fee_id
                     if refund_reference.host_publish_fee_id is not None
                     else Refund.id == refund_reference.id
                 )
@@ -215,7 +217,7 @@ def append_money_issue_event(
     metadata: dict[str, Any] | None = None,
     occurred_at: datetime | None = None,
 ) -> MoneyIssueEvent:
-    now = occurred_at or datetime.now(timezone.utc)
+    now = occurred_at or datetime.now(UTC)
     event = MoneyIssueEvent(
         id=uuid.uuid4(),
         money_issue_id=money_issue.id,
@@ -290,14 +292,11 @@ def financial_outcome_safely_supersedes_refund(
     if replacement.refund_id is None:
         return False
     replacement_refund = db.get(Refund, replacement.refund_id)
-    if (
-        replacement_refund is None
-        or not refund_expected_attempts_are_terminal(db, replacement_refund)
+    if replacement_refund is None or not refund_expected_attempts_are_terminal(
+        db, replacement_refund
     ):
         return False
-    returned = authoritative_succeeded_amount_for_refunds(
-        db, (replacement_refund,)
-    )
+    returned = authoritative_succeeded_amount_for_refunds(db, (replacement_refund,))
     return returned >= replacement.amount_cents
 
 
@@ -344,7 +343,7 @@ def stage_refund_money_issue(
     if issue_type not in ISSUE_DEFAULTS or not issue_type.startswith("refund_"):
         raise ValueError("Unsupported refund money issue type.")
 
-    detected_at = now or datetime.now(timezone.utc)
+    detected_at = now or datetime.now(UTC)
     value_kind, recommended_action_code = ISSUE_DEFAULTS[issue_type]
     active_sibling = active_publish_fee_sibling_outcome(db, refund=refund)
     if active_sibling is not None:
@@ -389,15 +388,15 @@ def stage_refund_money_issue(
         if money_issue.resolution_reason_code == "superseded_by_financial_outcome":
             replacements = list(
                 db.scalars(
-                select(AdminFinancialOutcome).where(
-                    AdminFinancialOutcome.host_publish_fee_id
-                    == refund.host_publish_fee_id,
-                    or_(
-                        AdminFinancialOutcome.refund_id.is_(None),
-                        AdminFinancialOutcome.refund_id != refund.id,
-                    ),
-                    AdminFinancialOutcome.applied_status == "applied",
-                )
+                    select(AdminFinancialOutcome).where(
+                        AdminFinancialOutcome.host_publish_fee_id
+                        == refund.host_publish_fee_id,
+                        or_(
+                            AdminFinancialOutcome.refund_id.is_(None),
+                            AdminFinancialOutcome.refund_id != refund.id,
+                        ),
+                        AdminFinancialOutcome.applied_status == "applied",
+                    )
                 ).all()
             )
             if any(
@@ -527,7 +526,7 @@ def stage_credit_money_issue(
     if issue_type not in ISSUE_DEFAULTS or not issue_type.startswith("credit_"):
         raise ValueError("Unsupported credit money issue type.")
 
-    detected_at = now or datetime.now(timezone.utc)
+    detected_at = now or datetime.now(UTC)
     value_kind, recommended_action_code = ISSUE_DEFAULTS[issue_type]
     if origin_workflow in {"official_game_cancellation", "player_removal"}:
         recommended_action_code = "reexecute_origin_workflow"
@@ -792,15 +791,15 @@ def validate_money_issue_resolution(
             )
         replacements = list(
             db.scalars(
-            select(AdminFinancialOutcome).where(
-                AdminFinancialOutcome.host_publish_fee_id
-                == refund.host_publish_fee_id,
-                or_(
-                    AdminFinancialOutcome.refund_id.is_(None),
-                    AdminFinancialOutcome.refund_id != refund.id,
-                ),
-                AdminFinancialOutcome.applied_status == "applied",
-            )
+                select(AdminFinancialOutcome).where(
+                    AdminFinancialOutcome.host_publish_fee_id
+                    == refund.host_publish_fee_id,
+                    or_(
+                        AdminFinancialOutcome.refund_id.is_(None),
+                        AdminFinancialOutcome.refund_id != refund.id,
+                    ),
+                    AdminFinancialOutcome.applied_status == "applied",
+                )
             ).all()
         )
         replacement = next(
@@ -858,7 +857,10 @@ def validate_money_issue_resolution(
             return
 
     if resolution_reason_code == "provider_completed_no_action_required":
-        if not money_issue.issue_type.startswith("refund_") or money_issue.target_refund_id is None:
+        if (
+            not money_issue.issue_type.startswith("refund_")
+            or money_issue.target_refund_id is None
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Stripe no-action resolution requires refund context.",
@@ -948,7 +950,7 @@ def resolve_admin_money_issue(
         resolution_external_reference=resolution_external_reference,
     )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     previous_status = money_issue.status
     admin_action = record_admin_action(
         db,
@@ -1014,9 +1016,7 @@ def resolve_admin_money_issue(
         previous_status=previous_status,
         new_status="resolved",
         metadata={
-            "replacement_financial_outcome_id": str(
-                replacement_financial_outcome.id
-            )
+            "replacement_financial_outcome_id": str(replacement_financial_outcome.id)
         }
         if replacement_financial_outcome is not None
         else None,
@@ -1126,7 +1126,7 @@ def retry_admin_money_issue_credit(
             status_code=status.HTTP_404_NOT_FOUND, detail="Game credit not found."
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     retry_kind = (
         "release" if money_issue.issue_type == "credit_release_failed" else "restore"
     )

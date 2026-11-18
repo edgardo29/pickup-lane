@@ -309,7 +309,9 @@ def upgrade() -> None:
         "admin_actions",
         ["admin_user_id", "target_financial_outcome_id", "idempotency_key"],
         unique=True,
-        postgresql_where=sa.text("action_type = 'resolve_manual_review' AND idempotency_key IS NOT NULL"),
+        postgresql_where=sa.text(
+            "action_type = 'resolve_manual_review' AND idempotency_key IS NOT NULL"
+        ),
     )
     op.create_index(
         "uq_admin_actions_delete_user_idempotency",

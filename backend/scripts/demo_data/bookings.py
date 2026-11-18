@@ -10,7 +10,9 @@ from backend.scripts.demo_data.helpers import demo_uuid, now_utc, upsert_by_id
 from backend.scripts.demo_data.users import CURRENT_USER_KEY, PLAYER_KEYS
 
 
-def seed_bookings(db: Session, users: dict[str, User], games: dict[str, Game]) -> dict[str, Booking]:
+def seed_bookings(
+    db: Session, users: dict[str, User], games: dict[str, Game]
+) -> dict[str, Booking]:
     seeded_bookings: dict[str, Booking] = {}
     timestamp = now_utc()
 
@@ -54,7 +56,10 @@ def seed_bookings(db: Session, users: dict[str, User], games: dict[str, Game]) -
         current_user_status = game_data.get("current_user_participant_status")
         is_current_user_host = game_data.get("host_key") == CURRENT_USER_KEY
 
-        if current_user_status in {"pending_payment", "confirmed"} and not is_current_user_host:
+        if (
+            current_user_status in {"pending_payment", "confirmed"}
+            and not is_current_user_host
+        ):
             buyer = users[CURRENT_USER_KEY]
             booking_key = f"{game_data['key']}:{CURRENT_USER_KEY}"
             subtotal_cents = game.price_per_player_cents
@@ -84,9 +89,7 @@ def seed_bookings(db: Session, users: dict[str, User], games: dict[str, Game]) -
                     "cancelled_by_user_id": None,
                     "cancel_reason": None,
                     "expires_at": (
-                        timestamp + timedelta(minutes=2)
-                        if is_pending_payment
-                        else None
+                        timestamp + timedelta(minutes=2) if is_pending_payment else None
                     ),
                     "updated_at": timestamp,
                 },

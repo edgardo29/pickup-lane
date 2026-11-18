@@ -53,9 +53,7 @@ class UserPaymentMethod(Base):
             "ix_user_payment_methods_one_active_default_per_user",
             "user_id",
             unique=True,
-            postgresql_where=text(
-                "is_default = true AND method_status = 'active'"
-            ),
+            postgresql_where=text("is_default = true AND method_status = 'active'"),
         ),
         Index(
             "ix_user_payment_methods_user_status",
@@ -76,9 +74,7 @@ class UserPaymentMethod(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    stripe_customer_id: Mapped[str] = mapped_column(
-        String(255), nullable=False
-    )
+    stripe_customer_id: Mapped[str] = mapped_column(String(255), nullable=False)
     stripe_payment_method_id: Mapped[str] = mapped_column(
         String(255), nullable=False, unique=True
     )

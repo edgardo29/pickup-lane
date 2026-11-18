@@ -50,9 +50,7 @@ ALLOWED_ENVIRONMENTS = frozenset(
 # string fields. Shared code-like telemetry tokens stay within that range.
 _MAX_CONTROLLED_TOKEN_LENGTH = 80
 _MAX_ROUTE_TEMPLATE_LENGTH = 160
-_LOW_CARDINALITY_TOKEN_RE = re.compile(
-    r"^[a-z][a-z0-9_]*(?:[.:][a-z][a-z0-9_]*)*$"
-)
+_LOW_CARDINALITY_TOKEN_RE = re.compile(r"^[a-z][a-z0-9_]*(?:[.:][a-z][a-z0-9_]*)*$")
 _ERROR_CODE_RE = re.compile(r"^[A-Z][A-Z0-9_]*(?:[.:][A-Z][A-Z0-9_]*)*$")
 _ROUTE_TEMPLATE_RE = re.compile(r"^/[A-Za-z0-9_{}./:-]*$")
 _UUID_RE = re.compile(
@@ -161,7 +159,9 @@ def _valid_route_template(value: str) -> bool:
         return False
     if _ROUTE_TEMPLATE_RE.fullmatch(value) is None:
         return False
-    if contains_sensitive_text(value):
+    # Route templates are code-owned paths; a literal route such as
+    # /games/browse must not be mistaken for a storage object key.
+    if contains_sensitive_text(value, include_object_keys=False):
         return False
     if _UUID_RE.search(value) or _PROVIDER_IDENTIFIER_RE.search(value):
         return False

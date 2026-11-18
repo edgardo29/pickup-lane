@@ -67,9 +67,7 @@ def get_sub_post_request_and_post_for_update(
     request_snapshot = get_sub_post_request_or_404(db, request_id)
     sub_post = get_sub_post_for_update_or_404(db, request_snapshot.sub_post_id)
     sub_request = db.scalar(
-        select(SubPostRequest)
-        .where(SubPostRequest.id == request_id)
-        .with_for_update()
+        select(SubPostRequest).where(SubPostRequest.id == request_id).with_for_update()
     )
     if sub_request is None:
         raise HTTPException(
@@ -83,15 +81,18 @@ def count_waitlist_ahead(db: Session, sub_request: SubPostRequest) -> int:
     if sub_request.request_status != "sub_waitlist":
         return 0
 
-    return db.scalar(
-        select(func.count())
-        .select_from(SubPostRequest)
-        .where(
-            SubPostRequest.sub_post_position_id == sub_request.sub_post_position_id,
-            SubPostRequest.request_status == "sub_waitlist",
-            SubPostRequest.created_at < sub_request.created_at,
+    return (
+        db.scalar(
+            select(func.count())
+            .select_from(SubPostRequest)
+            .where(
+                SubPostRequest.sub_post_position_id == sub_request.sub_post_position_id,
+                SubPostRequest.request_status == "sub_waitlist",
+                SubPostRequest.created_at < sub_request.created_at,
+            )
         )
-    ) or 0
+        or 0
+    )
 
 
 def build_requester_display(user: User | None) -> tuple[str | None, str | None]:
@@ -118,7 +119,11 @@ def serialize_sub_post_request(
     requester: User | None = None,
     waitlist_ahead_count: int | None = None,
 ) -> dict:
-    requester = requester if requester is not None else db.get(User, sub_request.requester_user_id)
+    requester = (
+        requester
+        if requester is not None
+        else db.get(User, sub_request.requester_user_id)
+    )
     requester_display_name, requester_initials = build_requester_display(requester)
 
     return {
@@ -155,7 +160,9 @@ def load_requester_users(
     if not requester_ids:
         return {}
 
-    return dict(db.execute(select(User.id, User).where(User.id.in_(requester_ids))).all())
+    return dict(
+        db.execute(select(User.id, User).where(User.id.in_(requester_ids))).all()
+    )
 
 
 def load_waitlist_ahead_counts(
@@ -284,25 +291,31 @@ def list_requester_sub_post_requests(
 
 
 def count_queued_slots(db: Session, sub_post_position_id: uuid.UUID) -> int:
-    return db.scalar(
-        select(func.count())
-        .select_from(SubPostRequest)
-        .where(
-            SubPostRequest.sub_post_position_id == sub_post_position_id,
-            SubPostRequest.request_status.in_(QUEUE_HOLD_REQUEST_STATUSES),
+    return (
+        db.scalar(
+            select(func.count())
+            .select_from(SubPostRequest)
+            .where(
+                SubPostRequest.sub_post_position_id == sub_post_position_id,
+                SubPostRequest.request_status.in_(QUEUE_HOLD_REQUEST_STATUSES),
+            )
         )
-    ) or 0
+        or 0
+    )
 
 
 def count_post_waitlist_requests(db: Session, sub_post_id: uuid.UUID) -> int:
-    return db.scalar(
-        select(func.count())
-        .select_from(SubPostRequest)
-        .where(
-            SubPostRequest.sub_post_id == sub_post_id,
-            SubPostRequest.request_status == "sub_waitlist",
+    return (
+        db.scalar(
+            select(func.count())
+            .select_from(SubPostRequest)
+            .where(
+                SubPostRequest.sub_post_id == sub_post_id,
+                SubPostRequest.request_status == "sub_waitlist",
+            )
         )
-    ) or 0
+        or 0
+    )
 
 
 def create_request(
@@ -364,7 +377,8 @@ def create_request(
     )
     if (
         initial_status == "sub_waitlist"
-        and count_post_waitlist_requests(db, sub_post.id) >= MAX_WAITLIST_REQUESTS_PER_POST
+        and count_post_waitlist_requests(db, sub_post.id)
+        >= MAX_WAITLIST_REQUESTS_PER_POST
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -447,13 +461,19 @@ def promote_next_waitlisted_request(
     return next_request
 
 
-def owner_accept_request(db: Session, owner: User, request_id: uuid.UUID) -> SubPostRequest:
+def owner_accept_request(
+    db: Session, owner: User, request_id: uuid.UUID
+) -> SubPostRequest:
     expire_due_posts_and_requests(db)
     sub_request, sub_post = get_sub_post_request_and_post_for_update(db, request_id)
-    position = get_position_or_404(db, sub_request.sub_post_position_id, lock_for_update=True)
+    position = get_position_or_404(
+        db, sub_request.sub_post_position_id, lock_for_update=True
+    )
     current_time = now_utc()
     require_owner(sub_post, owner)
-    require_before_post_start(sub_post, "Requests cannot be accepted after the game starts.")
+    require_before_post_start(
+        sub_post, "Requests cannot be accepted after the game starts."
+    )
 
     if sub_request.request_status != "pending":
         raise HTTPException(
@@ -461,7 +481,9 @@ def owner_accept_request(db: Session, owner: User, request_id: uuid.UUID) -> Sub
             detail="Only pending requests can be accepted.",
         )
 
-    if sub_post.post_status != "active" or current_time >= ensure_aware(sub_post.expires_at):
+    if sub_post.post_status != "active" or current_time >= ensure_aware(
+        sub_post.expires_at
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This post is not accepting requests.",
@@ -513,7 +535,9 @@ def owner_decline_request(
     sub_request, sub_post = get_sub_post_request_and_post_for_update(db, request_id)
     require_owner(sub_post, owner)
     require_live_sub_post(sub_post, "Only active posts can be reviewed.")
-    require_before_post_start(sub_post, "Requests cannot be declined after the game starts.")
+    require_before_post_start(
+        sub_post, "Requests cannot be declined after the game starts."
+    )
 
     if sub_request.request_status not in {"pending", "sub_waitlist"}:
         raise HTTPException(
@@ -580,7 +604,9 @@ def requester_cancel_request(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the requester can cancel this request.",
         )
-    require_before_post_start(sub_post, "Requests cannot be canceled after the game starts.")
+    require_before_post_start(
+        sub_post, "Requests cannot be canceled after the game starts."
+    )
     require_live_sub_post(sub_post, "Only active posts can be updated.")
 
     if sub_request.request_status not in ACTIVE_REQUEST_STATUSES:
@@ -696,7 +722,9 @@ def owner_cancel_request(
     )
 
     recalculate_filled_status(db, sub_post, owner.id, "owner")
-    promoted_request = promote_next_waitlisted_request(db, position_id, owner.id, "owner")
+    promoted_request = promote_next_waitlisted_request(
+        db, position_id, owner.id, "owner"
+    )
     notify_waitlist_promoted(
         db,
         sub_post,
@@ -731,7 +759,9 @@ def owner_report_no_show(
             detail="No-show can only be reported after the game ends.",
         )
 
-    change_request_status(db, sub_request, "no_show_reported", owner.id, "owner", reason)
+    change_request_status(
+        db, sub_request, "no_show_reported", owner.id, "owner", reason
+    )
     resolve_sub_chat_notification_for_user(
         db,
         sub_post_id=sub_post.id,

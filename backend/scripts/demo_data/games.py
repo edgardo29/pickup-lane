@@ -350,7 +350,9 @@ def get_demo_game_host_key(game_data: dict, game_index: int) -> str:
     return game_data.get("host_key") or HOST_KEYS[game_index % len(HOST_KEYS)]
 
 
-def seed_games(db: Session, users: dict[str, User], venues: dict[str, Venue]) -> dict[str, Game]:
+def seed_games(
+    db: Session, users: dict[str, User], venues: dict[str, Venue]
+) -> dict[str, Game]:
     seeded_games: dict[str, Game] = {}
     timestamp = now_utc()
     admin = users[ADMIN_KEY]
@@ -364,7 +366,9 @@ def seed_games(db: Session, users: dict[str, User], venues: dict[str, Venue]) ->
                 game_data["minute"],
             )
         else:
-            game_start = starts_at(game_data["day_offset"], game_data["hour"], game_data["minute"])
+            game_start = starts_at(
+                game_data["day_offset"], game_data["hour"], game_data["minute"]
+            )
         game_id = demo_uuid(f"game:{game_data['key']}")
         is_community = game_data["game_type"] == "community"
         host = users[get_demo_game_host_key(game_data, game_index)]

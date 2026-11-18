@@ -108,8 +108,12 @@ class Refund(Base):
         Index("ix_refunds_participant_id", "participant_id"),
         Index("ix_refunds_host_publish_fee_id", "host_publish_fee_id"),
         Index("ix_refunds_refund_status_created", "refund_status", "created_at", "id"),
-        Index("ix_refunds_origin_workflow_created", "origin_workflow", "created_at", "id"),
-        Index("ix_refunds_provider_status_created", "provider_status", "created_at", "id"),
+        Index(
+            "ix_refunds_origin_workflow_created", "origin_workflow", "created_at", "id"
+        ),
+        Index(
+            "ix_refunds_provider_status_created", "provider_status", "created_at", "id"
+        ),
         Index("ix_refunds_amount_cents_id", "amount_cents", "id"),
         Index(
             "ix_refunds_last_refund_event_at",
@@ -158,9 +162,7 @@ class Refund(Base):
         ForeignKey("host_publish_fees.id", ondelete="RESTRICT"),
         nullable=True,
     )
-    provider_refund_id: Mapped[str | None] = mapped_column(
-        String(255), nullable=True
-    )
+    provider_refund_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     origin_operation_key: Mapped[str] = mapped_column(String(255), nullable=False)
     current_attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
     stripe_request_key: Mapped[str | None] = mapped_column(String(255), nullable=True)

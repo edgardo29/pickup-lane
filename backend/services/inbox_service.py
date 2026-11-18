@@ -5,7 +5,7 @@ import hashlib
 import hmac
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from fastapi import HTTPException, status
@@ -21,7 +21,6 @@ from backend.models import (
     PlatformNoticeSelectedRead,
     User,
 )
-from backend.settings import SettingsError, get_inbox_token_secret
 from backend.schemas.inbox_schema import InboxCountsRead, InboxItemRead, InboxListRead
 from backend.services.account_eligibility_service import user_is_account_eligible
 from backend.services.notification_display_service import serialize_notification
@@ -29,6 +28,7 @@ from backend.services.platform_notice_service import (
     AUDIENCE_TYPE_ALL_ELIGIBLE,
     AUDIENCE_TYPE_SELECTED,
 )
+from backend.settings import SettingsError, get_inbox_token_secret
 
 APP_UPDATE_SOURCE_GLOBAL = "platform_notice_global"
 APP_UPDATE_SOURCE_SELECTED = "platform_notice_selected"
@@ -47,7 +47,7 @@ GLOBAL_SEEN_TOKEN_VERSION = 1
 
 
 def now_utc() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def token_secret() -> bytes:
@@ -121,7 +121,9 @@ def encode_cursor(
     )
 
 
-def decode_cursor(cursor: str | None, *, expected_feed_name: str) -> dict[str, Any] | None:
+def decode_cursor(
+    cursor: str | None, *, expected_feed_name: str
+) -> dict[str, Any] | None:
     normalized = str(cursor or "").strip()
     if not normalized:
         return None
@@ -347,7 +349,9 @@ def list_global_platform_notice_items(
     ).all()
     return [
         platform_notice_item(
-            is_new=bool(notice.global_sequence and notice.global_sequence > seen_sequence),
+            is_new=bool(
+                notice.global_sequence and notice.global_sequence > seen_sequence
+            ),
             notice=notice,
             read_at=None,
             source_type=APP_UPDATE_SOURCE_GLOBAL,
@@ -679,7 +683,10 @@ def mark_selected_platform_notice_read(
 
     notice = db.scalar(
         select(PlatformNotice)
-        .join(PlatformNoticeRecipient, PlatformNoticeRecipient.notice_id == PlatformNotice.id)
+        .join(
+            PlatformNoticeRecipient,
+            PlatformNoticeRecipient.notice_id == PlatformNotice.id,
+        )
         .where(
             PlatformNotice.id == notice_id,
             PlatformNoticeRecipient.user_id == user.id,
@@ -713,7 +720,9 @@ def mark_selected_platform_notice_read(
     )
     db.execute(statement)
     db.commit()
-    read = db.get(PlatformNoticeSelectedRead, {"notice_id": notice.id, "user_id": user.id})
+    read = db.get(
+        PlatformNoticeSelectedRead, {"notice_id": notice.id, "user_id": user.id}
+    )
     return platform_notice_item(
         is_new=False,
         notice=notice,
@@ -727,60 +736,75 @@ def get_inbox_counts(db: Session, *, user: User) -> InboxCountsRead:
     timestamp = now_utc()
     global_new_count = 0
     if user_is_account_eligible(user):
-        global_new_count = db.scalar(
-            select(func.count())
-            .select_from(PlatformNotice)
-            .where(
-                PlatformNotice.audience_type == AUDIENCE_TYPE_ALL_ELIGIBLE,
-                PlatformNotice.cancelled_at.is_(None),
-                PlatformNotice.published_at <= timestamp,
-                PlatformNotice.global_sequence > seen_sequence,
+        global_new_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(PlatformNotice)
+                .where(
+                    PlatformNotice.audience_type == AUDIENCE_TYPE_ALL_ELIGIBLE,
+                    PlatformNotice.cancelled_at.is_(None),
+                    PlatformNotice.published_at <= timestamp,
+                    PlatformNotice.global_sequence > seen_sequence,
+                )
             )
-        ) or 0
+            or 0
+        )
 
     selected_new_count = 0
     if user_is_account_eligible(user):
-        selected_new_count = db.scalar(
+        selected_new_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(PlatformNotice)
+                .join(
+                    PlatformNoticeRecipient,
+                    PlatformNoticeRecipient.notice_id == PlatformNotice.id,
+                )
+                .outerjoin(
+                    PlatformNoticeSelectedRead,
+                    and_(
+                        PlatformNoticeSelectedRead.notice_id == PlatformNotice.id,
+                        PlatformNoticeSelectedRead.user_id == user.id,
+                    ),
+                )
+                .where(
+                    PlatformNoticeRecipient.user_id == user.id,
+                    PlatformNotice.audience_type == AUDIENCE_TYPE_SELECTED,
+                    PlatformNotice.cancelled_at.is_(None),
+                    PlatformNotice.published_at <= timestamp,
+                    PlatformNoticeSelectedRead.user_id.is_(None),
+                )
+            )
+            or 0
+        )
+
+    app_notification_new_count = (
+        db.scalar(
             select(func.count())
-            .select_from(PlatformNotice)
-            .join(PlatformNoticeRecipient, PlatformNoticeRecipient.notice_id == PlatformNotice.id)
-            .outerjoin(
-                PlatformNoticeSelectedRead,
-                and_(
-                    PlatformNoticeSelectedRead.notice_id == PlatformNotice.id,
-                    PlatformNoticeSelectedRead.user_id == user.id,
-                ),
-            )
+            .select_from(Notification)
             .where(
-                PlatformNoticeRecipient.user_id == user.id,
-                PlatformNotice.audience_type == AUDIENCE_TYPE_SELECTED,
-                PlatformNotice.cancelled_at.is_(None),
-                PlatformNotice.published_at <= timestamp,
-                PlatformNoticeSelectedRead.user_id.is_(None),
+                Notification.user_id == user.id,
+                Notification.notification_category == "app",
+                Notification.event_at <= timestamp,
+                Notification.is_read.is_(False),
             )
-        ) or 0
-
-    app_notification_new_count = db.scalar(
-        select(func.count())
-        .select_from(Notification)
-        .where(
-            Notification.user_id == user.id,
-            Notification.notification_category == "app",
-            Notification.event_at <= timestamp,
-            Notification.is_read.is_(False),
         )
-    ) or 0
+        or 0
+    )
 
-    game_activity_unread_count = db.scalar(
-        select(func.count())
-        .select_from(Notification)
-        .where(
-            Notification.user_id == user.id,
-            Notification.notification_category == "game_activity",
-            Notification.event_at <= timestamp,
-            Notification.is_read.is_(False),
+    game_activity_unread_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(Notification)
+            .where(
+                Notification.user_id == user.id,
+                Notification.notification_category == "game_activity",
+                Notification.event_at <= timestamp,
+                Notification.is_read.is_(False),
+            )
         )
-    ) or 0
+        or 0
+    )
 
     return InboxCountsRead(
         app_updates_new_count=(

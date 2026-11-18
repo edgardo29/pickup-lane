@@ -1,7 +1,7 @@
 """create durable_worker_heartbeats table"""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "0062_durable_worker_heartbeats"
@@ -55,7 +55,9 @@ def upgrade() -> None:
             "((status = 'stopped') AND stopped_at IS NOT NULL) OR ((status <> 'stopped') AND stopped_at IS NULL)",
             name="ck_durable_worker_heartbeats_stopped_at",
         ),
-        sa.ForeignKeyConstraint(["current_job_id"], ["durable_jobs.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(
+            ["current_job_id"], ["durable_jobs.id"], ondelete="SET NULL"
+        ),
     )
     op.create_index(
         "ix_durable_worker_heartbeats_status",

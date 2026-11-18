@@ -37,9 +37,7 @@ def refund_attempt_identity_matches_refund(
 ) -> bool:
     """Validate an immutable attempt snapshot against its owning Refund."""
     expected_request_key = (
-        f"refund:{refund.id}:attempt:{attempt_number}"
-        if attempt_number > 0
-        else None
+        f"refund:{refund.id}:attempt:{attempt_number}" if attempt_number > 0 else None
     )
     return bool(
         attempt.identity_consistent
@@ -66,8 +64,7 @@ def refund_event_has_authoritative_provider_observation(
         event.event_type in AUTHORITATIVE_PROVIDER_EVENT_TYPES
         and event.provider == "stripe"
         and event.provider_refund_id is not None
-        and event.provider_status
-        in {"processing", "succeeded", "failed", "cancelled"}
+        and event.provider_status in {"processing", "succeeded", "failed", "cancelled"}
         and event.new_refund_status == event.provider_status
     )
 
@@ -155,13 +152,17 @@ def reduce_refund_attempt_evidence(
             event.provider_charge_id,
         )
         prior_snapshot = (
-            prior.amount_cents,
-            prior.currency,
-            prior.request_key,
-            prior.provider,
-            prior.provider_refund_id,
-            prior.provider_charge_id,
-        ) if prior is not None else snapshot
+            (
+                prior.amount_cents,
+                prior.currency,
+                prior.request_key,
+                prior.provider,
+                prior.provider_refund_id,
+                prior.provider_charge_id,
+            )
+            if prior is not None
+            else snapshot
+        )
         evidence[event.attempt_number] = RefundAttemptEvidence(
             status=status,
             # A conflicting success must never understate potentially returned cash.
@@ -295,9 +296,7 @@ def refund_has_only_terminal_attempts(db: Session, refund: Refund) -> bool:
 def refund_expected_attempts_are_terminal(db: Session, refund: Refund) -> bool:
     """Prove complete, identity-consistent terminal coverage for a Refund."""
     statuses = refund_attempt_statuses(db, refund.id)
-    evidence = refund_attempt_evidence_for_refunds(db, (refund.id,)).get(
-        refund.id, {}
-    )
+    evidence = refund_attempt_evidence_for_refunds(db, (refund.id,)).get(refund.id, {})
     expected_attempts = expected_refund_attempt_numbers(refund, evidence)
     if set(statuses) != expected_attempts:
         return False

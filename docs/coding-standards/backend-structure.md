@@ -34,7 +34,8 @@ The backend currently uses:
 * `backend/schemas/`: Pydantic request and response models
 * `backend/alembic/versions/`: Alembic migration revisions
 * `backend/scripts/`: explicit local mock/demo-data utilities
-* `backend/tests/`: backend tests
+* `backend/tests/`: backend tests; see `backend-testing.md`
+* `backend/tests_archive/`: old backend tests, reference only
 
 Continue using these locations.
 
@@ -781,8 +782,8 @@ Demo-data scripts must have a narrow purpose, use existing services for domain
 behavior, make destructive operations explicit, and refuse production use.
 They are not a substitute for a missing service.
 
-Tests belong under `backend/tests/` and should follow the domain or workflow
-being tested.
+Tests belong under `backend/tests/` and follow the layout in
+`backend-testing.md`: one folder per page specification.
 
 Route tests cover HTTP behavior, authentication, authorization, validation,
 status codes, and response contracts.

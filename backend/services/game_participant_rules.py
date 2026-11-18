@@ -1,6 +1,6 @@
 """Game participant constants, validation, and lifecycle normalization."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
@@ -86,7 +86,9 @@ def validate_game_participant_business_rules(
         )
 
     validate_game_participant_status(str(participant_data["participant_status"]))
-    validate_game_participant_attendance_status(str(participant_data["attendance_status"]))
+    validate_game_participant_attendance_status(
+        str(participant_data["attendance_status"])
+    )
 
     if participant_data["cancellation_type"] not in VALID_CANCELLATION_TYPES:
         raise HTTPException(
@@ -137,7 +139,8 @@ def validate_game_participant_business_rules(
         )
 
     if (
-        participant_data["participant_type"] in {"registered_user", "host", "admin_added"}
+        participant_data["participant_type"]
+        in {"registered_user", "host", "admin_added"}
         and participant_data["user_id"] is None
     ):
         raise HTTPException(
@@ -145,12 +148,9 @@ def validate_game_participant_business_rules(
             detail="Registered_user, host, and admin_added participants require user_id.",
         )
 
-    if (
-        participant_data["participant_type"] != "guest"
-        and any(
-            participant_data[field_name] is not None
-            for field_name in ("guest_name", "guest_email", "guest_phone")
-        )
+    if participant_data["participant_type"] != "guest" and any(
+        participant_data[field_name] is not None
+        for field_name in ("guest_name", "guest_email", "guest_phone")
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -211,11 +211,13 @@ def normalize_game_participant_lifecycle_fields(
     existing_participant: GameParticipant | None = None,
 ) -> dict[str, object]:
     normalized_data = dict(participant_data)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     normalized_data["joined_at"] = (
         normalized_data.get("joined_at")
-        or (existing_participant.joined_at if existing_participant is not None else None)
+        or (
+            existing_participant.joined_at if existing_participant is not None else None
+        )
         or now
     )
 

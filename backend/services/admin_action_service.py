@@ -516,7 +516,8 @@ def validate_sensitive_read_target_references(
             select(*selected_columns).where(model.id == target_id)
         ).one_or_none()
         deleted_target = (
-            deleted_at is not None and projection is not None
+            deleted_at is not None
+            and projection is not None
             and projection._mapping[deleted_at] is not None
         )
         allowed_deleted_user = (

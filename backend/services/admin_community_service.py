@@ -3,7 +3,7 @@
 import uuid
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from binascii import Error as BinasciiError
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from json import JSONDecodeError, dumps, loads
 
 from fastapi import HTTPException, status
@@ -1010,7 +1010,7 @@ def hide_admin_community_game_payment_text(
             detail="Host payment text is already hidden.",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     old_status = snapshot.payment_text_moderation_status or PAYMENT_TEXT_STATUS_VISIBLE
     snapshot.payment_text_moderation_status = PAYMENT_TEXT_STATUS_HIDDEN
     snapshot.payment_text_hidden_at = now
@@ -1181,7 +1181,7 @@ def restore_admin_community_game_payment_text(
             detail="Host payment text is already visible.",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     old_status = snapshot.payment_text_moderation_status
     snapshot.payment_text_moderation_status = PAYMENT_TEXT_STATUS_VISIBLE
     snapshot.payment_text_hidden_at = None

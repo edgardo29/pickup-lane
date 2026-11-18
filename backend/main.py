@@ -20,7 +20,6 @@ except Exception as exc:  # noqa: BLE001 - startup must not expose configuration
     raise RuntimeError("Application logging bootstrap failed.") from None
 
 from fastapi import FastAPI, Response, status
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from fastapi.staticfiles import StaticFiles
@@ -34,7 +33,17 @@ from backend.database import (
     dispose_database_engine,
     register_pool_metrics,
 )
-from backend.observability.http_contracts import RouteMatch, private_route_matches
+from backend.observability.http_contracts import (
+    NO_STORE_CACHE_CONTROL,
+    PRIVATE_NO_STORE_CACHE_CONTROL,
+    ApplicationCORSMiddleware,
+    RouteMatch,
+    RoutePreflightMethodMiddleware,
+    apply_api_security_headers,
+    iter_api_routes,
+    private_route_matches,
+    route_match,
+)
 from backend.observability.http_errors import (
     CorrelationIdMiddleware,
     register_exception_handlers,
@@ -43,6 +52,9 @@ from backend.observability.metrics import MetricsRecorder, metrics_context
 from backend.observability.openapi_contracts import (
     install_openapi_contracts,
     mark_tombstone_routes_deprecated,
+)
+from backend.observability.repeated_security_headers import (
+    RepeatedSecurityHeaderMiddleware,
 )
 from backend.observability.request_body_limits import (
     PLATFORM_NOTICE_CREATE_PATH,
@@ -119,10 +131,6 @@ from backend.services.payment_job_service import build_production_job_registry
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
-NO_STORE_CACHE_CONTROL = "no-store"
-PRIVATE_NO_STORE_CACHE_CONTROL = "private, no-store"
-API_REFERRER_POLICY = "no-referrer"
-CONTENT_TYPE_OPTIONS = "nosniff"
 DOCUMENTATION_FRAME_ANCESTORS = "frame-ancestors 'none'"
 DOCUMENTATION_FRAME_OPTIONS = "DENY"
 DOCUMENTATION_PERMISSIONS_POLICY = (
@@ -330,6 +338,7 @@ def _add_application_middleware(
         settings=backend_settings,
         route_policy=app_check_route_policy,
     )
+    app.add_middleware(RepeatedSecurityHeaderMiddleware)
     app.add_middleware(
         RequestBodyLimitMiddleware,
         ordinary_json_request_body_limit_bytes=(
@@ -344,11 +353,15 @@ def _add_application_middleware(
         ),
     )
     app.add_middleware(
-        CORSMiddleware,
+        ApplicationCORSMiddleware,
         allow_origins=list(backend_settings.cors_allowed_origins),
         allow_credentials=backend_settings.cors_allow_credentials,
         allow_methods=list(APPLICATION_CORS_ALLOWED_METHODS),
         allow_headers=list(APPLICATION_CORS_ALLOWED_HEADERS),
+    )
+    app.add_middleware(
+        RoutePreflightMethodMiddleware,
+        routes=tuple(route_match(route) for route in iter_api_routes(app.routes)),
     )
     app.add_middleware(
         TrustedHostMiddleware,
@@ -422,21 +435,11 @@ def _apply_response_security_headers(
         status_code=status_code,
         content_type=content_type,
     ):
-        _apply_api_security_headers(headers, cache_control=cache_control)
-
-
-def _apply_api_security_headers(
-    headers: MutableHeaders,
-    *,
-    cache_control: str = NO_STORE_CACHE_CONTROL,
-) -> None:
-    headers.setdefault("X-Content-Type-Options", CONTENT_TYPE_OPTIONS)
-    headers.setdefault("Referrer-Policy", API_REFERRER_POLICY)
-    headers.setdefault("Cache-Control", cache_control)
+        apply_api_security_headers(headers, cache_control=cache_control)
 
 
 def _apply_documentation_security_headers(headers: MutableHeaders) -> None:
-    _apply_api_security_headers(headers, cache_control=NO_STORE_CACHE_CONTROL)
+    apply_api_security_headers(headers, cache_control=NO_STORE_CACHE_CONTROL)
     headers.setdefault("Content-Security-Policy", DOCUMENTATION_FRAME_ANCESTORS)
     headers.setdefault("X-Frame-Options", DOCUMENTATION_FRAME_OPTIONS)
     headers.setdefault("Permissions-Policy", DOCUMENTATION_PERMISSIONS_POLICY)

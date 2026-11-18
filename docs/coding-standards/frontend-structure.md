@@ -49,11 +49,14 @@ frontend/
 │   ├── styles/             Global, shared, admin, and route-feature styles
 │   ├── App.jsx             Application composition
 │   └── main.jsx            React, router, and provider bootstrap
-└── tests/
-    ├── README.md           Frontend and browser test taxonomy
-    ├── unit/               Node unit tests for non-DOM frontend logic
-    └── e2e/                Playwright browser tests
+├── tests/                  Frontend tests (Vitest)
+├── e2e/                    Playwright workflows
+├── tests_archive/          Old frontend tests, kept as reference only
+├── vitest.config.js        Frontend test settings
+└── playwright.config.js    Playwright settings
 ```
+
+Testing rules are in `frontend-testing.md`.
 
 Continue using these locations.
 
@@ -431,34 +434,20 @@ actual shared owner instead of importing the page module.
 
 ## Tests
 
-The current frontend test setup includes Node unit tests and Playwright browser
-tests. Exact taxonomy, commands, environment requirements, and execution details
-belong in `frontend/tests/README.md`.
-
-General testability and behavior-focused testing principles are also defined
-in `frontend-standards.md`.
+Frontend tests live in `frontend/tests/` and run with
+Vitest, React Testing Library, and jsdom. Layout, naming, commands, and how to
+write tests are defined in `frontend-testing.md`.
 
 Current locations:
 
-* taxonomy: `frontend/tests/README.md`
-* Node unit tests: `frontend/tests/unit/*.test.js`
-* configuration: `frontend/playwright.config.js`
-* Playwright browser tests: `frontend/tests/e2e/*.spec.js`
-* generated reports: `frontend/playwright-report/`
-* generated test output: `frontend/test-results/`
+* frontend tests: `frontend/tests/pages/<page>/*.test.jsx`
+* Playwright workflows: `frontend/e2e/*.spec.js`
+* test settings: `frontend/vitest.config.js`
+* shared test setup: `frontend/tests/setup.js`
+* Playwright configuration: `frontend/playwright.config.js`
+* old tests, reference only: `frontend/tests_archive/`
 
-Node unit tests use Node's built-in test runner for frontend helpers and other
-non-DOM logic where a browser is not required.
-
-React component testing is not currently configured. Until a component test
-runner is explicitly introduced:
-
-* do not add unexecuted component test files
-* do not invent a component-test folder convention
-* do not introduce Vitest, React Testing Library, or another component-test
-  framework as part of an unrelated feature change
-
-Do not place production modules in the test package.
+Do not place production modules in the test folders.
 
 ## Scope Discipline
 

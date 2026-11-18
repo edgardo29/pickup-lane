@@ -3,7 +3,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 
 

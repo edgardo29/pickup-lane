@@ -5,12 +5,12 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import SubPostRequest, User
-from backend.services.auth_service import require_active_user, require_verified_user
 from backend.schemas import (
     SubPostRequestAction,
     SubPostRequestCreate,
     SubPostRequestRead,
 )
+from backend.services.auth_service import require_active_user, require_verified_user
 from backend.services.need_a_sub_request_service import (
     create_request,
     list_owner_sub_post_requests,

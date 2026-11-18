@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -14,8 +14,12 @@ from backend.services.auth_account_service import (
     cleanup_unfinished_account_workflow,
     sync_user_workflow,
 )
-from backend.services.auth_service import get_synced_current_app_user
-from backend.services.auth_service import require_recent_app_user
+from backend.services.auth_service import (
+    VerifiedFirebaseIdentity,
+    get_synced_current_app_user,
+    get_verified_firebase_identity,
+    require_recent_app_user,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -44,25 +48,24 @@ def read_current_app_user(
     status_code=status.HTTP_200_OK,
 )
 def sync_user(
-    authorization: str | None = Header(default=None),
+    identity: VerifiedFirebaseIdentity = Depends(get_verified_firebase_identity),
     db: Session = Depends(get_db),
 ) -> User:
-    return sync_user_workflow(authorization, db)
+    return sync_user_workflow(identity, db)
 
 
 @router.delete("/unfinished-account", status_code=status.HTTP_204_NO_CONTENT)
 def cleanup_unfinished_account(
-    authorization: str | None = Header(default=None),
+    identity: VerifiedFirebaseIdentity = Depends(get_verified_firebase_identity),
     db: Session = Depends(get_db),
 ) -> None:
-    cleanup_unfinished_account_workflow(authorization, db)
+    cleanup_unfinished_account_workflow(identity, db)
 
 
 @router.delete("/account", response_model=SelfUserRead, status_code=status.HTTP_200_OK)
 def delete_account(
     payload: AuthDeleteAccountRequest,
-    _current_user: User = Depends(require_recent_app_user),
-    authorization: str | None = Header(default=None),
+    current_user: User = Depends(require_recent_app_user),
     db: Session = Depends(get_db),
 ) -> User:
-    return delete_account_workflow(payload, authorization, db)
+    return delete_account_workflow(payload, current_user, db)

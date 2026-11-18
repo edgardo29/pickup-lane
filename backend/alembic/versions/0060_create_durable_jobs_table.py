@@ -1,7 +1,7 @@
 """create durable_jobs table"""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "0060_durable_jobs"
@@ -28,7 +28,9 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("'{}'::jsonb"),
         ),
-        sa.Column("priority", sa.Integer(), nullable=False, server_default=sa.text("0")),
+        sa.Column(
+            "priority", sa.Integer(), nullable=False, server_default=sa.text("0")
+        ),
         sa.Column(
             "available_at",
             sa.DateTime(timezone=True),
@@ -82,10 +84,14 @@ def upgrade() -> None:
             "status IN ('pending', 'retry_waiting', 'leased', 'succeeded', 'exhausted', 'cancelled')",
             name="ck_durable_jobs_status",
         ),
-        sa.CheckConstraint("payload_version >= 1", name="ck_durable_jobs_payload_version"),
+        sa.CheckConstraint(
+            "payload_version >= 1", name="ck_durable_jobs_payload_version"
+        ),
         sa.CheckConstraint("priority >= 0", name="ck_durable_jobs_priority"),
         sa.CheckConstraint("attempt_count >= 0", name="ck_durable_jobs_attempt_count"),
-        sa.CheckConstraint("maximum_attempts >= 1", name="ck_durable_jobs_maximum_attempts"),
+        sa.CheckConstraint(
+            "maximum_attempts >= 1", name="ck_durable_jobs_maximum_attempts"
+        ),
         sa.CheckConstraint(
             "attempt_count <= maximum_attempts",
             name="ck_durable_jobs_attempt_count_within_maximum",

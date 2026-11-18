@@ -1,0 +1,282 @@
+{
+  "$defs": {
+    "GameAvailabilityRead": {
+      "properties": {
+        "occupied_spots": {
+          "title": "Occupied Spots",
+          "type": "integer"
+        },
+        "spots_remaining": {
+          "title": "Spots Remaining",
+          "type": "integer"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "total_spots": {
+          "title": "Total Spots",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "status",
+        "occupied_spots",
+        "total_spots",
+        "spots_remaining"
+      ],
+      "title": "GameAvailabilityRead",
+      "type": "object"
+    },
+    "GameCardListRead": {
+      "properties": {
+        "browse_date": {
+          "format": "date",
+          "title": "Browse Date",
+          "type": "string"
+        },
+        "browse_timezone": {
+          "title": "Browse Timezone",
+          "type": "string"
+        },
+        "browse_today": {
+          "format": "date",
+          "title": "Browse Today",
+          "type": "string"
+        },
+        "games": {
+          "items": {
+            "$ref": "#/$defs/GameCardRead"
+          },
+          "title": "Games",
+          "type": "array"
+        },
+        "has_more": {
+          "default": false,
+          "title": "Has More",
+          "type": "boolean"
+        },
+        "limit": {
+          "default": 40,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "maximum_browse_date": {
+          "format": "date",
+          "title": "Maximum Browse Date",
+          "type": "string"
+        },
+        "minimum_browse_date": {
+          "format": "date",
+          "title": "Minimum Browse Date",
+          "type": "string"
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Next Cursor"
+        },
+        "time_groups": {
+          "items": {
+            "$ref": "#/$defs/GameTimeGroupRead"
+          },
+          "title": "Time Groups",
+          "type": "array"
+        }
+      },
+      "required": [
+        "browse_today",
+        "browse_timezone",
+        "minimum_browse_date",
+        "maximum_browse_date",
+        "browse_date",
+        "time_groups",
+        "games"
+      ],
+      "title": "GameCardListRead",
+      "type": "object"
+    },
+    "GameCardRead": {
+      "properties": {
+        "availability": {
+          "$ref": "#/$defs/GameAvailabilityRead"
+        },
+        "city_snapshot": {
+          "title": "City Snapshot",
+          "type": "string"
+        },
+        "currency": {
+          "title": "Currency",
+          "type": "string"
+        },
+        "display_title": {
+          "title": "Display Title",
+          "type": "string"
+        },
+        "ends_at": {
+          "format": "date-time",
+          "title": "Ends At",
+          "type": "string"
+        },
+        "environment_type": {
+          "title": "Environment Type",
+          "type": "string"
+        },
+        "format_label": {
+          "title": "Format Label",
+          "type": "string"
+        },
+        "game_player_group": {
+          "title": "Game Player Group",
+          "type": "string"
+        },
+        "game_status": {
+          "title": "Game Status",
+          "type": "string"
+        },
+        "game_type": {
+          "title": "Game Type",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "join_enforcement_status": {
+          "default": "open",
+          "title": "Join Enforcement Status",
+          "type": "string"
+        },
+        "location_label": {
+          "title": "Location Label",
+          "type": "string"
+        },
+        "participant_count": {
+          "title": "Participant Count",
+          "type": "integer"
+        },
+        "price_label": {
+          "title": "Price Label",
+          "type": "string"
+        },
+        "price_per_player_cents": {
+          "title": "Price Per Player Cents",
+          "type": "integer"
+        },
+        "primary_image_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Primary Image Url"
+        },
+        "public_visibility_status": {
+          "default": "visible",
+          "title": "Public Visibility Status",
+          "type": "string"
+        },
+        "registration_closes_at": {
+          "format": "date-time",
+          "title": "Registration Closes At",
+          "type": "string"
+        },
+        "starts_at": {
+          "format": "date-time",
+          "title": "Starts At",
+          "type": "string"
+        },
+        "starts_on_local": {
+          "format": "date",
+          "title": "Starts On Local",
+          "type": "string"
+        },
+        "state_snapshot": {
+          "title": "State Snapshot",
+          "type": "string"
+        },
+        "time_group_key": {
+          "title": "Time Group Key",
+          "type": "string"
+        },
+        "timezone": {
+          "title": "Timezone",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "total_spots": {
+          "title": "Total Spots",
+          "type": "integer"
+        },
+        "venue_name_snapshot": {
+          "title": "Venue Name Snapshot",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "game_type",
+        "game_status",
+        "title",
+        "display_title",
+        "venue_name_snapshot",
+        "city_snapshot",
+        "state_snapshot",
+        "location_label",
+        "starts_at",
+        "ends_at",
+        "starts_on_local",
+        "time_group_key",
+        "timezone",
+        "format_label",
+        "game_player_group",
+        "environment_type",
+        "total_spots",
+        "price_per_player_cents",
+        "currency",
+        "price_label",
+        "participant_count",
+        "availability",
+        "registration_closes_at"
+      ],
+      "title": "GameCardRead",
+      "type": "object"
+    },
+    "GameTimeGroupRead": {
+      "properties": {
+        "group_key": {
+          "title": "Group Key",
+          "type": "string"
+        },
+        "total_games": {
+          "title": "Total Games",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "group_key",
+        "total_games"
+      ],
+      "title": "GameTimeGroupRead",
+      "type": "object"
+    }
+  },
+  "endpoints": {
+    "GET /games/browse": {
+      "$ref": "#/$defs/GameCardListRead"
+    }
+  }
+}

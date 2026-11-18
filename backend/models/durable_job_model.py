@@ -35,7 +35,9 @@ class DurableJob(Base):
         ),
         CheckConstraint("priority >= 0", name="ck_durable_jobs_priority"),
         CheckConstraint("attempt_count >= 0", name="ck_durable_jobs_attempt_count"),
-        CheckConstraint("maximum_attempts >= 1", name="ck_durable_jobs_maximum_attempts"),
+        CheckConstraint(
+            "maximum_attempts >= 1", name="ck_durable_jobs_maximum_attempts"
+        ),
         CheckConstraint(
             "attempt_count <= maximum_attempts",
             name="ck_durable_jobs_attempt_count_within_maximum",
@@ -105,7 +107,11 @@ class DurableJob(Base):
         ),
         Index("ix_durable_jobs_lease_expiry", "status", "lease_expires_at", "id"),
         Index("ix_durable_jobs_correlation_id", "correlation_id"),
-        Index("ix_durable_jobs_origin_reference", "origin_reference_type", "origin_reference_id"),
+        Index(
+            "ix_durable_jobs_origin_reference",
+            "origin_reference_type",
+            "origin_reference_id",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -142,7 +148,9 @@ class DurableJob(Base):
         server_default=text("0"),
     )
     maximum_attempts: Mapped[int] = mapped_column(Integer, nullable=False)
-    lease_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    lease_token: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
     lease_owner: Mapped[str | None] = mapped_column(String(120), nullable=True)
     lease_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

@@ -1,7 +1,7 @@
 """Policy document public reads and admin management workflows."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -85,13 +85,11 @@ def validate_policy_document_business_rules(policy_data: dict[str, Any]) -> None
             detail="title must not be empty.",
         )
 
-    has_content_url = (
-        policy_data["content_url"] is not None
-        and bool(policy_data["content_url"].strip())
+    has_content_url = policy_data["content_url"] is not None and bool(
+        policy_data["content_url"].strip()
     )
-    has_content_text = (
-        policy_data["content_text"] is not None
-        and bool(policy_data["content_text"].strip())
+    has_content_text = policy_data["content_text"] is not None and bool(
+        policy_data["content_text"].strip()
     )
 
     if not has_content_url and not has_content_text:
@@ -120,7 +118,7 @@ def validate_policy_document_update_rules(update_data: dict[str, Any]) -> None:
 
 
 def public_policy_document_statement():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return select(PolicyDocument).where(
         PolicyDocument.is_active.is_(True),
         PolicyDocument.retired_at.is_(None),
@@ -229,8 +227,12 @@ def update_policy_document_record(
         "version": update_data.get("version", db_policy_document.version),
         "title": update_data.get("title", db_policy_document.title),
         "content_url": update_data.get("content_url", db_policy_document.content_url),
-        "content_text": update_data.get("content_text", db_policy_document.content_text),
-        "effective_at": update_data.get("effective_at", db_policy_document.effective_at),
+        "content_text": update_data.get(
+            "content_text", db_policy_document.content_text
+        ),
+        "effective_at": update_data.get(
+            "effective_at", db_policy_document.effective_at
+        ),
         "retired_at": update_data.get("retired_at", db_policy_document.retired_at),
         "is_active": update_data.get("is_active", db_policy_document.is_active),
     }
@@ -239,7 +241,7 @@ def update_policy_document_record(
     for field_name, field_value in update_data.items():
         setattr(db_policy_document, field_name, field_value)
 
-    db_policy_document.updated_at = datetime.now(timezone.utc)
+    db_policy_document.updated_at = datetime.now(UTC)
 
     try:
         db.add(db_policy_document)

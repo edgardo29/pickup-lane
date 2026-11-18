@@ -4,7 +4,7 @@ import hashlib
 import json
 import uuid
 from dataclasses import dataclass, fields
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select
@@ -597,7 +597,7 @@ def preview_admin_user_delete_impact(
     user_id: uuid.UUID,
 ) -> AdminUserDeleteImpactPreviewRead:
     user = get_admin_user_or_404(db, user_id)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     snapshot = build_delete_impact_snapshot(db, user_id=user.id, now=now)
     future_official_host_assignments = list_future_hosted_games(
         db,
@@ -813,7 +813,7 @@ def delete_admin_user(
             expected_reason=reason,
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     snapshot = build_delete_impact_snapshot(db, user_id=target_user.id, now=now)
     future_official_host_assignments = list_future_hosted_games(
         db,
@@ -879,7 +879,7 @@ def delete_admin_user(
         "had_auth_link": bool(target_user.auth_user_id),
     }
     target_user.account_status = "pending_deletion"
-    target_user.updated_at = datetime.now(timezone.utc)
+    target_user.updated_at = datetime.now(UTC)
     db.add(target_user)
 
     try:
@@ -902,7 +902,7 @@ def delete_admin_user(
             delete_firebase_user(auth_user_id)
         except FirebaseAdminConfigError as exc:
             target_user.account_status = previous_account_status
-            target_user.updated_at = datetime.now(timezone.utc)
+            target_user.updated_at = datetime.now(UTC)
             db.add(target_user)
             try:
                 db.commit()
@@ -954,7 +954,7 @@ def delete_admin_user(
             raise
         except Exception as exc:
             target_user.account_status = previous_account_status
-            target_user.updated_at = datetime.now(timezone.utc)
+            target_user.updated_at = datetime.now(UTC)
             db.add(target_user)
             try:
                 db.commit()
@@ -989,7 +989,7 @@ def delete_admin_user(
             ) from exc
 
         target_user.auth_user_id = None
-        target_user.updated_at = datetime.now(timezone.utc)
+        target_user.updated_at = datetime.now(UTC)
         db.add(target_user)
         try:
             db.commit()
@@ -1009,7 +1009,7 @@ def delete_admin_user(
                 ),
             ) from exc
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     reviewed = {
         "preview_snapshot_hash": preview.preview_token,
         "future_official_host_assignment_count": (
@@ -1093,7 +1093,7 @@ def delete_admin_user(
             ),
         ) from exc
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     try:
         cancel_future_user_activity(
             target_user,

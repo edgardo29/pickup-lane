@@ -42,7 +42,12 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         route_template="/admin/users/{user_id}/role",
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="AdminUserDetailPage role action",
-        protections=("active admin", "final-admin guard", "idempotency key", "audit action"),
+        protections=(
+            "active admin",
+            "final-admin guard",
+            "idempotency key",
+            "audit action",
+        ),
         firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
@@ -52,7 +57,12 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         route_template="/admin/users/{user_id}/delete",
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="AdminUserDeletePreviewModal",
-        protections=("active admin", "current-state token", "idempotency key", "audit action"),
+        protections=(
+            "active admin",
+            "current-state token",
+            "idempotency key",
+            "audit action",
+        ),
         firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
@@ -95,7 +105,12 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         route_template="/admin/users/{user_id}/suspend",
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="AdminUserSuspensionModal",
-        protections=("active admin", "current-state token", "idempotency key", "audit action"),
+        protections=(
+            "active admin",
+            "current-state token",
+            "idempotency key",
+            "audit action",
+        ),
         firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
@@ -125,7 +140,12 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         route_template="/admin/money/financial-outcomes/{financial_outcome_id}/resolve",
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="adminFinancialOutcomeApi",
-        protections=("active admin", "pending manual review", "idempotency key", "audit action"),
+        protections=(
+            "active admin",
+            "pending manual review",
+            "idempotency key",
+            "audit action",
+        ),
         firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
@@ -190,7 +210,12 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         route_template="/admin/game-credits/issue",
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="admin money credit workflows",
-        protections=("active admin", "source validation", "idempotency key", "ledger row"),
+        protections=(
+            "active admin",
+            "source validation",
+            "idempotency key",
+            "ledger row",
+        ),
         firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
@@ -324,7 +349,11 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         route_template="/user-payment-methods/{payment_method_id}/default",
         enforcement_dependency="require_recent_active_user",
         frontend_caller="PaymentMethodsPage",
-        protections=("active user", "owned saved-card check", "persistent account-state change"),
+        protections=(
+            "active user",
+            "owned saved-card check",
+            "persistent account-state change",
+        ),
         firebase_mfa_requirement="not_required_for_current_user_saved_card_management",
     ),
     RecentAuthProtectedAction(
@@ -334,7 +363,11 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         route_template="/user-payment-methods/{payment_method_id}",
         enforcement_dependency="require_recent_active_user",
         frontend_caller="PaymentMethodsPage",
-        protections=("active user", "owned saved-card check", "persistent account-state change"),
+        protections=(
+            "active user",
+            "owned saved-card check",
+            "persistent account-state change",
+        ),
         firebase_mfa_requirement="not_required_for_current_user_saved_card_management",
     ),
 )

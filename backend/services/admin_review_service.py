@@ -5,7 +5,7 @@ import uuid
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from binascii import Error as BinasciiError
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from json import JSONDecodeError, dumps, loads
 from typing import Any
 
@@ -542,7 +542,7 @@ def create_case_event(
         ):
             raise ValueError("Automatic closure event metadata is invalid.")
 
-    event_time = created_at or datetime.now(timezone.utc)
+    event_time = created_at or datetime.now(UTC)
     review_case.updated_at = event_time
     db.add(review_case)
     event = AdminReviewCaseEvent(
@@ -1447,7 +1447,7 @@ def close_open_content_moderation_case_for_lifecycle(
     ):
         raise ValueError("Automatic closure linked action is not eligible enforcement.")
 
-    now = closed_at or datetime.now(timezone.utc)
+    now = closed_at or datetime.now(UTC)
     review_case.case_status = "closed"
     review_case.closure_outcome = closure_outcome
     review_case.closure_reason = reason
@@ -1642,7 +1642,7 @@ def create_internal_review_signal(
     normalized_targets = copy_targets(target_data)
     validate_target_references(db, normalized_targets)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     review_case = find_open_case_for_signal(
         db,
         target_data=normalized_targets,
@@ -1857,7 +1857,7 @@ def add_review_case_note(
             detail=f"Review cases can have at most {MAX_REVIEW_CASE_NOTES} notes.",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     note = AdminReviewCaseNote(
         id=uuid.uuid4(),
         review_case_id=review_case.id,
@@ -2006,7 +2006,7 @@ def close_review_case(
         ):
             raise review_case_conflict("review_case_transition_conflict", review_case)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     review_case.case_status = "closed"
     review_case.closure_outcome = outcome
     review_case.closure_reason = reason

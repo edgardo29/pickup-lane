@@ -1,7 +1,7 @@
 """Admin user role mutation workflows."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import or_, select
@@ -223,7 +223,7 @@ def change_user_role(
         next_role=next_role,
     )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     previous_role = target_user.role
     audit_action = record_admin_action(
         db,

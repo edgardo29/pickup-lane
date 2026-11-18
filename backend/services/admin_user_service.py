@@ -329,9 +329,7 @@ def count_active_admins(db: Session) -> int:
 
 
 def serialize_admin_user_profile(user: User) -> AdminUserProfileRead:
-    return AdminUserProfileRead(
-        **serialize_admin_user_list_item(user).model_dump()
-    )
+    return AdminUserProfileRead(**serialize_admin_user_list_item(user).model_dump())
 
 
 def serialize_admin_user_stats(
@@ -389,8 +387,12 @@ def determine_admin_user_game_outcome(
     now: datetime,
 ) -> str:
     starts_at = get_aware_datetime(game.starts_at)
-    if is_host and game.game_status == "cancelled" and (
-        game.cancelled_by_user_id is not None or game.cancellation_source == "host"
+    if (
+        is_host
+        and game.game_status == "cancelled"
+        and (
+            game.cancelled_by_user_id is not None or game.cancellation_source == "host"
+        )
     ):
         return "host_cancel"
 
@@ -414,7 +416,8 @@ def determine_admin_user_game_outcome(
         return "upcoming"
     if any(
         participant.participant_status in ADMIN_USER_CANCELLED_PARTICIPANT_STATUSES
-        or participant.cancellation_type in {
+        or participant.cancellation_type
+        in {
             "on_time",
             "admin_cancelled",
             "payment_failed",
@@ -552,7 +555,9 @@ def sort_admin_user_need_a_sub_activity_items(
     *,
     now: datetime,
 ) -> list[AdminUserNeedASubActivityItemRead]:
-    def sort_key(item: AdminUserNeedASubActivityItemRead) -> tuple[int, float, float, str]:
+    def sort_key(
+        item: AdminUserNeedASubActivityItemRead,
+    ) -> tuple[int, float, float, str]:
         scheduled_at = get_aware_datetime(item.scheduled_at)
         is_upcoming = item.post_status == "active" and scheduled_at > now
         scheduled_timestamp = get_activity_sort_timestamp(item.scheduled_at)
@@ -576,9 +581,7 @@ def get_admin_user_need_a_sub_activity(
     offset: int = 0,
 ) -> AdminUserNeedASubActivityRead:
     items: list[AdminUserNeedASubActivityItemRead] = []
-    posts = db.scalars(
-        select(SubPost).where(SubPost.owner_user_id == user_id)
-    ).all()
+    posts = db.scalars(select(SubPost).where(SubPost.owner_user_id == user_id)).all()
     for post in posts:
         items.append(
             AdminUserNeedASubActivityItemRead(

@@ -1,7 +1,7 @@
 """Payment mutation workflows for admin/support routes."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -220,7 +220,7 @@ def normalize_payment_lifecycle_fields(
         normalized_data["paid_at"] = (
             normalized_data.get("paid_at")
             or (existing_payment.paid_at if existing_payment is not None else None)
-            or datetime.now(timezone.utc)
+            or datetime.now(UTC)
         )
     else:
         normalized_data["paid_at"] = None
@@ -489,7 +489,7 @@ def update_payment_record(
     for field_name, field_value in update_data.items():
         setattr(db_payment, field_name, field_value)
 
-    db_payment.updated_at = datetime.now(timezone.utc)
+    db_payment.updated_at = datetime.now(UTC)
 
     try:
         db.add(db_payment)

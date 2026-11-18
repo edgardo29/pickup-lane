@@ -10,13 +10,13 @@ from backend.schemas import (
     BookingStatusHistoryRead,
 )
 from backend.services.auth_service import require_active_admin
-from backend.services.status_history_service import (
-    get_booking_status_history_record,
-    list_booking_status_history_records,
-)
 from backend.services.query_pagination import (
     DEFAULT_ADMIN_COLLECTION_LIMIT,
     MAX_ADMIN_COLLECTION_LIMIT,
+)
+from backend.services.status_history_service import (
+    get_booking_status_history_record,
+    list_booking_status_history_records,
 )
 
 router = APIRouter(prefix="/booking-status-history", tags=["booking_status_history"])

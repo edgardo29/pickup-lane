@@ -204,8 +204,7 @@ def list_admin_money_issues_route(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "Unsupported money issue list filter: "
-                f"{', '.join(unsupported_params)}."
+                f"Unsupported money issue list filter: {', '.join(unsupported_params)}."
             ),
         )
     return list_admin_money_issues_page(

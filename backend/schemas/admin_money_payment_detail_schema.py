@@ -23,7 +23,9 @@ class AdminMoneyPaymentDetailRead(BaseModel):
     booking: AdminMoneyBookingContextRead | None = None
     game: AdminMoneyGameContextRead | None = None
     host_publish_fee: AdminMoneyHostPublishFeeContextRead | None = None
-    community_publish_attempt: AdminMoneyCommunityPublishAttemptContextRead | None = None
+    community_publish_attempt: AdminMoneyCommunityPublishAttemptContextRead | None = (
+        None
+    )
     publish_host: AdminMoneyPaymentUserContextRead | None = None
     refunds: list[AdminMoneyRefundDetailItemRead] = Field(default_factory=list)
     credit_grants: list[AdminMoneyCreditGrantSummaryRead] = Field(default_factory=list)

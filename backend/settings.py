@@ -61,6 +61,7 @@ BACKEND_ENVIRONMENT_VARIABLES = frozenset(
         "DB_POOL_SIZE",
         "DB_MAX_OVERFLOW",
         "INBOX_TOKEN_SECRET",
+        "CURSOR_SIGNING_SECRET",
         "FIREBASE_ADMIN_CREDENTIALS_JSON",
         "FIREBASE_ADMIN_CREDENTIALS",
         "FIREBASE_PROJECT_ID",
@@ -116,7 +117,6 @@ DEFAULT_ALLOWED_HOSTS = ("localhost", "127.0.0.1", "testserver")
 DEFAULT_R2_ALLOWED_IMAGE_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 DEDICATED_TEST_DATABASE_NAME = "pickup_lane_test_db"
 DEDICATED_MIGRATION_TEST_DATABASE_NAME = "pickup_lane_migration_test_db"
-LOCAL_TEST_DATABASE_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 SUPPORTED_STRIPE_CURRENCY = "USD"
 DEFAULT_STRIPE_READ_TIMEOUT_SECONDS = 6
 DEFAULT_STRIPE_MUTATION_TIMEOUT_SECONDS = 15
@@ -132,6 +132,7 @@ DEFAULT_DB_LOCK_TIMEOUT_MILLISECONDS = 2_000
 DOCUMENTED_PLACEHOLDER_VALUES = frozenset(
     {
         "replace-with-independent-secret",
+        "replace-with-cursor-signing-secret",
         "replace-with-postgresql-url",
         "replace-with-migration-postgresql-url",
         "replace-with-api-hosts",
@@ -204,6 +205,7 @@ class BackendSettings(BaseModel):
     release_identity: str = DEFAULT_RELEASE_IDENTITY
     database_url: SecretStr
     inbox_token_secret: SecretStr | None = None
+    cursor_signing_secret: SecretStr | None = None
     firebase_admin_credentials_json: SecretStr | None = None
     firebase_admin_credentials: SecretStr | None = None
     firebase_project_id: str | None = None
@@ -243,9 +245,7 @@ class BackendSettings(BaseModel):
     r2_read_url_minutes: int = 60
     r2_max_image_bytes: int = MAX_R2_IMAGE_BYTES
     r2_allowed_image_types: frozenset[str] = DEFAULT_R2_ALLOWED_IMAGE_TYPES
-    r2_object_connect_timeout_seconds: int = (
-        DEFAULT_R2_OBJECT_CONNECT_TIMEOUT_SECONDS
-    )
+    r2_object_connect_timeout_seconds: int = DEFAULT_R2_OBJECT_CONNECT_TIMEOUT_SECONDS
     r2_object_read_timeout_seconds: int = DEFAULT_R2_OBJECT_READ_TIMEOUT_SECONDS
     db_pool_wait_timeout_seconds: int = DEFAULT_DB_POOL_WAIT_TIMEOUT_SECONDS
     db_statement_timeout_milliseconds: int = DEFAULT_DB_STATEMENT_TIMEOUT_MILLISECONDS
@@ -264,6 +264,10 @@ class BackendSettings(BaseModel):
     @property
     def inbox_token_secret_value(self) -> str | None:
         return _secret_value(self.inbox_token_secret)
+
+    @property
+    def cursor_signing_secret_value(self) -> str | None:
+        return _secret_value(self.cursor_signing_secret)
 
     @property
     def firebase_admin_credentials_json_value(self) -> str | None:
@@ -355,54 +359,6 @@ def get_migration_database_url() -> str:
     return _cached_migration_database_url()
 
 
-def validate_ordinary_test_database_url(
-    database_url: object,
-    *,
-    name: str = "DATABASE_URL",
-) -> str:
-    """Validate an explicit ordinary-test URL without loading ambient settings."""
-
-    return _validate_explicit_local_test_database_url(
-        database_url, name=name, database_name=DEDICATED_TEST_DATABASE_NAME
-    )
-
-
-def validate_migration_test_database_url(
-    database_url: object,
-    *,
-    name: str = "MIGRATION_DATABASE_URL",
-) -> str:
-    """Validate an explicit migration-test URL without loading ambient settings."""
-
-    return _validate_explicit_local_test_database_url(
-        database_url,
-        name=name,
-        database_name=DEDICATED_MIGRATION_TEST_DATABASE_NAME,
-    )
-
-
-def _validate_explicit_local_test_database_url(
-    database_url: object,
-    *,
-    name: str,
-    database_name: str,
-) -> str:
-    if not isinstance(database_url, str) or not database_url.strip():
-        _fail(name, "must be a non-empty PostgreSQL SQLAlchemy URL")
-    validated_url = _parse_database_url_value(
-        name,
-        database_url,
-        AppEnvironment.TEST,
-        test_database_name=database_name,
-    )
-    parsed = make_url(validated_url)
-    if str(parsed.host).lower() not in LOCAL_TEST_DATABASE_HOSTS:
-        _fail(name, "must use localhost or an explicit loopback address")
-    if parsed.query:
-        _fail(name, "must not use connection query parameters")
-    return validated_url
-
-
 def escape_alembic_config_url(database_url: str) -> str:
     """Preserve URL-encoded credentials through ConfigParser interpolation."""
 
@@ -433,21 +389,35 @@ def get_inbox_token_secret(settings: BackendSettings | None = None) -> str:
     return secret
 
 
+def get_cursor_signing_secret(settings: BackendSettings | None = None) -> str:
+    backend_settings = settings or get_settings()
+    secret = backend_settings.cursor_signing_secret_value
+    if not secret:
+        _fail("CURSOR_SIGNING_SECRET", "must be set before pagination cursors are used")
+    return secret
+
+
 def build_settings(
     environ: Mapping[str, str] | None = None,
     *,
     load_dotenv_file: bool = False,
     validate_full: bool = True,
 ) -> BackendSettings:
-    env, loaded_dotenv = _environment_mapping(environ, load_dotenv_file=load_dotenv_file)
+    env, loaded_dotenv = _environment_mapping(
+        environ, load_dotenv_file=load_dotenv_file
+    )
     app_env = _parse_app_env(env)
 
     _validate_runtime_environment_source(env, loaded_dotenv, app_env)
 
     database_url = _parse_database_url(env, app_env)
     release_identity = _parse_release_identity(env)
-    allowed_hosts = _parse_allowed_hosts(env, app_env) if validate_full else DEFAULT_ALLOWED_HOSTS
-    cors_origins = _parse_cors_origins(env, app_env) if validate_full else DEFAULT_CORS_ORIGINS
+    allowed_hosts = (
+        _parse_allowed_hosts(env, app_env) if validate_full else DEFAULT_ALLOWED_HOSTS
+    )
+    cors_origins = (
+        _parse_cors_origins(env, app_env) if validate_full else DEFAULT_CORS_ORIGINS
+    )
     enable_api_docs = (
         _parse_bool(env, "ENABLE_API_DOCS", default=not app_env.is_production_like)
         if validate_full
@@ -478,9 +448,13 @@ def build_settings(
 
     if app_env is AppEnvironment.PRODUCTION and enable_api_docs:
         _fail("ENABLE_API_DOCS", "must be disabled in production")
+    if app_env is AppEnvironment.PRODUCTION and enable_db_health:
+        _fail("ENABLE_DB_HEALTH", "must be disabled in production")
 
     stripe_values = (
-        _parse_stripe_settings(env, app_env) if validate_full else _empty_stripe_settings()
+        _parse_stripe_settings(env, app_env)
+        if validate_full
+        else _empty_stripe_settings()
     )
     firebase_values = (
         _parse_firebase_admin_settings(env, app_env)
@@ -492,14 +466,26 @@ def build_settings(
         if validate_full
         else _empty_firebase_app_check_settings()
     )
-    r2_values = _parse_r2_settings(env, app_env) if validate_full else _empty_r2_settings()
-    inbox_token_secret = _parse_inbox_token_secret(env, app_env, database_url, validate_full)
+    r2_values = (
+        _parse_r2_settings(env, app_env) if validate_full else _empty_r2_settings()
+    )
+    inbox_token_secret = _parse_inbox_token_secret(
+        env, app_env, database_url, validate_full
+    )
+    cursor_signing_secret = _parse_cursor_signing_secret(
+        env, app_env, database_url, validate_full
+    )
 
     return BackendSettings(
         app_env=app_env,
         release_identity=release_identity,
         database_url=SecretStr(database_url),
-        inbox_token_secret=SecretStr(inbox_token_secret) if inbox_token_secret else None,
+        inbox_token_secret=SecretStr(inbox_token_secret)
+        if inbox_token_secret
+        else None,
+        cursor_signing_secret=(
+            SecretStr(cursor_signing_secret) if cursor_signing_secret else None
+        ),
         allowed_hosts=allowed_hosts,
         cors_allowed_origins=cors_origins,
         enable_api_docs=enable_api_docs,
@@ -532,8 +518,11 @@ def _environment_mapping(
 
 
 def _local_dotenv_may_load(environ: Mapping[str, str]) -> bool:
+    # Tests supply their whole environment, so a developer's backend/.env (with
+    # real keys and the development database) never reaches them.
     raw_app_env = environ.get("APP_ENV")
     if raw_app_env and raw_app_env.strip().lower() in {
+        AppEnvironment.TEST.value,
         AppEnvironment.PREVIEW.value,
         AppEnvironment.STAGING.value,
         AppEnvironment.PRODUCTION.value,
@@ -554,7 +543,9 @@ def _parse_app_env(env: Mapping[str, str]) -> AppEnvironment:
     try:
         return AppEnvironment(normalized)
     except ValueError:
-        _fail("APP_ENV", "must be one of ci, local, preview, production, staging, or test")
+        _fail(
+            "APP_ENV", "must be one of ci, local, preview, production, staging, or test"
+        )
 
 
 def _validate_runtime_environment_source(
@@ -563,9 +554,15 @@ def _validate_runtime_environment_source(
     app_env: AppEnvironment,
 ) -> None:
     if loaded_dotenv and app_env.is_production_like:
-        _fail("APP_ENV", "production-like environments must be supplied by deployed environment injection")
+        _fail(
+            "APP_ENV",
+            "production-like environments must be supplied by deployed environment injection",
+        )
     if _has_deployment_marker(env) and not app_env.is_production_like:
-        _fail("APP_ENV", "deployed runtimes must set preview, staging, or production explicitly")
+        _fail(
+            "APP_ENV",
+            "deployed runtimes must set preview, staging, or production explicitly",
+        )
 
 
 def _parse_optional_ci(env: Mapping[str, str]) -> bool:
@@ -622,9 +619,7 @@ def _parse_database_url_value(
         if _is_local_host(parsed.host):
             _fail(name, "must not use localhost in production-like environments")
         lowered_name = database_name.lower()
-        if any(
-            part in lowered_name for part in _UNSAFE_PRODUCTION_LIKE_DB_NAME_PARTS
-        ):
+        if any(part in lowered_name for part in _UNSAFE_PRODUCTION_LIKE_DB_NAME_PARTS):
             _fail(name, "must not use a development, local, or test database name")
         if app_env is AppEnvironment.PRODUCTION and any(
             part in lowered_name for part in _UNSAFE_PRODUCTION_DB_NAME_PARTS
@@ -681,9 +676,8 @@ def _parse_release_identity(env: Mapping[str, str]) -> str:
 
 
 def _is_full_git_commit_sha(value: str) -> bool:
-    return (
-        len(value) in _FULL_GIT_COMMIT_SHA_LENGTHS
-        and bool(_FULL_GIT_COMMIT_SHA_RE.fullmatch(value))
+    return len(value) in _FULL_GIT_COMMIT_SHA_LENGTHS and bool(
+        _FULL_GIT_COMMIT_SHA_RE.fullmatch(value)
     )
 
 
@@ -695,7 +689,9 @@ def _validate_release_identity_text(name: str, value: str) -> None:
         _fail(name, "must not be a URL")
 
 
-def _parse_allowed_hosts(env: Mapping[str, str], app_env: AppEnvironment) -> tuple[str, ...]:
+def _parse_allowed_hosts(
+    env: Mapping[str, str], app_env: AppEnvironment
+) -> tuple[str, ...]:
     raw_value = _optional_text(env, "ALLOWED_HOSTS")
     if raw_value is None:
         if app_env.is_production_like:
@@ -710,7 +706,10 @@ def _parse_allowed_hosts(env: Mapping[str, str], app_env: AppEnvironment) -> tup
         if _is_documented_placeholder(host):
             _fail("ALLOWED_HOSTS", "must not use a documented placeholder value")
         if app_env.is_production_like and _is_local_host(host):
-            _fail("ALLOWED_HOSTS", "must not include localhost in production-like environments")
+            _fail(
+                "ALLOWED_HOSTS",
+                "must not include localhost in production-like environments",
+            )
         allowed_hosts.append(host)
 
     if not allowed_hosts:
@@ -725,7 +724,9 @@ def _normalize_allowed_host(raw_host: str) -> str:
         _fail("ALLOWED_HOSTS", "must not include blank hosts")
     if any(ord(character) < 32 or ord(character) == 127 for character in raw_host):
         _fail("ALLOWED_HOSTS", "must not contain control characters")
-    if "://" in host or any(character in host for character in ("/", "?", "#", "@", "\\")):
+    if "://" in host or any(
+        character in host for character in ("/", "?", "#", "@", "\\")
+    ):
         _fail("ALLOWED_HOSTS", "must contain host names only")
     if ":" in host:
         _fail("ALLOWED_HOSTS", "must not include ports")
@@ -749,7 +750,10 @@ def _parse_cors_origins(
     raw_value = _optional_text(env, "CORS_ALLOWED_ORIGINS")
     if raw_value is None:
         if app_env.is_production_like:
-            _fail("CORS_ALLOWED_ORIGINS", "must be explicit in production-like environments")
+            _fail(
+                "CORS_ALLOWED_ORIGINS",
+                "must be explicit in production-like environments",
+            )
         return DEFAULT_CORS_ORIGINS
 
     origins: list[str] = []
@@ -758,14 +762,22 @@ def _parse_cors_origins(
         if not origin:
             _fail("CORS_ALLOWED_ORIGINS", "must not include blank origins")
         if origin == "*":
-            _fail("CORS_ALLOWED_ORIGINS", "must not use wildcard origins with credentials")
+            _fail(
+                "CORS_ALLOWED_ORIGINS", "must not use wildcard origins with credentials"
+            )
         parsed = urlsplit(origin)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             _fail("CORS_ALLOWED_ORIGINS", "must contain valid http or https origins")
         if parsed.path or parsed.query or parsed.fragment:
-            _fail("CORS_ALLOWED_ORIGINS", "must contain origins only, without paths or query strings")
+            _fail(
+                "CORS_ALLOWED_ORIGINS",
+                "must contain origins only, without paths or query strings",
+            )
         if app_env.is_production_like and _is_local_origin(parsed.hostname):
-            _fail("CORS_ALLOWED_ORIGINS", "must not include localhost in production-like environments")
+            _fail(
+                "CORS_ALLOWED_ORIGINS",
+                "must not include localhost in production-like environments",
+            )
         origins.append(origin)
 
     return tuple(dict.fromkeys(origins))
@@ -775,7 +787,9 @@ def _parse_stripe_settings(
     env: Mapping[str, str],
     app_env: AppEnvironment,
 ) -> dict[str, object]:
-    currency = (_optional_text(env, "STRIPE_CURRENCY") or SUPPORTED_STRIPE_CURRENCY).upper()
+    currency = (
+        _optional_text(env, "STRIPE_CURRENCY") or SUPPORTED_STRIPE_CURRENCY
+    ).upper()
     if currency != SUPPORTED_STRIPE_CURRENCY:
         _fail("STRIPE_CURRENCY", f"must be {SUPPORTED_STRIPE_CURRENCY}")
 
@@ -802,10 +816,25 @@ def _parse_stripe_settings(
             if value and _is_documented_placeholder(value):
                 _fail(name, "must not use a documented placeholder value")
 
+    if app_env is AppEnvironment.PRODUCTION:
+        # A secret key may be a standard key (sk_) or a restricted key (rk_)
+        # limited to the permissions the app needs; both must be live mode.
+        for name, value, live_prefixes in (
+            ("STRIPE_SECRET_KEY", secret_key, ("sk_live_", "rk_live_")),
+            ("STRIPE_PUBLISHABLE_KEY", publishable_key, ("pk_live_",)),
+        ):
+            if value and not any(
+                value.startswith(prefix) and len(value) > len(prefix)
+                for prefix in live_prefixes
+            ):
+                _fail(name, "must identify a live Stripe account")
+
     return {
         "enable_stripe_payments": enabled,
         "stripe_secret_key": SecretStr(secret_key) if secret_key else None,
-        "stripe_publishable_key": SecretStr(publishable_key) if publishable_key else None,
+        "stripe_publishable_key": SecretStr(publishable_key)
+        if publishable_key
+        else None,
         "stripe_webhook_secret": SecretStr(webhook_secret) if webhook_secret else None,
         "stripe_currency": currency,
     }
@@ -831,7 +860,10 @@ def _parse_firebase_admin_settings(
 
     if credentials_json:
         if app_env.is_production_like and _is_documented_placeholder(credentials_json):
-            _fail("FIREBASE_ADMIN_CREDENTIALS_JSON", "must not use a documented placeholder value")
+            _fail(
+                "FIREBASE_ADMIN_CREDENTIALS_JSON",
+                "must not use a documented placeholder value",
+            )
         try:
             parsed_credentials = json.loads(credentials_json)
         except json.JSONDecodeError:
@@ -839,8 +871,14 @@ def _parse_firebase_admin_settings(
         if not isinstance(parsed_credentials, dict):
             _fail("FIREBASE_ADMIN_CREDENTIALS_JSON", "must contain a JSON object")
 
-    if credentials_path and app_env.is_production_like and _is_documented_placeholder(credentials_path):
-        _fail("FIREBASE_ADMIN_CREDENTIALS", "must not use a documented placeholder value")
+    if (
+        credentials_path
+        and app_env.is_production_like
+        and _is_documented_placeholder(credentials_path)
+    ):
+        _fail(
+            "FIREBASE_ADMIN_CREDENTIALS", "must not use a documented placeholder value"
+        )
     if (
         credentials_path
         and app_env.is_production_like
@@ -849,7 +887,10 @@ def _parse_firebase_admin_settings(
         _fail("FIREBASE_ADMIN_CREDENTIALS", "must point to a readable file")
 
     if app_env.is_production_like and not (credentials_json or credentials_path):
-        _fail("FIREBASE_ADMIN_CREDENTIALS_JSON", "is required in production-like environments")
+        _fail(
+            "FIREBASE_ADMIN_CREDENTIALS_JSON",
+            "is required in production-like environments",
+        )
 
     if project_id:
         if app_env.is_production_like and _is_documented_placeholder(project_id):
@@ -863,7 +904,9 @@ def _parse_firebase_admin_settings(
         "firebase_admin_credentials_json": SecretStr(credentials_json)
         if credentials_json
         else None,
-        "firebase_admin_credentials": SecretStr(credentials_path) if credentials_path else None,
+        "firebase_admin_credentials": SecretStr(credentials_path)
+        if credentials_path
+        else None,
         "firebase_project_id": project_id,
     }
 
@@ -883,19 +926,30 @@ def _parse_firebase_app_check_settings(
     raw_mode = _optional_text(env, "FIREBASE_APP_CHECK_MODE")
     if raw_mode is None:
         if app_env.is_production_like:
-            _fail("FIREBASE_APP_CHECK_MODE", "must be explicit in production-like environments")
+            _fail(
+                "FIREBASE_APP_CHECK_MODE",
+                "must be explicit in production-like environments",
+            )
         mode = FirebaseAppCheckMode.DISABLED
     else:
         try:
             mode = FirebaseAppCheckMode(raw_mode.lower())
         except ValueError:
-            _fail("FIREBASE_APP_CHECK_MODE", "must be one of disabled, observe, or enforced")
+            _fail(
+                "FIREBASE_APP_CHECK_MODE",
+                "must be one of disabled, observe, or enforced",
+            )
 
     app_id = _optional_text(env, "FIREBASE_APP_CHECK_APP_ID")
     if mode.requires_app_id and not app_id:
-        _fail("FIREBASE_APP_CHECK_APP_ID", "is required when Firebase App Check is observe or enforced")
+        _fail(
+            "FIREBASE_APP_CHECK_APP_ID",
+            "is required when Firebase App Check is observe or enforced",
+        )
     if app_id and app_env.is_production_like and _is_documented_placeholder(app_id):
-        _fail("FIREBASE_APP_CHECK_APP_ID", "must not use a documented placeholder value")
+        _fail(
+            "FIREBASE_APP_CHECK_APP_ID", "must not use a documented placeholder value"
+        )
 
     firebase_project_id = _optional_text(env, "FIREBASE_PROJECT_ID")
     if app_id and firebase_project_id and app_id == firebase_project_id:
@@ -914,15 +968,25 @@ def _empty_firebase_app_check_settings() -> dict[str, object]:
     }
 
 
-def _parse_r2_settings(env: Mapping[str, str], app_env: AppEnvironment) -> dict[str, object]:
+def _parse_r2_settings(
+    env: Mapping[str, str], app_env: AppEnvironment
+) -> dict[str, object]:
     account_id = _optional_text(env, "R2_ACCOUNT_ID")
     access_key_id = _optional_text(env, "R2_ACCESS_KEY_ID")
     secret_access_key = _optional_text(env, "R2_SECRET_ACCESS_KEY")
     bucket_name = _optional_text(env, "R2_BUCKET_NAME")
     endpoint_url = _optional_text(env, "R2_ENDPOINT_URL")
 
-    supplied_values = [account_id, access_key_id, secret_access_key, bucket_name, endpoint_url]
-    require_complete = app_env.is_production_like or any(value is not None for value in supplied_values)
+    supplied_values = [
+        account_id,
+        access_key_id,
+        secret_access_key,
+        bucket_name,
+        endpoint_url,
+    ]
+    require_complete = app_env.is_production_like or any(
+        value is not None for value in supplied_values
+    )
     if require_complete:
         for name, value in (
             ("R2_ACCOUNT_ID", account_id),
@@ -952,19 +1016,27 @@ def _parse_r2_settings(env: Mapping[str, str], app_env: AppEnvironment) -> dict[
             or parsed_endpoint.password is not None
         ):
             _fail("R2_ENDPOINT_URL", "must be a valid https URL")
-        if parsed_endpoint.path not in {"", "/"} or parsed_endpoint.query or parsed_endpoint.fragment:
+        if (
+            parsed_endpoint.path not in {"", "/"}
+            or parsed_endpoint.query
+            or parsed_endpoint.fragment
+        ):
             _fail("R2_ENDPOINT_URL", "must not include paths, queries, or fragments")
 
     return {
         "r2_account_id": account_id,
         "r2_access_key_id": SecretStr(access_key_id) if access_key_id else None,
-        "r2_secret_access_key": SecretStr(secret_access_key) if secret_access_key else None,
+        "r2_secret_access_key": SecretStr(secret_access_key)
+        if secret_access_key
+        else None,
         "r2_bucket_name": bucket_name,
         "r2_endpoint_url": endpoint_url.rstrip("/") if endpoint_url else None,
         "r2_upload_url_minutes": _parse_positive_int(
             env, "R2_UPLOAD_URL_MINUTES", default=15
         ),
-        "r2_read_url_minutes": _parse_positive_int(env, "R2_READ_URL_MINUTES", default=60),
+        "r2_read_url_minutes": _parse_positive_int(
+            env, "R2_READ_URL_MINUTES", default=60
+        ),
         "r2_max_image_bytes": _parse_bounded_positive_int(
             env,
             "R2_MAX_IMAGE_BYTES",
@@ -1094,6 +1166,7 @@ def _parse_inbox_token_secret(
         _fail("INBOX_TOKEN_SECRET", "must be independent from DATABASE_URL")
 
     for name in (
+        "CURSOR_SIGNING_SECRET",
         "FIREBASE_ADMIN_CREDENTIALS_JSON",
         "FIREBASE_ADMIN_CREDENTIALS",
         "STRIPE_SECRET_KEY",
@@ -1109,6 +1182,40 @@ def _parse_inbox_token_secret(
         _fail("INBOX_TOKEN_SECRET", "must not use a documented placeholder value")
 
     return token_secret
+
+
+def _parse_cursor_signing_secret(
+    env: Mapping[str, str],
+    app_env: AppEnvironment,
+    database_url: str,
+    validate_full: bool,
+) -> str | None:
+    signing_secret = _optional_text(env, "CURSOR_SIGNING_SECRET")
+    if app_env.is_production_like and not signing_secret and validate_full:
+        _fail("CURSOR_SIGNING_SECRET", "is required in production-like environments")
+    if not signing_secret:
+        return None
+
+    if signing_secret == database_url:
+        _fail("CURSOR_SIGNING_SECRET", "must be independent from DATABASE_URL")
+
+    for name in (
+        "INBOX_TOKEN_SECRET",
+        "FIREBASE_ADMIN_CREDENTIALS_JSON",
+        "FIREBASE_ADMIN_CREDENTIALS",
+        "STRIPE_SECRET_KEY",
+        "STRIPE_WEBHOOK_SECRET",
+        "R2_ACCESS_KEY_ID",
+        "R2_SECRET_ACCESS_KEY",
+    ):
+        other_value = _optional_text(env, name)
+        if other_value and signing_secret == other_value:
+            _fail("CURSOR_SIGNING_SECRET", f"must be independent from {name}")
+
+    if app_env.is_production_like and _is_documented_placeholder(signing_secret):
+        _fail("CURSOR_SIGNING_SECRET", "must not use a documented placeholder value")
+
+    return signing_secret
 
 
 def _parse_image_types(env: Mapping[str, str]) -> frozenset[str]:

@@ -40,6 +40,7 @@ PAYMENT_RECONCILE_RETRY_DELAYS_SECONDS = (1, 5, 30, 120)
 PAYMENT_METHOD_RECONCILE_RETRY_DELAYS_SECONDS = (1, 5, 30, 120)
 PAYMENT_JOB_MAXIMUM_ATTEMPTS = 5
 
+
 def canonical_fingerprint(payload: Mapping[str, Any]) -> str:
     encoded = json.dumps(
         payload,
@@ -101,7 +102,6 @@ def booking_reservation_pair_is_valid(
         "capacity_conflict": {"capacity_conflict"},
         "cancelled": {"released", "not_required"},
     }
-    return (
-        reservation_status in expected.get(booking_status, set())
-        and has_expiry == (reservation_status == "held")
+    return reservation_status in expected.get(booking_status, set()) and has_expiry == (
+        reservation_status == "held"
     )

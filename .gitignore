@@ -8,7 +8,7 @@ __pycache__/
 .venv/
 venv/
 backend/.mutmut-cache
-backend/.test-artifacts/
+.coverage
 
 # Env files
 .env
@@ -31,6 +31,16 @@ docs/coding-standards/pickup-lane-standards-review-findings.md
 docs/production-readiness/pass-codex-prompt-template.md
 docs/production-readiness/program/archive/
 
+# Old tests, kept locally as reference only
+backend/tests_archive/
+frontend/tests_archive/
+
+# Playwright workflows, kept locally while Playwright is on hold
+frontend/e2e/
+
+# Platform tests, kept locally until the production launch passes
+backend/tests/platform/
+
 # Node
 node_modules/
 dist/
@@ -38,3 +48,6 @@ dist/
 
 # Logs
 *.log
+
+# Local editor settings
+.vscode/

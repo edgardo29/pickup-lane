@@ -4,7 +4,14 @@ from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
-from backend.models import Booking, ChatMessage, Game, GameParticipant, Notification, User
+from backend.models import (
+    Booking,
+    ChatMessage,
+    Game,
+    GameParticipant,
+    Notification,
+    User,
+)
 from backend.scripts.demo_data.helpers import demo_uuid, now_utc, upsert_by_id
 from backend.scripts.demo_data.users import CURRENT_USER_KEY
 from backend.services.notification_event_service import (
@@ -132,9 +139,13 @@ def seed_notifications(
                 games[game_key],
                 item["notification_type"],
                 event_at=created_at,
-                aggregate_count=1 if item["notification_type"] == "chat_message" else None,
+                aggregate_count=1
+                if item["notification_type"] == "chat_message"
+                else None,
                 aggregation_key=(
-                    f"demo-chat:{game_key}" if item["notification_type"] == "chat_message" else None
+                    f"demo-chat:{game_key}"
+                    if item["notification_type"] == "chat_message"
+                    else None
                 ),
             )
             if game_key

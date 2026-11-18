@@ -635,9 +635,9 @@ The backend uses private-origin credentials for authorized image uploads and sep
 
 Private R2 access credentials remain on the backend. The published-image base URL identifies where approved public images are served; it does not grant permission to access private originals.
 
-#### R2 isolated provider-contract tests
+#### Cloudflare R2 isolated check
 
-These settings are used by isolated tests that communicate with R2 to verify the storage integration against actual provider behavior. They are separate from the credentials used for production image storage.
+These settings are used by the isolated Cloudflare R2 check, which communicates with R2 to verify the storage integration against actual Cloudflare R2 behavior. They are separate from the credentials used for production image storage.
 
 | Configuration key | Consumer / scope | Purpose and exposure |
 |---|---|---|
@@ -667,6 +667,7 @@ Request-body limits control the maximum amount of data accepted by different API
 | `STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES` | Backend webhook | Maximum accepted size of Stripe webhook request bodies |
 | `VITE_API_BASE_URL` | Frontend build | Public base URL used by the browser to reach the FastAPI backend |
 | `INBOX_TOKEN_SECRET` | Backend | Private secret used to sign application inbox tokens |
+| `CURSOR_SIGNING_SECRET` | Backend | Private secret used to sign pagination cursors so clients cannot construct or modify them |
 
 The public `VITE_API_BASE_URL` identifies the API's address; it does not authorize access to protected API operations.
 

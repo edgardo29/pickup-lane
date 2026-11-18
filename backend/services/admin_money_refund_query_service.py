@@ -222,9 +222,7 @@ def build_refund_summaries(
     refund_ids = {refund.id for refund in refunds}
     payment_ids = {refund.payment_id for refund in refunds}
     payments = load_by_id(db, Payment, payment_ids)
-    confirmed_returned_cents_by_payment = confirmed_returned_by_payment(
-        db, payment_ids
-    )
+    confirmed_returned_cents_by_payment = confirmed_returned_by_payment(db, payment_ids)
     host_publish_fee_ids = {
         refund.host_publish_fee_id
         for refund in refunds
@@ -383,10 +381,7 @@ def refund_has_current_exhausted_diagnostic(
         return True
     return bool(
         refund.refund_status in {"failed", "cancelled"}
-        and (
-            payment is None
-            or confirmed_returned_cents < payment.amount_cents
-        )
+        and (payment is None or confirmed_returned_cents < payment.amount_cents)
     )
 
 
@@ -444,8 +439,7 @@ def final_replacement_host_publish_fee_ids(
         .where(
             HostPublishEntitlement.id
             == AdminFinancialOutcome.host_publish_entitlement_id,
-            HostPublishEntitlement.host_user_id
-            == AdminFinancialOutcome.host_user_id,
+            HostPublishEntitlement.host_user_id == AdminFinancialOutcome.host_user_id,
             HostPublishEntitlement.entitlement_type == "refund_replacement",
             HostPublishEntitlement.source == "financial_outcome",
             HostPublishEntitlement.source_financial_outcome_id
@@ -454,27 +448,29 @@ def final_replacement_host_publish_fee_ids(
         )
         .exists()
     )
-    rows = list(db.scalars(
-        select(AdminFinancialOutcome)
-        .join(
-            HostPublishFee,
-            HostPublishFee.id == AdminFinancialOutcome.host_publish_fee_id,
-        )
-        .where(
-            AdminFinancialOutcome.host_publish_fee_id.in_(host_publish_fee_ids),
-            AdminFinancialOutcome.applied_status == "applied",
-            or_(
-                AdminFinancialOutcome.outcome == "forfeit",
-                and_(
-                    AdminFinancialOutcome.outcome == "credit",
-                    valid_credit_exists,
+    rows = list(
+        db.scalars(
+            select(AdminFinancialOutcome)
+            .join(
+                HostPublishFee,
+                HostPublishFee.id == AdminFinancialOutcome.host_publish_fee_id,
+            )
+            .where(
+                AdminFinancialOutcome.host_publish_fee_id.in_(host_publish_fee_ids),
+                AdminFinancialOutcome.applied_status == "applied",
+                or_(
+                    AdminFinancialOutcome.outcome == "forfeit",
+                    and_(
+                        AdminFinancialOutcome.outcome == "credit",
+                        valid_credit_exists,
+                    ),
+                    AdminFinancialOutcome.outcome == "refund",
                 ),
-                AdminFinancialOutcome.outcome == "refund",
-            ),
-            AdminFinancialOutcome.amount_cents == HostPublishFee.amount_cents,
-            AdminFinancialOutcome.currency == HostPublishFee.currency,
-        )
-    ).all())
+                AdminFinancialOutcome.amount_cents == HostPublishFee.amount_cents,
+                AdminFinancialOutcome.currency == HostPublishFee.currency,
+            )
+        ).all()
+    )
     refund_rows = {
         refund.id: refund
         for refund in db.scalars(
@@ -485,9 +481,7 @@ def final_replacement_host_publish_fee_ids(
             )
         ).all()
     }
-    refund_evidence = refund_attempt_evidence_for_refunds(
-        db, refund_rows.keys()
-    )
+    refund_evidence = refund_attempt_evidence_for_refunds(db, refund_rows.keys())
     final_ids: set[uuid.UUID] = set()
     for row in rows:
         if row.host_publish_fee_id is None:
@@ -523,9 +517,7 @@ def final_replacement_host_publish_fee_ids(
     return final_ids
 
 
-def get_current_exhausted_refund_job(
-    db: Session, refund: Refund
-) -> DurableJob | None:
+def get_current_exhausted_refund_job(db: Session, refund: Refund) -> DurableJob | None:
     job = db.scalars(
         select(DurableJob)
         .where(
@@ -815,9 +807,7 @@ def refund_available_actions(
     if (
         refund.refund_status == "succeeded"
         and refund_expected_attempts_are_terminal(db, refund)
-        and refund_attempt_statuses(db, refund.id).get(
-            refund.current_attempt_number
-        )
+        and refund_attempt_statuses(db, refund.id).get(refund.current_attempt_number)
         == "succeeded"
     ):
         check_provider_blockers.append("Refund already succeeded.")

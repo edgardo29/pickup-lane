@@ -224,7 +224,9 @@ def build_admin_need_a_sub_list_cursor_filter(
 
 
 def get_admin_need_a_sub_list_sort(view: str) -> str:
-    return "starts_at_asc" if view in NEED_A_SUB_LIST_ASCENDING_VIEWS else "starts_at_desc"
+    return (
+        "starts_at_asc" if view in NEED_A_SUB_LIST_ASCENDING_VIEWS else "starts_at_desc"
+    )
 
 
 def build_need_a_sub_full_condition():
@@ -433,9 +435,7 @@ def list_admin_need_a_sub_posts(
     if cursor_payload is None:
         statement = statement.offset(offset)
 
-    rows = db.execute(
-        statement.limit(limit + 1)
-    ).all()
+    rows = db.execute(statement.limit(limit + 1)).all()
     page_rows = rows[:limit]
     has_more = len(rows) > limit
     counts_by_post = get_request_count_rows(db, [post.id for post, _ in page_rows])
@@ -574,8 +574,7 @@ def get_admin_need_a_sub_request_detail(
         else {}
     )
     status_history = [
-        serialize_history(history, users_by_id)
-        for history in request_histories
+        serialize_history(history, users_by_id) for history in request_histories
     ]
     serialized_post = AdminNeedASubPostRead.model_validate(serialize_sub_post(db, post))
     return AdminNeedASubRequestDetailRead(
@@ -639,9 +638,7 @@ def get_admin_need_a_sub_post_detail(
         list(
             db.scalars(
                 select(SubPostRequestStatusHistory)
-                .where(
-                    SubPostRequestStatusHistory.sub_post_request_id.in_(request_ids)
-                )
+                .where(SubPostRequestStatusHistory.sub_post_request_id.in_(request_ids))
                 .order_by(
                     SubPostRequestStatusHistory.created_at.asc(),
                     SubPostRequestStatusHistory.id.asc(),
@@ -655,7 +652,9 @@ def get_admin_need_a_sub_post_detail(
         db.scalars(
             select(SubPostStatusHistory)
             .where(SubPostStatusHistory.sub_post_id == post.id)
-            .order_by(SubPostStatusHistory.created_at.asc(), SubPostStatusHistory.id.asc())
+            .order_by(
+                SubPostStatusHistory.created_at.asc(), SubPostStatusHistory.id.asc()
+            )
         ).all()
     )
 

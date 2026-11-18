@@ -4,11 +4,13 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import User, Venue
 from backend.schemas import AdminLookupUserListRead, VenueRead
-from backend.services.auth_service import require_active_admin
 from backend.services.admin_lookup_service import (
     list_admin_lookup_users as list_admin_lookup_users_workflow,
+)
+from backend.services.admin_lookup_service import (
     list_admin_lookup_venues as list_admin_lookup_venues_workflow,
 )
+from backend.services.auth_service import require_active_admin
 
 router = APIRouter(prefix="/admin/lookups", tags=["admin_lookups"])
 

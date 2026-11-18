@@ -25,11 +25,7 @@ class Payment(Base):
     __tablename__ = "payments"
     __table_args__ = (
         CheckConstraint(
-            (
-                "payment_type IN ("
-                "'booking', 'community_publish_fee', 'admin_charge'"
-                ")"
-            ),
+            ("payment_type IN ('booking', 'community_publish_fee', 'admin_charge')"),
             name="ck_payments_payment_type",
         ),
         CheckConstraint(
@@ -47,9 +43,7 @@ class Payment(Base):
             name="ck_payments_payment_status",
         ),
         CheckConstraint(
-            (
-                "provider_status IS NULL OR char_length(btrim(provider_status)) > 0"
-            ),
+            ("provider_status IS NULL OR char_length(btrim(provider_status)) > 0"),
             name="ck_payments_provider_status",
         ),
         CheckConstraint(
@@ -65,10 +59,7 @@ class Payment(Base):
             name="ck_payments_booking_requires_booking_id",
         ),
         CheckConstraint(
-            (
-                "(payment_type <> 'community_publish_fee' "
-                "OR booking_id IS NULL)"
-            ),
+            ("(payment_type <> 'community_publish_fee' OR booking_id IS NULL)"),
             name="ck_payments_community_publish_fee_no_booking",
         ),
         CheckConstraint(
@@ -130,9 +121,7 @@ class Payment(Base):
     provider_charge_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     provider_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     provider_status: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    idempotency_key: Mapped[str] = mapped_column(
-        String(255), nullable=False
-    )
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
     creation_fingerprint: Mapped[str] = mapped_column(
         String(64),
         nullable=False,

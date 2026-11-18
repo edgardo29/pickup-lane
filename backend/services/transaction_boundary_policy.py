@@ -375,7 +375,10 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         operation_class=ExternalOperationClass.MANUAL_REPAIR_MUTATION,
         provider_retry_contexts=("admin_credit_repair_state_gate",),
         required_pre_effect_checkpoint="Existing money issue and admin repair intent.",
-        required_post_effect_recording=("GameCredit ledger repair result", "AdminAction row"),
+        required_post_effect_recording=(
+            "GameCredit ledger repair result",
+            "AdminAction row",
+        ),
         timeout_or_unknown_outcome="Manual repair remains state gated; no automatic replay.",
         recovery_path="Admin money review and financial reconciliation.",
         downstream_owner="financial_reconciliation",
@@ -383,36 +386,59 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
     TransactionBoundaryPolicy(
         workflow="official_game_cancellation.refunds",
         service_function="backend.services.game_cancellation_service.create_official_cancellation_refunds",
-        database_unit_of_work=("cancelled Game", "Booking/Payment/Refund/MoneyIssue rows"),
+        database_unit_of_work=(
+            "cancelled Game",
+            "Booking/Payment/Refund/MoneyIssue rows",
+        ),
         external_effect="Durable refund-attempt handoff during official-game cancellation.",
         operation_class=ExternalOperationClass.ADMIN_VISIBLE_LOCAL_EFFECT,
         provider_retry_contexts=(),
         required_pre_effect_checkpoint="Deterministic game/payment obligation identity.",
-        required_post_effect_recording=("Refund attempt", "DurableJob", "queued notice rows"),
+        required_post_effect_recording=(
+            "Refund attempt",
+            "DurableJob",
+            "queued notice rows",
+        ),
         timeout_or_unknown_outcome="Not applicable: this path performs no provider call.",
         recovery_path="The durable refund worker owns provider execution and reconciliation.",
     ),
     TransactionBoundaryPolicy(
         workflow="official_player_removal.refunds",
         service_function="backend.services.official_game_player_removal_service.execute_admin_removal_refunds",
-        database_unit_of_work=("removed participant/booking state", "Payment/Refund/MoneyIssue rows"),
+        database_unit_of_work=(
+            "removed participant/booking state",
+            "Payment/Refund/MoneyIssue rows",
+        ),
         external_effect="Durable refund-attempt handoff during official player removal.",
         operation_class=ExternalOperationClass.ADMIN_VISIBLE_LOCAL_EFFECT,
         provider_retry_contexts=(),
         required_pre_effect_checkpoint="Deterministic booking-party/payment obligation identity.",
-        required_post_effect_recording=("Refund attempt", "DurableJob", "queued response state"),
+        required_post_effect_recording=(
+            "Refund attempt",
+            "DurableJob",
+            "queued response state",
+        ),
         timeout_or_unknown_outcome="Not applicable: this path performs no provider call.",
         recovery_path="The durable refund worker owns provider execution and reconciliation.",
     ),
     TransactionBoundaryPolicy(
         workflow="community_publish_financial_outcome.refund",
         service_function="backend.services.admin_financial_outcome_service.apply_refund_outcome",
-        database_unit_of_work=("AdminFinancialOutcome", "Payment", "Refund", "MoneyIssue"),
+        database_unit_of_work=(
+            "AdminFinancialOutcome",
+            "Payment",
+            "Refund",
+            "MoneyIssue",
+        ),
         external_effect="Durable refund-attempt handoff from an admin financial outcome.",
         operation_class=ExternalOperationClass.ADMIN_VISIBLE_LOCAL_EFFECT,
         provider_retry_contexts=(),
         required_pre_effect_checkpoint="Admin financial-outcome action key plus locked fee decision.",
-        required_post_effect_recording=("Refund attempt", "DurableJob", "AdminAction metadata"),
+        required_post_effect_recording=(
+            "Refund attempt",
+            "DurableJob",
+            "AdminAction metadata",
+        ),
         timeout_or_unknown_outcome="Not applicable: this path performs no provider call.",
         recovery_path="The durable refund worker owns provider execution and reconciliation.",
     ),
@@ -439,7 +465,9 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
             "Committed PaymentMethodOperation row with setup_create kind and "
             "Stripe idempotency identity before Stripe SetupIntent create."
         ),
-        required_post_effect_recording=("returned client_secret only; no saved-card row yet",),
+        required_post_effect_recording=(
+            "returned client_secret only; no saved-card row yet",
+        ),
         timeout_or_unknown_outcome=(
             "PaymentMethodOperation identity is committed before Stripe create; "
             "unknown outcome is durable and blocks blind user replay."
@@ -458,7 +486,10 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
             "saved_card_default_set",
         ),
         required_pre_effect_checkpoint="Stripe setup result and durable user identity.",
-        required_post_effect_recording=("UserPaymentMethod row", "default-card state when changed"),
+        required_post_effect_recording=(
+            "UserPaymentMethod row",
+            "default-card state when changed",
+        ),
         timeout_or_unknown_outcome="Safe reads can be retried; default mutation requires reconciliation.",
         recovery_path="Saved-card sync/default-card repair from durable local state.",
     ),
@@ -497,7 +528,10 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
             "Provider-verified saved-card row and PaymentMethodOperation "
             "idempotency identity; default repair uses its own operation identity."
         ),
-        required_post_effect_recording=("UserPaymentMethod inactive state", "default-card state"),
+        required_post_effect_recording=(
+            "UserPaymentMethod inactive state",
+            "default-card state",
+        ),
         timeout_or_unknown_outcome=(
             "Provider-unknown detach or default-repair operation blocks conflicting "
             "card mutations until reconciliation/support resolves it."
@@ -525,7 +559,9 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         operation_class=ExternalOperationClass.PROVIDER_READ,
         provider_retry_contexts=("authenticated_request_identity",),
         required_pre_effect_checkpoint="Incoming request token only; no provider mutation.",
-        required_post_effect_recording=("authenticated request identity or safe request rejection",),
+        required_post_effect_recording=(
+            "authenticated request identity or safe request rejection",
+        ),
         timeout_or_unknown_outcome="Safe read timeout returns dependency-read retry-later.",
         recovery_path="Client can retry authentication after provider-read recovery.",
     ),
@@ -537,7 +573,9 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         operation_class=ExternalOperationClass.PROVIDER_READ,
         provider_retry_contexts=("app_check_request_verification",),
         required_pre_effect_checkpoint="Incoming App Check token only; no provider mutation.",
-        required_post_effect_recording=("verified App Check context or safe request rejection",),
+        required_post_effect_recording=(
+            "verified App Check context or safe request rejection",
+        ),
         timeout_or_unknown_outcome="Safe read timeout returns provider-unavailable request failure.",
         recovery_path="Client can retry after provider-read recovery.",
     ),
@@ -549,7 +587,9 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         operation_class=ExternalOperationClass.PROVIDER_READ,
         provider_retry_contexts=("authenticated_token_user_lookup",),
         required_pre_effect_checkpoint="Incoming request token only; no provider mutation.",
-        required_post_effect_recording=("verified Firebase user identity or safe request rejection",),
+        required_post_effect_recording=(
+            "verified Firebase user identity or safe request rejection",
+        ),
         timeout_or_unknown_outcome="Safe read timeout returns dependency-read retry-later.",
         recovery_path="Client can retry authentication after provider-read recovery.",
     ),
@@ -561,19 +601,28 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         operation_class=ExternalOperationClass.PROVIDER_READ,
         provider_retry_contexts=("email_availability_lookup",),
         required_pre_effect_checkpoint="Normalized email and local availability check; no provider mutation.",
-        required_post_effect_recording=("availability response only; no local state mutation",),
+        required_post_effect_recording=(
+            "availability response only; no local state mutation",
+        ),
         timeout_or_unknown_outcome="Safe read timeout returns dependency-read retry-later.",
         recovery_path="Client can retry availability check after provider-read recovery.",
     ),
     TransactionBoundaryPolicy(
         workflow="account_deletion.saved_card_cleanup",
         service_function="backend.services.account_deletion_service.detach_account_saved_payment_methods",
-        database_unit_of_work=("pending account deletion", "saved payment methods", "support flags"),
+        database_unit_of_work=(
+            "pending account deletion",
+            "saved payment methods",
+            "support flags",
+        ),
         external_effect="Stripe PaymentMethod detach during account deletion.",
         operation_class=ExternalOperationClass.RECONCILE_BEFORE_RETRY_MUTATION,
         provider_retry_contexts=("account_deletion_saved_card_cleanup",),
         required_pre_effect_checkpoint="Pending account-deletion cleanup state.",
-        required_post_effect_recording=("saved-card cleanup state", "support flag on partial failure"),
+        required_post_effect_recording=(
+            "saved-card cleanup state",
+            "support flag on partial failure",
+        ),
         timeout_or_unknown_outcome="Pending deletion/support flags remain authoritative.",
         recovery_path="Durable account cleanup recovery.",
         downstream_owner="account_cleanup",
@@ -586,7 +635,9 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         operation_class=ExternalOperationClass.RECONCILE_BEFORE_RETRY_MUTATION,
         provider_retry_contexts=("account_deletion_auth_cleanup",),
         required_pre_effect_checkpoint="Pending deletion and support/recovery state.",
-        required_post_effect_recording=("deleted local user state or support partial-failure flag",),
+        required_post_effect_recording=(
+            "deleted local user state or support partial-failure flag",
+        ),
         timeout_or_unknown_outcome="Pending deletion/support flags remain authoritative.",
         recovery_path="Durable account cleanup recovery.",
         downstream_owner="account_cleanup",
@@ -603,7 +654,9 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
             "current source records support follow-up if Firebase succeeds and the "
             "local delete commit fails."
         ),
-        required_post_effect_recording=("hard-deleted incomplete user or support partial-failure flag",),
+        required_post_effect_recording=(
+            "hard-deleted incomplete user or support partial-failure flag",
+        ),
         timeout_or_unknown_outcome="Rollback local delete and propagate unknown Firebase outcome.",
         recovery_path="Duplicate cleanup reuses Firebase identity; support follows partial failures.",
         downstream_owner="account_cleanup",
@@ -616,7 +669,9 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         operation_class=ExternalOperationClass.STORAGE_OBJECT_DEPENDENCY,
         provider_retry_contexts=("venue_image_staging_download",),
         required_pre_effect_checkpoint="Existing upload intent and persisted storage target.",
-        required_post_effect_recording=("venue-image state remains local source of truth",),
+        required_post_effect_recording=(
+            "venue-image state remains local source of truth",
+        ),
         timeout_or_unknown_outcome="Read failure leaves the upload intent pending.",
         recovery_path="A deliberate completion retry may read staging again while live.",
         downstream_owner="venue_image_completion",
@@ -629,7 +684,9 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         operation_class=ExternalOperationClass.NO_AUTOMATIC_RETRY_MUTATION,
         provider_retry_contexts=("venue_image_publication",),
         required_pre_effect_checkpoint="Unique server-generated candidate key and persisted target.",
-        required_post_effect_recording=("complete publication tuple committed atomically",),
+        required_post_effect_recording=(
+            "complete publication tuple committed atomically",
+        ),
         timeout_or_unknown_outcome="Unknown candidates are preserved and never reused.",
         recovery_path="Refetch state before deliberate retry; venue-image reconciliation owns orphans.",
         downstream_owner="venue_image_reconciliation",
@@ -637,7 +694,9 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
     TransactionBoundaryPolicy(
         workflow="r2.venue_image_cleanup",
         service_function="backend.services.r2_storage_service.delete_object",
-        database_unit_of_work=("VenueImage staging or confirmed-owned candidate identity",),
+        database_unit_of_work=(
+            "VenueImage staging or confirmed-owned candidate identity",
+        ),
         external_effect="Idempotent R2 object deletion.",
         operation_class=ExternalOperationClass.IDEMPOTENT_PROVIDER_MUTATION,
         provider_retry_contexts=("venue_image_object_cleanup",),
@@ -655,7 +714,9 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         operation_class=ExternalOperationClass.USER_VISIBLE_LOCAL_EFFECT,
         provider_retry_contexts=(),
         required_pre_effect_checkpoint="The committed Notification row is the visible effect.",
-        required_post_effect_recording=("Notification row committed before visible success is claimed",),
+        required_post_effect_recording=(
+            "Notification row committed before visible success is claimed",
+        ),
         timeout_or_unknown_outcome="Not applicable - external delivery is not current source behavior.",
         recovery_path="Future external delivery belongs to notification delivery.",
         downstream_owner="external_notification_delivery",
@@ -663,12 +724,18 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
     TransactionBoundaryPolicy(
         workflow="platform_notice.publish",
         service_function="backend.services.platform_notice_service.create_platform_notice",
-        database_unit_of_work=("PlatformNotice", "selected recipient notification rows"),
+        database_unit_of_work=(
+            "PlatformNotice",
+            "selected recipient notification rows",
+        ),
         external_effect="Admin-visible publish and user-visible in-app notice rows.",
         operation_class=ExternalOperationClass.ADMIN_VISIBLE_LOCAL_EFFECT,
         provider_retry_contexts=(),
         required_pre_effect_checkpoint="Committed notice/recipient rows are the visible effect.",
-        required_post_effect_recording=("published PlatformNotice", "recipient notification rows"),
+        required_post_effect_recording=(
+            "published PlatformNotice",
+            "recipient notification rows",
+        ),
         timeout_or_unknown_outcome="Not applicable - no external provider delivery today.",
         recovery_path="Future external platform notice delivery belongs to notification delivery.",
         downstream_owner="external_notification_delivery",
@@ -702,7 +769,9 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
 
 def policies_by_workflow(workflow: str) -> tuple[TransactionBoundaryPolicy, ...]:
     return tuple(
-        policy for policy in TRANSACTION_BOUNDARY_POLICIES if policy.workflow == workflow
+        policy
+        for policy in TRANSACTION_BOUNDARY_POLICIES
+        if policy.workflow == workflow
     )
 
 

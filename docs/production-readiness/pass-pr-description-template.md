@@ -6,24 +6,20 @@ Write for a competent software engineer who has never worked in this repository.
 
 ## 1. PR Title
 
-For an executable production-launch pass, use:
+The title matches the pass's branch name: the same pass ID, a colon, and the
+same page or pass name, written as a title instead of in lowercase with dashes.
 
 ```text
-<PASS-ID>: <Concise descriptive title>
+<pass ID>: <page or pass name>
 ```
 
-Use the exact executable pass ID, a colon, and a concise sentence-case
-description of the implemented outcome. Examples:
+| Pass type | Branch | PR title |
+|---|---|---|
+| Feature pass | `feature/F15-browse-games` | `F15: Browse Games` |
+| Production launch pass | `production-launch/PL06-backend-api-and-http-foundations` | `PL06: Backend API and HTTP Foundations` |
+| Production launch minor pass | `production-launch/PL06a-request-limits` | `PL06a: Request Limits` |
 
-- Major pass: `Pass 09: Add structured API and worker logging`
-- Minor pass: `Pass 09A: Add API request logging`
-
-Do not use alternate executable-pass forms such as `<PASS-ID> - ...`, `Implement <PASS-ID> ...`, or `Add <PASS-ID> ...`.
-
-For a feature-page pass, use its exact F01–F54 ID, a colon, and a concise
-title that names the page and implemented result. Example:
-
-`F15: Browse games with the selected filters`
+Do not use other forms such as `<pass ID> - ...`, `Implement <pass ID> ...`, or `Add <pass ID> ...`.
 
 Non-pass repository-maintenance work may use an appropriate descriptive convention such as `Docs:` or `Program:`.
 
@@ -60,6 +56,8 @@ Use:
 - the actual tests, checks, testing record, and recorded execution results to establish what was validated.
 
 Plans, pass titles, requirement names, test filenames, directory names, and workflow reports may help locate relevant work, but they do not prove what the final implementation changed or validated.
+
+The one exception is a Feature Pass Plan's test tables (Sections 2.1 and 2.2). Their results record tests that actually ran, so a feature pass PR's Validation may point to them.
 
 Do not make a claim unless the implementation or executed validation supports it.
 
@@ -309,6 +307,8 @@ Do not include:
 
 The Summary explains the primary change or unifying purpose of the PR.
 
+A pass PR contains everything its page or pass needed. Its Summary describes what the PR did overall, in general terms. Do not single out one change or list the changes.
+
 It should communicate:
 
 - the relevant previous behavior or condition;
@@ -441,6 +441,8 @@ The Validation section explains what important behavior was actually exercised a
 
 Use one bullet for each meaningful validation scenario. Include only the bullets needed to communicate the results clearly.
 
+For a feature pass PR, the first bullet points to the Feature Pass Plan's test tables (Sections 2.1 and 2.2) and states whether every test passed. Add another bullet only for a check that proves something this PR changed and that the plan does not record, such as a migration check when the PR changes the database. Do not list routine checks that CI already shows, such as lint or the build. Each behavior appears in only one bullet.
+
 Each bullet should lead with the scenario or property, followed by what was exercised and what happened.
 
 Use this form:
@@ -481,7 +483,7 @@ Validation should cover the most important applicable areas, such as:
 Do not infer validation from:
 
 - the implementation;
-- the plan;
+- the plan, except a Feature Pass Plan's test tables, as described above;
 - a requirement;
 - a test filename;
 - a related suite;
@@ -509,21 +511,7 @@ Clear Validation:
 
 ### Test Counts
 
-Test counts are optional supporting information.
-
-Lead with the proven behavior. Add a count afterward only when it helps communicate the breadth of the validation.
-
-Preferred:
-
-```text
-- Fresh and older database states both reached the expected schema, interrupted runs recovered successfully, and overlapping runs remained isolated; 26 focused tests covered these scenarios.
-```
-
-Avoid:
-
-```text
-- 26 tests passed.
-```
+Do not include test counts or commands.
 
 ### Documentation, Configuration, And Mechanical Changes
 
@@ -553,7 +541,6 @@ For configuration-only or mechanical work, describe the relevant checks that act
 
 Do not use Validation bullets for:
 
-- requirement mapping;
 - `git diff --check`;
 - Git status or staged state;
 - Gate approval;
@@ -582,6 +569,9 @@ Do not return the PR body until every applicable answer is yes.
 14. Are vague, duplicated, unsupported, exaggerated, or unnecessarily technical claims removed?
 15. Is the amount of text appropriate for the actual change, without padding or excessive compression?
 16. Does the PR body contain no sensitive information or local workstation details?
+17. Does the Summary describe the whole PR without singling out one change?
+18. Does each behavior appear in only one Validation bullet?
+19. Is Validation free of test counts, commands, and routine CI checks?
 
 If any applicable answer is no, rewrite the PR body before returning it.
 

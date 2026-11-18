@@ -1,7 +1,15 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -35,7 +43,9 @@ class AdminRejectedAttempt(Base):
         Index("ix_admin_rejected_attempts_rejection_mode", "rejection_mode"),
         Index("ix_admin_rejected_attempts_created_at", "created_at"),
         Index("ix_admin_rejected_attempts_target_user_id", "target_user_id"),
-        Index("ix_admin_rejected_attempts_target_game_credit_id", "target_game_credit_id"),
+        Index(
+            "ix_admin_rejected_attempts_target_game_credit_id", "target_game_credit_id"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)

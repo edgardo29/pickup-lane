@@ -1,7 +1,7 @@
 """Venue approval request scaffold workflow helpers."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -163,7 +163,10 @@ def validate_venue_approval_request_business_rules(
             detail="Reviewed venue approval requests require reviewed_by_user_id.",
         )
 
-    if request_data["request_status"] == "approved" and request_data["venue_id"] is None:
+    if (
+        request_data["request_status"] == "approved"
+        and request_data["venue_id"] is None
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Approved venue approval requests require venue_id.",
@@ -219,9 +222,9 @@ def normalize_venue_approval_request_fields(
         "requested_country_code" in normalized_data
         and normalized_data["requested_country_code"] is not None
     ):
-        normalized_data["requested_country_code"] = normalized_data[
-            "requested_country_code"
-        ].strip().upper()
+        normalized_data["requested_country_code"] = (
+            normalized_data["requested_country_code"].strip().upper()
+        )
 
     return normalized_data
 
@@ -286,7 +289,9 @@ def list_venue_approval_request_records(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="request_status is not supported.",
             )
-        statement = statement.where(VenueApprovalRequest.request_status == request_status)
+        statement = statement.where(
+            VenueApprovalRequest.request_status == request_status
+        )
 
     venue_approval_requests = db.scalars(
         statement.order_by(
@@ -369,7 +374,7 @@ def update_venue_approval_request_record(
     for field_name, field_value in update_data.items():
         setattr(db_venue_approval_request, field_name, field_value)
 
-    db_venue_approval_request.updated_at = datetime.now(timezone.utc)
+    db_venue_approval_request.updated_at = datetime.now(UTC)
 
     try:
         db.add(db_venue_approval_request)

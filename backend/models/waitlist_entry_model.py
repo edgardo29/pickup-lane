@@ -142,9 +142,7 @@ class WaitlistEntry(Base):
     authorized_payment_method_last4: Mapped[str | None] = mapped_column(
         String(4), nullable=True
     )
-    authorized_amount_cents: Mapped[int | None] = mapped_column(
-        Integer, nullable=True
-    )
+    authorized_amount_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")
     )

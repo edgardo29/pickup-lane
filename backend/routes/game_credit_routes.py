@@ -5,15 +5,15 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import GameCredit, User
-from backend.services.auth_service import (
-    get_current_app_user,
-    require_recent_active_admin,
-)
 from backend.schemas import (
     GameCreditBalanceRead,
     GameCreditIssueCreate,
     GameCreditRead,
     GameCreditReverseCreate,
+)
+from backend.services.auth_service import (
+    get_current_app_user,
+    require_recent_active_admin,
 )
 from backend.services.game_credit_admin_service import (
     issue_admin_game_credit,

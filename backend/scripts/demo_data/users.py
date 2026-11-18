@@ -78,7 +78,9 @@ def seed_users(db: Session) -> dict[str, User]:
             User,
             user_id,
             {
-                "auth_user_id": user_data.get("auth_user_id", f"demo-{user_data['key']}"),
+                "auth_user_id": user_data.get(
+                    "auth_user_id", f"demo-{user_data['key']}"
+                ),
                 "role": user_data["role"],
                 "email": f"{user_data['key']}@demo.pickuplane.local",
                 "email_verified_at": timestamp,

@@ -6,7 +6,7 @@ import json
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from backend.observability.correlation import (
     get_correlation_id,
@@ -44,6 +44,7 @@ class EventEnvelope:
     release: str | None = None
     source_identity: str | None = None
     correlation_id: str | None = None
+    caller_correlation_id: str | None = None
     request_id: str | None = None
     actor_kind: str | None = None
     operation: str | None = None
@@ -85,6 +86,11 @@ class EventEnvelope:
                 self,
                 "request_id",
                 _validate_optional_id(self.request_id),
+            )
+            object.__setattr__(
+                self,
+                "caller_correlation_id",
+                _validate_optional_id(self.caller_correlation_id),
             )
             object.__setattr__(
                 self,
@@ -204,6 +210,7 @@ class EventEnvelope:
         optional_fields = {
             "actor_kind": self.actor_kind,
             "correlation_id": self.correlation_id,
+            "caller_correlation_id": self.caller_correlation_id,
             "environment": self.environment,
             "provider_kind": self.provider_kind,
             "release": self.release,
@@ -339,5 +346,5 @@ def _validate_optional_integer(
 
 
 def _format_timestamp(value: datetime) -> str:
-    utc_value = value.astimezone(timezone.utc)
+    utc_value = value.astimezone(UTC)
     return utc_value.isoformat().replace("+00:00", "Z")
