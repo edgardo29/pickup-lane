@@ -15,6 +15,7 @@ export function useGameCheckoutData({
   const [images, setImages] = useState([])
   const [participants, setParticipants] = useState([])
   const [paymentMethods, setPaymentMethods] = useState([])
+  const [paymentMethodsError, setPaymentMethodsError] = useState('')
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState('')
 
@@ -24,9 +25,15 @@ export function useGameCheckoutData({
       return []
     }
 
-    const methods = await listUserPaymentMethods(firebaseUser)
-    setPaymentMethods(methods)
-    return methods
+    try {
+      const methods = await listUserPaymentMethods(firebaseUser)
+      setPaymentMethods(methods)
+      setPaymentMethodsError('')
+      return methods
+    } catch (requestError) {
+      setPaymentMethodsError('Saved cards could not be loaded. Try again.')
+      throw requestError
+    }
   }, [firebaseUser])
 
   useEffect(() => {
@@ -59,6 +66,7 @@ export function useGameCheckoutData({
           setImages(checkout.images)
           setParticipants(checkout.participants)
           setPaymentMethods(checkout.paymentMethods)
+          setPaymentMethodsError(checkout.paymentMethodsError)
           setStatus('success')
         }
       } catch (requestError) {
@@ -82,6 +90,7 @@ export function useGameCheckoutData({
     images,
     participants,
     paymentMethods,
+    paymentMethodsError,
     reloadPaymentMethods,
     status,
     venue,

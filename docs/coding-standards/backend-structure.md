@@ -33,7 +33,7 @@ The backend currently uses:
 * `backend/models/`: SQLAlchemy ORM models
 * `backend/schemas/`: Pydantic request and response models
 * `backend/alembic/versions/`: Alembic migration revisions
-* `backend/scripts/`: explicit local mock/demo-data utilities
+* `backend/scripts/`: explicit local mock/demo-data utilities, kept out of Git
 * `backend/tests/`: backend tests; see `backend-testing.md`
 * `backend/tests_archive/`: old backend tests, reference only
 
@@ -773,7 +773,8 @@ remain visible.
 
 ## Scripts And Tests
 
-`backend/scripts/` owns explicit local mock/demo-data utilities only. Keep
+`backend/scripts/` owns explicit local mock/demo-data utilities only. It is
+kept out of Git because the demo data is only for the developer's own use. Keep
 test infrastructure, administrator tools, and worker runtime entry points out
 of this directory. The existing non-demo command entry points live in focused
 modules at the `backend/` package root.

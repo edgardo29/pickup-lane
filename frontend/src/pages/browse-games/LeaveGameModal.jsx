@@ -4,6 +4,7 @@ import { UsersRound } from 'lucide-react'
 export function LeaveGameModal({
   addableGuestCount = 0,
   canAddGuests = false,
+  canRemoveGuests = true,
   guestCount,
   guestMax = 0,
   isLeaving,
@@ -17,7 +18,7 @@ export function LeaveGameModal({
   const [nextGuestCount, setNextGuestCount] = useState(guestCount)
   const title = isWaitlisted ? 'Edit waitlist?' : 'Edit attendance?'
   const maxSelectableGuests = Math.min(guestMax, guestCount + addableGuestCount)
-  const canDecreaseGuests = nextGuestCount > 0
+  const canDecreaseGuests = nextGuestCount > 0 && (canRemoveGuests || nextGuestCount > guestCount)
   const canIncreaseGuests = nextGuestCount < maxSelectableGuests
   const guestDelta = nextGuestCount - guestCount
   const hasGuestChanges = guestDelta !== 0
@@ -108,7 +109,7 @@ export function LeaveGameModal({
                 <div className="details-attendance-actions__inline">
                   <button
                     type="button"
-                    disabled={isLeaving || isUpdatingGuests}
+                    disabled={!canRemoveGuests || isLeaving || isUpdatingGuests}
                     onClick={() => onRemoveGuests(1)}
                   >
                     {isUpdatingGuests ? 'Updating...' : 'Remove 1 Guest'}

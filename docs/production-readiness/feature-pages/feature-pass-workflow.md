@@ -104,6 +104,12 @@ review the corrected Feature Pass Plan again.
 
 ## 3. Gate C — Implement and verify the page
 
+**Before starting,** re-read these coding standards in full, in
+`docs/coding-standards/`: `backend-standards.md`, `backend-structure.md`,
+`frontend-standards.md`, `frontend-structure.md`, `css-standards.md`,
+`database.md`, `backend-testing.md`, and `frontend-testing.md`. Do not work
+from memory of earlier passes.
+
 **Working through the Feature Pass Plan**
 
 1. Work through Feature Pass Plan, Section 3 (Work to do) in order, one item at a time.
@@ -116,9 +122,24 @@ review the corrected Feature Pass Plan again.
      "Result" with **Pass** or **Fail** for each test run.
 
    Always update before stopping or switching chats.
-3. If new work is found, add it to Feature Pass Plan, Section 3 (Work to do)
+3. Before setting a test row to **Yes** or **Pass**, confirm:
+   - the test exists and proves that exact scenario, not only that it
+     carries the scenario's marker or name;
+   - every faked API answer matches what the real server returns for that
+     kind of user (for example signed out, unverified, or suspended),
+     including its status code and message;
+   - test data is built the way the real workflow creates it, for example a
+     community game includes the host's own roster place;
+   - the test follows `backend-testing.md` or `frontend-testing.md`: its
+     folder, page marker or name, one file per topic, exact status codes, a
+     database check after each successful change, a nothing-changed check
+     after each rejected request, and every allowed value of a status or role
+     the behavior depends on.
+4. When the pass changes the database schema, update
+   `docs/production-readiness/data-model-baseline.md` in the same pass.
+5. If new work is found, add it to Feature Pass Plan, Section 3 (Work to do)
    before starting it.
-4. Gate C is done when every "In the code?" is **Yes**, and every "Test
+6. Gate C is done when every "In the code?" is **Yes**, and every "Test
    exists?" is **Yes** and every "Result" is **Pass** in both Section 2.1 and
    Section 2.2.
 
@@ -151,7 +172,28 @@ correctly.
 
 ## 4. Gate D — Review corrections and completed work
 
+**Before starting,** re-read these coding standards in full, in
+`docs/coding-standards/`: `backend-standards.md`, `backend-structure.md`,
+`frontend-standards.md`, `frontend-structure.md`, `css-standards.md`,
+`database.md`, `backend-testing.md`, and `frontend-testing.md`. Do not work
+from memory of earlier passes.
+
 Conduct an independent, read-only review of the completed page pass against every item in its approved Feature Pass Plan, Sections 3–5 of the selected page specification, and the applicable coding standards.
+
+Every Gate D round is a complete review from the start, including the round
+after corrections. Do not review only the diff or only the corrected items.
+
+- For each requirement, follow the whole path: every request the page makes,
+  what the server allows for each kind of user, and how the stored data
+  really looks.
+- Read every section of another specification or architecture document that
+  the page specification or Feature Pass Plan relies on, and check the code
+  against that rule.
+- Open each test listed in Feature Pass Plan, Section 2, and check it against
+  the Gate C test checks above.
+
+Report findings as a short, plain list of the issues. Give further detail
+only when asked.
 
 Examine the relevant implementation, directly affected dependencies, and verification results from Gate C. Confirm that the required behavior, failure handling, prohibited effects, and applicable test scenarios have been addressed.
 

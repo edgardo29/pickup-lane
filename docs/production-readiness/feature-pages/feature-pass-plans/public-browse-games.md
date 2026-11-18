@@ -87,4 +87,6 @@
 
 ## 3. Work to do
 
-None. All work is done.
+Item 1 was found in the 2026-11-18 review and is done.
+
+1. Refresh the list once when the player returns to the page. Returning to the window used to start two refreshes, one when the window regained focus and one when the tab became visible. Update the frontend scenario 29 test to check that a return refreshes exactly once.

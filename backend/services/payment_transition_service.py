@@ -117,6 +117,12 @@ def _creation_metadata(payment: Payment, booking: Booking) -> dict[str, object]:
             "payment_id": str(payment.id),
             "waitlist_entry_id": metadata.get("waitlist_entry_id"),
             "authorized_amount_cents": metadata.get("authorized_amount_cents"),
+            "checkout_total_cents": metadata.get("checkout_total_cents"),
+            "credit_applied_cents": metadata.get("credit_applied_cents"),
+            "minimum_charge_adjustment_cents": metadata.get(
+                "minimum_charge_adjustment_cents"
+            ),
+            "stripe_amount_cents": payment.amount_cents,
         }
     if is_guest_checkout_payment(metadata):
         return guest_checkout_stripe_metadata(payment, booking.game_id)

@@ -61,12 +61,13 @@ describe('Game Details chat', () => {
     expect(screen.getByRole('button', { name: 'Open chat' })).toBeDisabled()
   })
 
-  it('F16-10: a valid chat message appears after sending', async () => {
+  it('F16-10: opening chat clears the unread state, and a valid message appears after sending', async () => {
     const user = userEvent.setup()
     fakePageApi(game(), {
       'GET /games/{game_id}/participants': [participant()],
-      'POST /game-chats/for-game/{game_id}': gameChat(),
-      'GET /chat-messages': [],
+      // The host wrote a message the player has not read yet.
+      'POST /game-chats/for-game/{game_id}': gameChat({ unread_count: 1 }),
+      'GET /chat-messages': [chatMessage({ message_body: 'Field 2 tonight' })],
       'POST /game-chats/{game_chat_id}/read': {
         chat_id: CHAT_ID, user_id: PLAYER_ID, last_read_at: '2029-06-15T18:00:00Z',
         last_read_message_id: null, unread_count: 0,
@@ -76,8 +77,11 @@ describe('Game Details chat', () => {
     renderGame()
 
     await screen.findByRole('heading', { name: 'Evening Pickup' })
+    expect(await screen.findByText('New')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Open chat' }))
     const dialog = await screen.findByRole('dialog', { name: 'Game Chat' })
+    expect(apiRequest).toHaveBeenCalledWith(`/game-chats/${CHAT_ID}/read`, expect.objectContaining({ method: 'POST' }))
+    expect(screen.queryByText('New')).not.toBeInTheDocument()
     await user.type(within(dialog).getByRole('textbox', { name: 'Message' }), 'Ready to play')
     await user.click(within(dialog).getByRole('button', { name: 'Send' }))
 
@@ -125,14 +129,14 @@ describe('Game Details chat', () => {
     const user = userEvent.setup()
     fakePageApi(game(), {
       'GET /games/{game_id}/participants': [participant()],
-      'POST /game-chats/for-game/{game_id}': new ApiRequestError('Verify your email to use chat', { status: 403 }),
+      'POST /game-chats/for-game/{game_id}': new ApiRequestError('Verified email required.', { status: 403 }),
     })
     renderGame()
 
     await screen.findByRole('heading', { name: 'Evening Pickup' })
     await user.click(screen.getByRole('button', { name: 'Open chat' }))
 
-    expect(await screen.findByText('Verify your email to use chat')).toBeInTheDocument()
+    expect(await screen.findByText('Verified email required.')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Evening Pickup' })).toBeInTheDocument()
     expect(screen.queryByRole('dialog', { name: 'Game Chat' })).not.toBeInTheDocument()
   })

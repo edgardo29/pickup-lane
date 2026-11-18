@@ -91,17 +91,19 @@
 
 ## 3. Work to do
 
-1. Restrict `GET /games/{game_id}/participants` to signed-in users, and give signed-out visitors the roster summary from the game detail response. Re-check Game Checkout (F17) and the admin official game pages, which call the same endpoint.
-2. Return not found from `GET /community-game-details` for a hidden game when the viewer may not see it, matching `GET /games/{game_id}`.
-3. Let suspended players leave, leave the waitlist, remove guests, use game chat, and cancel or add host guests to games they already host, while blocking new joins, waitlisting, and guests added through checkout. Add one sentence to Section 4.1 of the page specification stating that a suspended host may add host guests to a game they already host. Re-check My Games (F19) and Game Checkout (F17), which use the same actions. Editing a hosted game stays active-only: the Edit Game pass (F18) owns both host-edit routes and must let a suspended host edit through both, or neither.
-4. Build the changed-official-game removal request: the approved `game_change_removal_requests` table and migration, a player submit endpoint that changes no booking or money, and the page action to review the change and choose a refund or game credit.
-5. State the community payment responsibility on the page before joining, and in the community game cancellation notice.
-6. Show Game Not Found with a link to Browse Games for a missing or inaccessible game, separate from the load error for a technical failure.
-7. Show Joining Temporarily Paused on a paused community game and remove Join and Add Guest until joining resumes.
-8. Add F16's endpoints to `PAGE_ENDPOINTS` in `backend/tests/frontend_fields/save.py`, save the page's `backend_fields.json`, and create the page's test kit with the made-up answer check.
-9. Write the backend tests in Section 2.1 and the frontend tests in Section 2.2, and run them.
-10. Finish the paid official add-guest checkout flow: no guest or capacity change before a successful required Stripe charge (or valid credit/minimum-balance resolution). The direct paid join and guest-add demo-payment mutations are now guarded and return 503, so neither can falsely confirm attendance. Re-check Game Checkout (F17), which owns the shared payment flow, and add the successful and failed-charge scenario tests.
+Items 1–10 are done. Items 12–20 were found in the 2026-11-18 review and are done. Item 11 remains, blocked as described below.
+
 11. Implement the explicit staff action to remove a suspended community-game host for safety or misconduct, cancelling the game with no replacement and notifying every registered player through the community cancellation path. Re-check Community Game Detail and User Detail, which own this staff workflow; then verify F16 scenario 28 end to end.
+
+12. Turn off guest removal in Edit Attendance while a community game is paused, matching Add Guest and Manage Guests, because the backend rejects guest changes on a paused game (Community Game Detail, Section 4.2). Extend the paused-player scenario 24 test to check it.
+13. Add the changed-official-game removal request table to `docs/production-readiness/data-model-baseline.md`, with its inbound references from bookings and users, and update the document's schema counts.
+14. Replace finished work in this section with a note that it is done, so only blocked work remains listed.
+15. Add the frontend scenario 15 test: a host guest addition rejected after the last spot was taken shows the server's error and changes nothing.
+16. Extend the frontend scenario 10 test to check that opening chat marks it read and clears the unread badge.
+17. Remove the scenario 28 marker from the backend host-cancellation test, which proves scenario 9, and move the staff-cancellation notice test to `backend/tests/domains/notifications/`, citing Section 4.5, because neither test performs the blocked host-removal action.
+18. Check exact status codes in the backend tests for chat on a cancelled game (400) and empty (400) or oversized (422) chat messages.
+19. Use the server's real message, "Verified email required.", in the frontend unverified-email tests for scenario 19.
+20. Build every community game in the backend tests with the host's confirmed roster place, as publishing creates it, and count only players in the tests' roster counts.
 
 ## Blocked
 

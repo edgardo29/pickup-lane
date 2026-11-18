@@ -5,8 +5,17 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import func, select
 
-from backend.models import ChatMessage
+from backend.models import ChatMessage, User
 from backend.tests.factories import make_game, make_participant, make_user
+
+
+def community_game(db, **overrides):
+    """A community game whose host holds a confirmed roster place, as publishing creates it."""
+    game = make_game(db, game_type="community", **overrides)
+    make_participant(
+        db, game=game, user=db.get(User, game.host_user_id), participant_type="host"
+    )
+    return game
 
 
 @pytest.mark.page("F16", 3)
@@ -14,9 +23,8 @@ def test_host_and_confirmed_player_can_open_chat_but_waitlisted_player_cannot(
     clock, db, client, firebase
 ):
     host = make_user(db, hosting_status="eligible")
-    game = make_game(
+    game = community_game(
         db,
-        game_type="community",
         host=host,
         starts_at=clock.now + timedelta(days=2),
     )
@@ -42,9 +50,8 @@ def test_host_and_confirmed_player_can_open_chat_but_waitlisted_player_cannot(
 def test_message_appears_and_opening_chat_clears_unread_state(db, client, firebase):
     host = make_user(db, hosting_status="eligible")
     player = make_user(db)
-    game = make_game(
+    game = community_game(
         db,
-        game_type="community",
         host=host,
         starts_at=datetime.now(UTC) + timedelta(days=2),
     )
@@ -80,9 +87,8 @@ def test_empty_oversized_and_rapid_messages_do_not_create_extra_rows(
     clock, db, client, firebase
 ):
     host = make_user(db, hosting_status="eligible")
-    game = make_game(
+    game = community_game(
         db,
-        game_type="community",
         host=host,
         starts_at=clock.now + timedelta(days=2),
     )
@@ -112,8 +118,8 @@ def test_empty_oversized_and_rapid_messages_do_not_create_extra_rows(
         json={"chat_id": chat_id, "message_body": "Message six"},
     )
 
-    assert empty.status_code in (400, 422)
-    assert oversized.status_code in (400, 422)
+    assert empty.status_code == 400, empty.text
+    assert oversized.status_code == 422, oversized.text
     assert all(response.status_code == 201 for response in accepted)
     assert rapid.status_code == 429
     assert db.scalar(select(func.count(ChatMessage.id))) == 5

@@ -358,8 +358,10 @@ database once contained them.
 
 Schema migrations should define schema, not serve as general seed scripts.
 
-Use `backend/scripts/` only for local mock/demo-data setup. Non-demo commands
-such as the admin bootstrap and durable worker live outside it.
+Use `backend/scripts/` only for local mock/demo-data setup. It is kept out of
+Git (see `.gitignore`) because the demo data is only for the developer's own
+use. Non-demo commands such as the admin bootstrap and durable worker live
+outside it.
 
 Immutable reference rows that are required for database behavior may be
 inserted by a focused migration when an applicable requirement source calls for
@@ -403,7 +405,8 @@ backend/.venv/bin/alembic upgrade head
 Set both variables to the development database URL so the command never
 depends on what `backend/.env` contains.
 
-Optional browse-demo data seed:
+Optional browse-demo data seed, when the local `backend/scripts/` folder is
+present:
 
 ```bash
 DATABASE_URL='[LOCAL_DEV_DATABASE_URL]' backend/.venv/bin/python -m backend.scripts.seed_demo_browse

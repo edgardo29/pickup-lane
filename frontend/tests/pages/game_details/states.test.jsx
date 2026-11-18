@@ -216,11 +216,21 @@ describe('Game Details page states', () => {
     expect(screen.getByRole('button', { name: 'Leave Game' })).toBeEnabled()
   })
 
-  it('F16-24: a paused existing player can leave but cannot add booking guests', async () => {
+  it('F16-24: a paused existing player can leave but cannot add or remove booking guests', async () => {
     const user = userEvent.setup()
     signIn()
     fakePageApi(communityGame({ is_chat_enabled: false, join_enforcement_status: 'paused' }), {
-      'GET /games/{game_id}/participants': [participant()],
+      'GET /games/{game_id}/participants': [
+        participant(),
+        participant({
+          id: '00000000-0000-4000-8000-000000000008',
+          participant_type: 'guest',
+          user_id: null,
+          guest_of_user_id: PLAYER_ID,
+          display_name_snapshot: 'Guest Player',
+          roster_order: 2,
+        }),
+      ],
     })
     renderGame()
 
@@ -228,6 +238,7 @@ describe('Game Details page states', () => {
     expect(screen.getByText(/Joining Temporarily Paused\. Existing participants/)).toBeInTheDocument()
     await user.click(screen.getAllByRole('button', { name: 'Edit Attendance' })[0])
     expect(screen.getByRole('button', { name: 'Increase guests' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Decrease guests' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Leave Game' })).toBeEnabled()
   })
 

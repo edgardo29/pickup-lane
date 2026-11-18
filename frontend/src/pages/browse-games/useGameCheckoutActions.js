@@ -37,8 +37,7 @@ export function describeCheckoutStatus(checkoutStatus) {
     }
   }
   if (
-    checkoutStatus.booking_status === 'confirmed' &&
-    checkoutStatus.booking_payment_status === 'paid' &&
+    ['confirmed', 'partially_cancelled'].includes(checkoutStatus.booking_status) &&
     checkoutStatus.payment_status === 'succeeded'
   ) {
     return { outcome: 'confirmed', message: '' }

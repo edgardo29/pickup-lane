@@ -22,7 +22,18 @@ from backend.observability.timeouts import (
     PublicTimeoutError,
 )
 from backend.schemas.game_schema import GameJoinCreate
-from backend.services.game_credit_service import release_reserved_game_credits
+from backend.services.checkout_service import (
+    MINIMUM_USD_PAYMENT_INTENT_AMOUNT_CENTS,
+    confirm_credit_covered_checkout,
+)
+from backend.services.game_credit_service import (
+    GameCreditApplication,
+    calculate_game_credit_application,
+    get_ordered_available_credit_grants_for_update,
+    redeem_reserved_game_credits,
+    release_reserved_game_credits,
+    reserve_game_credits,
+)
 from backend.services.game_notification_service import (
     create_waitlist_payment_failed_notification,
     create_waitlist_promotion_notification,
@@ -226,6 +237,7 @@ def create_waitlist_auto_charge_payment(
     db_game: Game,
     booking: Booking,
     waitlist_entry: WaitlistEntry,
+    credit_application: GameCreditApplication,
     provider_customer_id: str,
     now: datetime,
 ) -> Payment:
@@ -270,6 +282,12 @@ def create_waitlist_auto_charge_payment(
             "waitlist_entry_id": str(waitlist_entry.id),
             "user_id": str(booking.buyer_user_id),
             "authorized_amount_cents": waitlist_entry.authorized_amount_cents,
+            "checkout_total_cents": booking.subtotal_cents + booking.platform_fee_cents,
+            "credit_applied_cents": credit_application.credit_applied_cents,
+            "minimum_charge_adjustment_cents": (
+                credit_application.minimum_charge_adjustment_cents
+            ),
+            "stripe_amount_cents": credit_application.stripe_amount_cents,
             "auto_charge_consent_version": (waitlist_entry.auto_charge_consent_version),
             "auto_charge_consent_at": (
                 waitlist_entry.auto_charge_consent_at.isoformat()
@@ -518,7 +536,66 @@ def attempt_paid_waitlist_auto_promotion(
         return "failed", 0
 
     buyer_user = db.get(User, booking.buyer_user_id)
-    if buyer_user is None or not buyer_user.stripe_customer_id:
+    if buyer_user is None:
+        mark_paid_waitlist_auto_promotion_failed(
+            db,
+            db_game,
+            waitlist_entry,
+            booking,
+            booking_participants,
+            None,
+            now,
+            payment_status=None,
+            failure_code="waitlist_auto_charge_customer_missing",
+            failure_message="Waitlist auto-charge customer identity was missing.",
+        )
+        return "failed", 0
+
+    # Lock the grants before pricing the offer so another checkout cannot
+    # reserve the same credit between the balance read and this reservation.
+    credit_grants = get_ordered_available_credit_grants_for_update(
+        db, booking.buyer_user_id, now=now
+    )
+    credit_application = calculate_game_credit_application(
+        booking.subtotal_cents + booking.platform_fee_cents,
+        sum(grant.available_cents for grant in credit_grants),
+        minimum_stripe_charge_cents=MINIMUM_USD_PAYMENT_INTENT_AMOUNT_CENTS,
+    )
+    booking.discount_cents = (
+        credit_application.credit_applied_cents
+        + credit_application.minimum_charge_adjustment_cents
+    )
+    booking.total_cents = credit_application.final_amount_due_cents
+    booking.updated_at = now
+    db.add(booking)
+
+    if not credit_application.payment_required:
+        reserve_game_credits(
+            db,
+            booking.buyer_user_id,
+            amount_cents=credit_application.credit_applied_cents,
+            booking_id=booking.id,
+            game_id=db_game.id,
+            now=now,
+            idempotency_scope=f"waitlist:{waitlist_entry.id}:credit",
+        )
+        redeem_reserved_game_credits(
+            db, booking.id, now=now, user_id=booking.buyer_user_id
+        )
+        confirm_credit_covered_checkout(
+            db, db_game, booking, booking_participants, now=now
+        )
+        waitlist_entry.waitlist_status = "accepted"
+        waitlist_entry.promoted_booking_id = booking.id
+        waitlist_entry.promoted_at = now
+        waitlist_entry.updated_at = now
+        db.add(waitlist_entry)
+        create_waitlist_promotion_notification(
+            db, db_game, waitlist_entry, booking_participants[0], now
+        )
+        return "succeeded", len(booking_participants)
+
+    if not buyer_user.stripe_customer_id:
         mark_paid_waitlist_auto_promotion_failed(
             db,
             db_game,
@@ -544,11 +621,22 @@ def attempt_paid_waitlist_auto_promotion(
         db_game,
         booking,
         waitlist_entry,
+        credit_application,
         buyer_user.stripe_customer_id,
         now,
     )
     db.add(payment)
     db.flush()
+    reserve_game_credits(
+        db,
+        booking.buyer_user_id,
+        amount_cents=credit_application.credit_applied_cents,
+        booking_id=booking.id,
+        game_id=db_game.id,
+        payment_id=payment.id,
+        now=now,
+        idempotency_scope=f"waitlist:{waitlist_entry.id}:credit",
+    )
     held_spots = len(booking_participants)
     buyer_user_id = booking.buyer_user_id
     booking_id = booking.id
@@ -711,6 +799,16 @@ def attempt_paid_waitlist_auto_promotion(
                 "payment_id": str(payment_id),
                 "waitlist_entry_id": str(waitlist_entry_id),
                 "authorized_amount_cents": str(authorized_amount_cents),
+                "checkout_total_cents": str(
+                    payment.payment_metadata["checkout_total_cents"]
+                ),
+                "credit_applied_cents": str(
+                    payment.payment_metadata["credit_applied_cents"]
+                ),
+                "minimum_charge_adjustment_cents": str(
+                    payment.payment_metadata["minimum_charge_adjustment_cents"]
+                ),
+                "stripe_amount_cents": str(payment_amount_cents),
             },
             customer_id=buyer_user.stripe_customer_id,
         )

@@ -192,7 +192,11 @@ def create_waitlist_promotion_notification(
     payment: Payment | None = None,
 ) -> None:
     if game_requires_app_player_payment(db_game):
-        body = "Enough spots opened. You were charged and moved to the player list."
+        body = (
+            "Enough spots opened. You were charged and moved to the player list."
+            if payment is not None
+            else "Enough spots opened. You were moved to the player list without a card charge."
+        )
     else:
         body = "Enough spots opened. You were moved to the player list."
 

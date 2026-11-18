@@ -125,7 +125,7 @@ function GameCheckoutPage() {
   const usesCardSelection = isStripeCheckout || isPaidWaitlistCheckout
   const { quote, quoteError, quoteStatus } = useGameCheckoutQuote({
     addGuests: isAddGuestsCheckout,
-    enabled: checkoutData.status === 'success' && isStripeCheckout,
+    enabled: checkoutData.status === 'success' && isOfficialInAppGame,
     firebaseUser,
     gameId,
     guestCount: checkout.effectiveGuestCount,
@@ -274,6 +274,14 @@ function GameCheckoutPage() {
     await handleStartAddCard()
   }
 
+  async function handleRetryPaymentMethods() {
+    try {
+      await checkoutData.reloadPaymentMethods()
+    } catch {
+      // The hook keeps the error visible so the player can retry again.
+    }
+  }
+
   if (checkoutData.status === 'loading') {
     return (
       <div className="checkout-page">
@@ -300,7 +308,8 @@ function GameCheckoutPage() {
   const isStripeReady = hasStripeCheckoutSupport()
   const stripePaymentsDisabled = isStripeCheckout && !stripePaymentsEnabled
   const hasReachedSavedCardLimit = checkoutData.paymentMethods.length >= MAX_SAVED_PAYMENT_METHODS
-  const canAddPaymentMethod = isStripeReady && !hasReachedSavedCardLimit && setupStatus !== 'loading'
+  const canAddPaymentMethod = isStripeReady && !checkoutData.paymentMethodsError &&
+    !hasReachedSavedCardLimit && setupStatus !== 'loading'
   const selectedUsablePaymentMethod = getUsablePaymentMethods(checkoutData.paymentMethods)
     .find((method) => method.id === effectiveSelectedPaymentMethodId)
   const usesSavedPaymentMethod = Boolean(
@@ -346,7 +355,9 @@ function GameCheckoutPage() {
       }
 
       if (paymentRequired && !usesSavedPaymentMethod) {
-        setCheckoutActionError('Add a payment method to continue.')
+        setCheckoutActionError(
+          checkoutData.paymentMethodsError || 'Add a payment method to continue.',
+        )
         return
       }
 
@@ -369,6 +380,10 @@ function GameCheckoutPage() {
     }
 
     if (isPaidWaitlistCheckout) {
+      if (checkoutData.paymentMethodsError) {
+        setCheckoutActionError(checkoutData.paymentMethodsError)
+        return
+      }
       if (!selectedUsablePaymentMethod) {
         setCheckoutActionError('Add a card to join this waitlist.')
         return
@@ -428,6 +443,7 @@ function GameCheckoutPage() {
       onBack={() => navigate(`/games/${checkoutData.game.id}`)}
       onAddPaymentMethod={handleStartAddCard}
       onChangePaymentMethod={handleOpenPaymentSelector}
+      onRetryPaymentMethods={handleRetryPaymentMethods}
       onConfirmBooking={handleConfirm}
       onGuestCountChange={(nextGuestCount) => {
         setGuestCount(nextGuestCount)
@@ -437,6 +453,7 @@ function GameCheckoutPage() {
       onSetAgreed={handleAgreementChange}
       paymentMethod={checkout.paymentMethod}
       paymentMethods={checkout.paymentMethods}
+      paymentMethodsError={checkoutData.paymentMethodsError}
       platformFee={checkout.platformFee}
       price={checkout.price}
       primaryImage={checkout.primaryImage}

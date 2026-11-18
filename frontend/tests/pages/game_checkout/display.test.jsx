@@ -2,7 +2,9 @@ import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAuth } from '../../../src/hooks/useAuth.js'
-import { communityGame, fakePageApi, game, PLAYER_ID, quote, renderCheckout } from './gameCheckoutTestKit.jsx'
+import {
+  communityGame, fakePageApi, game, otherPlayers, PLAYER_ID, quote, renderCheckout,
+} from './gameCheckoutTestKit.jsx'
 
 vi.mock('../../../src/lib/apiClient.js', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -57,6 +59,21 @@ describe('Game Checkout display', () => {
     expect(screen.getByText('-$3.00')).toBeInTheDocument()
     expect(screen.getByText('Amount due').nextSibling).toHaveTextContent('$7.00')
     expect(screen.getByText('Available game credit: $3.00')).toBeInTheDocument()
+  })
+
+  it('F17-5: a paid waitlist shows current credit as an estimate of the later charge', async () => {
+    fakePageApi(game({ total_spots: 1 }), {
+      'GET /games/{game_id}/participants': otherPlayers(1),
+      'GET /checkout/games/{game_id}/quote': quote({
+        available_credit_cents: 300, credit_applied_cents: 300,
+        final_amount_due_cents: 700,
+      }),
+    })
+    renderCheckout()
+
+    expect(await screen.findByText('Available game credit: $3.00')).toBeInTheDocument()
+    expect(screen.getByText('Estimated later charge').nextSibling).toHaveTextContent('$7.00')
+    expect(screen.getByText(/Credit is applied when a spot opens/)).toBeInTheDocument()
   })
 
   it('F17-24: a small remainder after credit is covered and nothing is due', async () => {

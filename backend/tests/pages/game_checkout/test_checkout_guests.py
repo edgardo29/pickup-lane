@@ -12,6 +12,7 @@ from backend.models import (
     Payment,
     PaymentCompensation,
 )
+from backend.services.game_service import count_roster_players
 from backend.tests.conftest import database_now
 from backend.tests.factories import (
     make_booking,
@@ -122,7 +123,6 @@ def test_failed_guest_charge_adds_no_guests_and_releases_credit(
     stripe.confirm_status = "requires_payment_method"
 
     response = add_guests(client, firebase, game, user, card)
-    stripe.report(db, guest_payment(db, booking), "canceled")
 
     assert response.status_code == 201, response.text
     assert response.json()["payment_status"] == "requires_payment_method"
@@ -135,6 +135,15 @@ def test_failed_guest_charge_adds_no_guests_and_releases_credit(
     assert (booking.booking_status, booking.participant_count) == ("confirmed", 1)
     assert booking.total_cents == 1000
     assert credit.available_cents == 500
+    assert count_roster_players(db, game.id, now=database_now(db)) == 1
+
+    # A later cancel webhook may repeat the cleanup, but the declined response
+    # itself must already have released the spots and credit.
+    stripe.report(db, guest_payment(db, booking), "canceled")
+    assert [guest.participant_status for guest in guests(db, booking)] == [
+        "cancelled",
+        "cancelled",
+    ]
 
 
 @pytest.mark.page("F17", 13)
