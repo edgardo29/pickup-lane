@@ -58,13 +58,19 @@ export async function getCommunityPublishAttempt(firebaseUser, attemptId) {
   })
 }
 
-export async function loadEditableGame(firebaseUser, gameId) {
+export async function loadEditableGame(firebaseUser, gameId, appUserId) {
   if (!firebaseUser) {
     throw new Error('Sign in to edit this game.')
   }
 
   const game = await apiRequest(`/games/${gameId}`)
-  const venue = await apiRequest(`/venues/${game.venue_id}`).catch(() => null)
+  // The server also refuses these saves; the page should not offer the form.
+  if (game.game_type !== 'community' || game.host_user_id !== appUserId) {
+    throw new Error('Only the host of a community game can edit it.')
+  }
+  // The venue supplies the full address, including the ZIP code; without it the
+  // form would open with a blank location, so a failed load stops the page.
+  const venue = await apiRequest(`/venues/${game.venue_id}`)
   const communityDetails = await apiRequest(
     `/community-game-details/games/${gameId}/host-edit`,
     {

@@ -30,10 +30,14 @@ export function useCreateGameContext({
     let ignore = false
 
     async function loadVerifiedContext(effectiveAppUser) {
+      // Saved cards and fee history are only for publishing a new game. Editing
+      // charges no fee, and a suspended host, who may still edit, cannot load them.
       const [paymentMethods, gameContext, hostPublishFees] = await Promise.all([
-        loadUserPaymentMethods(firebaseUser),
-        isEditMode ? loadEditableGame(firebaseUser, gameId) : Promise.resolve(null),
-        loadHostPublishFees(firebaseUser),
+        isEditMode ? Promise.resolve([]) : loadUserPaymentMethods(firebaseUser),
+        isEditMode
+          ? loadEditableGame(firebaseUser, gameId, effectiveAppUser.id)
+          : Promise.resolve(null),
+        isEditMode ? Promise.resolve([]) : loadHostPublishFees(firebaseUser),
       ])
 
       if (ignore) {

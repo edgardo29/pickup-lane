@@ -3,7 +3,9 @@
 This log shows which of Pickup Lane's 54 Product & Functional Specifications
 are complete. A blank completion date means the specification is not yet
 complete. Add a date only after the entire specification satisfies the
-completion rules in `feature-pass-workflow.md`. The IDs show a preferred work
+completion rules in `feature-pass-workflow.md`. A date followed by
+"(items left)" means the pass was merged with blocked work still to do; its
+pass plan lists what remains. The IDs show a preferred work
 order, not required completion prerequisites.
 
 <table border="1" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse; border: 1px solid #777;">
@@ -93,7 +95,7 @@ order, not required completion prerequisites.
     <tr>
       <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;">F16</td>
       <td style="border: 1px solid #777; padding: 6px 10px;">Game Details</td>
-      <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;"></td>
+      <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;">2026-11-17 (items left)</td>
     </tr>
     <tr>
       <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;">F17</td>
@@ -103,7 +105,7 @@ order, not required completion prerequisites.
     <tr>
       <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;">F18</td>
       <td style="border: 1px solid #777; padding: 6px 10px;">Edit Game</td>
-      <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;"></td>
+      <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;">2026-11-18</td>
     </tr>
     <tr>
       <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;">F19</td>

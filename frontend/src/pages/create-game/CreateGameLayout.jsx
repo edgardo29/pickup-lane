@@ -70,7 +70,7 @@ export function CreateGameLayout({
                 status={verificationStatus}
                 onSend={onSendVerification}
               />
-            ) : visibleUser ? (
+            ) : visibleUser && !(isEditMode && loadError) ? (
               <section className="create-game-layout">
                 <div className="create-game-panel">
                   {activeStep === 1 && <BasicsStep form={form} updateField={onUpdateField} />}

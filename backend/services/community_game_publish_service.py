@@ -30,6 +30,7 @@ from backend.services.game_rules import (
     build_game_conflict_detail,
     get_default_host_guest_max,
     normalize_game_lifecycle_fields,
+    require_community_start_within_schedule_window,
     validate_game_business_rules,
 )
 from backend.services.hosting_access_service import (
@@ -49,7 +50,7 @@ from backend.services.stripe_service import (
     map_payment_intent_status,
 )
 from backend.services.user_service import get_user_display_name
-from backend.services.venue_service import find_matching_active_venue
+from backend.services.venue_service import find_or_create_facility_venue
 
 COMMUNITY_PUBLISH_FEE_CENTS = 499
 FIRST_FREE_WAIVER_REASON = "first_game_free"
@@ -124,7 +125,7 @@ def get_or_create_approved_venue(
     host_user_id: uuid.UUID,
     venue_data: dict[str, object],
 ) -> Venue:
-    matching_venue = find_matching_active_venue(
+    return find_or_create_facility_venue(
         db,
         name=venue_data["name"],
         address_line_1=venue_data["address_line_1"],
@@ -133,29 +134,14 @@ def get_or_create_approved_venue(
         postal_code=venue_data["postal_code"],
         country_code=venue_data["country_code"],
         neighborhood=venue_data.get("neighborhood"),
+        new_venue_fields={
+            "venue_status": "approved",
+            "created_by_user_id": host_user_id,
+            "approved_by_user_id": host_user_id,
+            "approved_at": datetime.now(UTC),
+            "is_active": True,
+        },
     )
-
-    if matching_venue is not None:
-        return matching_venue
-
-    new_venue = Venue(
-        id=uuid.uuid4(),
-        name=venue_data["name"],
-        address_line_1=venue_data["address_line_1"],
-        city=venue_data["city"],
-        state=venue_data["state"],
-        postal_code=venue_data["postal_code"],
-        country_code=venue_data["country_code"],
-        neighborhood=venue_data.get("neighborhood"),
-        venue_status="approved",
-        created_by_user_id=host_user_id,
-        approved_by_user_id=host_user_id,
-        approved_at=datetime.now(UTC),
-        is_active=True,
-    )
-    db.add(new_venue)
-    db.flush()
-    return new_venue
 
 
 def get_or_create_first_free_entitlement(
@@ -240,7 +226,11 @@ def build_game_data(
         "address_snapshot": build_address_snapshot(publish_data.venue.model_dump()),
         "city_snapshot": venue.city,
         "state_snapshot": venue.state,
-        "neighborhood_snapshot": venue.neighborhood,
+        # The host's neighborhood labels this game even when an existing
+        # facility with another neighborhood is reused.
+        "neighborhood_snapshot": (
+            (publish_data.venue.neighborhood or "").strip() or None
+        ),
         "host_user_id": host_user_id,
         "created_by_user_id": host_user_id,
         "starts_at": publish_data.starts_at,
@@ -346,6 +336,9 @@ def validate_community_publish_payload(
         build_game_validation_data(publish_request, host.id)
     )
     validate_game_business_rules(game_data)
+    require_community_start_within_schedule_window(
+        game_data["starts_at"], game_data["timezone"], datetime.now(UTC)
+    )
     return game_data
 
 

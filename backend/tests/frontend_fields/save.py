@@ -57,6 +57,13 @@ PAGE_ENDPOINTS = {
         "POST /games/{game_id}/join",
         "POST /games/{game_id}/booking-guests/add",
     ],
+    "edit_game": [
+        "GET /games/{game_id}",
+        "GET /venues/{venue_id}",
+        "GET /community-game-details/games/{game_id}/host-edit",
+        "PATCH /games/{game_id}/host-edit",
+        "PUT /community-game-details/games/{game_id}/host-edit",
+    ],
 }
 
 

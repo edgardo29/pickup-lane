@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   getCommunityPublishAttempt,
   patchHostEditGame,
@@ -35,6 +35,9 @@ export function useCreateGamePublish({
   const [status, setStatus] = useState('idle')
   const [publishError, setPublishError] = useState('')
   const [stepError, setStepError] = useState('')
+  // The last game and community-detail changes the server accepted while
+  // editing, so a retry repeats only the part that has not been saved.
+  const savedEditPayloadsRef = useRef({ game: '', details: '' })
 
   function clearPublishFeedback() {
     setStepError('')
@@ -101,6 +104,44 @@ export function useCreateGamePublish({
     await pollPublishAttempt(result.attempt_id)
   }
 
+  // The game and its community details save separately. Each part is sent only
+  // if it changed since the server last accepted it, and success is reported
+  // only once both are saved.
+  async function saveEdit() {
+    const gamePayload = buildHostEditPayload(form)
+    const detailsPayload = buildCommunityGameDetailPayload(form)
+    const gameKey = JSON.stringify(gamePayload)
+    const detailsKey = JSON.stringify(detailsPayload)
+    const saved = savedEditPayloadsRef.current
+
+    if (saved.game !== gameKey) {
+      try {
+        await patchHostEditGame(firebaseUser, gameId, gamePayload)
+      } catch (error) {
+        throw new Error(
+          `Your game changes were not saved. ${getErrorMessage(error)}`,
+          { cause: error },
+        )
+      }
+      saved.game = gameKey
+    }
+
+    if (saved.details !== detailsKey) {
+      try {
+        await upsertHostCommunityGameDetails(firebaseUser, gameId, detailsPayload)
+      } catch (error) {
+        throw new Error(
+          'Your game changes were saved, but the payment details were not. ' +
+            `${getErrorMessage(error)} Save again to retry the payment details.`,
+          { cause: error },
+        )
+      }
+      saved.details = detailsKey
+    }
+
+    navigate(`/games/${gameId}`)
+  }
+
   async function submitGame() {
     if (!currentUser) {
       setPublishError('Demo user is not loaded yet.')
@@ -125,14 +166,7 @@ export function useCreateGamePublish({
 
     try {
       if (isEditMode) {
-        await patchHostEditGame(firebaseUser, gameId, buildHostEditPayload(form))
-        await upsertHostCommunityGameDetails(
-          firebaseUser,
-          gameId,
-          buildCommunityGameDetailPayload(form),
-        )
-
-        navigate(`/games/${gameId}`)
+        await saveEdit()
         return
       }
 
@@ -155,4 +189,8 @@ export function useCreateGamePublish({
     stepError,
     submitGame,
   }
+}
+
+function getErrorMessage(error) {
+  return error instanceof Error && error.message ? error.message : 'Please try again.'
 }

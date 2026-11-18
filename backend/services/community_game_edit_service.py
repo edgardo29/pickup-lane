@@ -4,6 +4,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -26,6 +27,7 @@ from backend.services.game_rules import (
     get_default_host_guest_max,
     host_edit_field_changed,
     normalize_game_lifecycle_fields,
+    require_community_start_within_schedule_window,
     require_game_not_started,
     validate_game_business_rules,
 )
@@ -34,7 +36,7 @@ from backend.services.game_service import (
     game_has_paid_booking_payment,
 )
 from backend.services.moderation_surfacing_service import surface_community_game_text
-from backend.services.venue_service import find_matching_active_venue
+from backend.services.venue_service import find_or_create_facility_venue
 
 
 def create_host_edit_venue(
@@ -56,7 +58,7 @@ def create_host_edit_venue(
             ),
         )
 
-    matching_venue = find_matching_active_venue(
+    return find_or_create_facility_venue(
         db,
         name=venue_name,
         address_line_1=address_line_1,
@@ -65,28 +67,14 @@ def create_host_edit_venue(
         postal_code=postal_code,
         country_code="US",
         neighborhood=neighborhood,
+        new_venue_fields={
+            "venue_status": "approved",
+            "created_by_user_id": db_game.host_user_id,
+            "approved_by_user_id": db_game.host_user_id,
+            "approved_at": datetime.now(UTC),
+            "is_active": True,
+        },
     )
-    if matching_venue is not None:
-        return matching_venue
-
-    new_venue = Venue(
-        id=uuid.uuid4(),
-        name=venue_name,
-        address_line_1=address_line_1,
-        city=city,
-        state=state_value,
-        postal_code=postal_code,
-        country_code="US",
-        neighborhood=neighborhood,
-        venue_status="approved",
-        created_by_user_id=db_game.host_user_id,
-        approved_by_user_id=db_game.host_user_id,
-        approved_at=datetime.now(UTC),
-        is_active=True,
-    )
-    db.add(new_venue)
-    db.flush()
-    return new_venue
 
 
 def build_host_edit_address_snapshot(game_update: GameHostEdit) -> str:
@@ -108,12 +96,17 @@ def build_host_edit_address_snapshot(game_update: GameHostEdit) -> str:
     )
 
 
+# The fields that identify a facility. Neighborhood is descriptive: changing
+# it only relabels the game and is not a location change.
+FACILITY_FIELDS = LOCATION_FIELDS - {"neighborhood"}
+
+
 def host_edit_changes_location(
     db: Session, db_game: Game, game_update: GameHostEdit
 ) -> bool:
     update_data = game_update.model_dump(exclude_unset=True)
 
-    if not LOCATION_FIELDS.intersection(update_data):
+    if not FACILITY_FIELDS.intersection(update_data):
         return False
 
     db_venue = db.get(Venue, db_game.venue_id)
@@ -129,15 +122,9 @@ def host_edit_changes_location(
         "city": db_venue.city if db_venue is not None else db_game.city_snapshot,
         "state": db_venue.state if db_venue is not None else db_game.state_snapshot,
         "postal_code": db_venue.postal_code if db_venue is not None else "",
-        "neighborhood": (
-            db_venue.neighborhood
-            if db_venue is not None
-            else db_game.neighborhood_snapshot
-        )
-        or "",
     }
 
-    for field_name in LOCATION_FIELDS:
+    for field_name in FACILITY_FIELDS:
         if field_name not in update_data:
             continue
 
@@ -153,7 +140,11 @@ def host_edit_game_workflow(
     game_update: GameHostEdit,
     current_user: User,
 ) -> Game:
-    db_game = db.get(Game, game_id)
+    # Lock the game so a player joining at the same moment waits, and the
+    # after-join limits below see the roster as it is when this edit saves.
+    db_game = db.scalars(
+        select(Game).where(Game.id == game_id).with_for_update()
+    ).first()
 
     if db_game is None or db_game.deleted_at is not None:
         raise HTTPException(
@@ -263,6 +254,11 @@ def host_edit_game_workflow(
             detail="ends_at must be greater than starts_at.",
         )
 
+    if host_edit_field_changed(db_game, "starts_at", effective_starts_at):
+        require_community_start_within_schedule_window(
+            effective_starts_at, db_game.timezone, now
+        )
+
     if (
         "total_spots" in update_data
         and update_data["total_spots"] < reserved_player_count
@@ -291,9 +287,25 @@ def host_edit_game_workflow(
             f"{db_game.venue_name_snapshot} {update_data['format_label']}"
         )
 
+    # As when publishing, a paid community game has players pay the host and a
+    # free one collects nothing, so a price change can turn either into the other.
+    if "price_per_player_cents" in update_data:
+        update_data["payment_collection_type"] = (
+            "external_host" if update_data["price_per_player_cents"] > 0 else "none"
+        )
+
+    # The neighborhood describes where the game is without identifying the
+    # facility, so the host's entry is kept even when a venue is reused.
+    if "neighborhood" in game_update.model_fields_set:
+        update_data["neighborhood_snapshot"] = (
+            game_update.neighborhood or ""
+        ).strip() or None
+
     effective_game_data = {
         "game_type": db_game.game_type,
-        "payment_collection_type": db_game.payment_collection_type,
+        "payment_collection_type": update_data.get(
+            "payment_collection_type", db_game.payment_collection_type
+        ),
         "publish_status": db_game.publish_status,
         "game_status": db_game.game_status,
         "public_visibility_status": db_game.public_visibility_status,

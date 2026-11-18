@@ -1,5 +1,6 @@
 """Venue lookup and scaffold workflow helpers."""
 
+import hashlib
 import uuid
 from datetime import UTC, datetime
 
@@ -30,11 +31,36 @@ def build_venue_conflict_detail(exc: IntegrityError) -> str:
     return "Venue could not be saved."
 
 
-def normalize_venue_lookup_value(value: str | None) -> str:
-    return " ".join((value or "").strip().lower().split())
+# One facility lookup and creation routine for every path that creates a venue
+# from a typed location: community publishing, host editing, official game
+# creation, and direct venue creation (database architecture, Section 3.6).
+# A venue is a facility, matched on its normalized name and full address; the
+# neighborhood is descriptive and does not identify it.
+
+FACILITY_NEEDS_STAFF_REVIEW_DETAIL = (
+    "This location matches a venue that needs staff review. "
+    "Contact support or choose another location."
+)
 
 
-def find_matching_active_venue(
+def normalize_facility_value(value: str | None) -> str:
+    """Case, spacing, and periods or commas do not change a facility's identity."""
+    without_punctuation = (value or "").replace(".", " ").replace(",", " ")
+    return " ".join(without_punctuation.lower().split())
+
+
+def facility_location_lock_key(country_code: str, state: str, postal_code: str) -> int:
+    key_material = (
+        f"pickup-lane:venue:{normalize_facility_value(country_code)}:"
+        f"{normalize_facility_value(state)}:{normalize_facility_value(postal_code)}"
+    )
+    digest = hashlib.blake2b(
+        key_material.encode("utf-8"), digest_size=8, person=b"pl-venue"
+    ).digest()
+    return int.from_bytes(digest, byteorder="big", signed=True)
+
+
+def find_or_create_facility_venue(
     db: Session,
     *,
     name: str,
@@ -42,38 +68,74 @@ def find_matching_active_venue(
     city: str,
     state: str,
     postal_code: str,
-    country_code: str = "US",
-    neighborhood: str | None = None,
-) -> Venue | None:
-    name_key = normalize_venue_lookup_value(name)
-    street_key = normalize_venue_lookup_value(address_line_1)
-    city_key = normalize_venue_lookup_value(city)
-    state_key = normalize_venue_lookup_value(state)
-    postal_key = normalize_venue_lookup_value(postal_code)
-    country_key = normalize_venue_lookup_value(country_code).upper()
-    neighborhood_key = normalize_venue_lookup_value(neighborhood)
+    country_code: str,
+    neighborhood: str | None,
+    new_venue_fields: dict[str, object],
+) -> Venue:
+    """Reuse the one active venue for this facility, or create it.
 
-    if not all([name_key, street_key, city_key, state_key, postal_key, country_key]):
-        return None
-
-    statement = (
-        select(Venue)
-        .where(
-            Venue.deleted_at.is_(None),
-            Venue.is_active.is_(True),
-            func.lower(func.trim(Venue.name)) == name_key,
-            func.lower(func.trim(Venue.address_line_1)) == street_key,
-            func.lower(func.trim(Venue.city)) == city_key,
-            func.lower(func.trim(Venue.state)) == state_key,
-            func.lower(func.trim(Venue.postal_code)) == postal_key,
-            func.upper(func.trim(Venue.country_code)) == country_key,
-            func.lower(func.trim(func.coalesce(Venue.neighborhood, "")))
-            == neighborhood_key,
+    Writers lock the location's state and postal code first, so two requests
+    for the same new facility cannot both create it. An inactive, deleted, or
+    duplicated match is left for staff to resolve instead of creating another
+    copy. ``new_venue_fields`` holds the creator, approval, and any other
+    columns used only when a new venue is created.
+    """
+    db.execute(
+        select(
+            func.pg_advisory_xact_lock(
+                facility_location_lock_key(country_code, state, postal_code)
+            )
         )
-        .order_by(Venue.created_at.asc(), Venue.id.asc())
-        .limit(1)
     )
-    return db.scalars(statement).first()
+    identity = (
+        normalize_facility_value(name),
+        normalize_facility_value(address_line_1),
+        normalize_facility_value(city),
+    )
+    same_area_venues = db.scalars(
+        select(Venue).where(
+            func.upper(func.trim(Venue.country_code))
+            == normalize_facility_value(country_code).upper(),
+            func.lower(func.trim(Venue.state)) == normalize_facility_value(state),
+            func.lower(func.trim(Venue.postal_code))
+            == normalize_facility_value(postal_code),
+        )
+    ).all()
+    matches = [
+        venue
+        for venue in same_area_venues
+        if (
+            normalize_facility_value(venue.name),
+            normalize_facility_value(venue.address_line_1),
+            normalize_facility_value(venue.city),
+        )
+        == identity
+    ]
+    usable_matches = [
+        venue for venue in matches if venue.deleted_at is None and venue.is_active
+    ]
+    if len(usable_matches) == 1:
+        return usable_matches[0]
+    if matches:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=FACILITY_NEEDS_STAFF_REVIEW_DETAIL,
+        )
+
+    new_venue = Venue(
+        id=uuid.uuid4(),
+        name=name,
+        address_line_1=address_line_1,
+        city=city,
+        state=state,
+        postal_code=postal_code,
+        country_code=country_code,
+        neighborhood=neighborhood,
+        **new_venue_fields,
+    )
+    db.add(new_venue)
+    db.flush()
+    return new_venue
 
 
 def get_active_user_or_404(db: Session, user_id: uuid.UUID, detail: str) -> User:
@@ -153,40 +215,27 @@ def create_venue_record(db: Session, venue: VenueCreate) -> Venue:
         venue.approved_at,
     )
 
-    matching_venue = find_matching_active_venue(
-        db,
-        name=venue.name,
-        address_line_1=venue.address_line_1,
-        city=venue.city,
-        state=venue.state,
-        postal_code=venue.postal_code,
-        country_code=venue.country_code,
-        neighborhood=venue.neighborhood,
-    )
-    if matching_venue is not None:
-        return matching_venue
-
-    new_venue = Venue(
-        id=uuid.uuid4(),
-        name=venue.name,
-        address_line_1=venue.address_line_1,
-        city=venue.city,
-        state=venue.state,
-        postal_code=venue.postal_code,
-        country_code=venue.country_code,
-        neighborhood=venue.neighborhood,
-        latitude=venue.latitude,
-        longitude=venue.longitude,
-        external_place_id=venue.external_place_id,
-        venue_status=venue.venue_status,
-        created_by_user_id=venue.created_by_user_id,
-        approved_by_user_id=approved_by_user_id,
-        approved_at=approved_at,
-        is_active=venue.is_active,
-    )
-
     try:
-        db.add(new_venue)
+        new_venue = find_or_create_facility_venue(
+            db,
+            name=venue.name,
+            address_line_1=venue.address_line_1,
+            city=venue.city,
+            state=venue.state,
+            postal_code=venue.postal_code,
+            country_code=venue.country_code,
+            neighborhood=venue.neighborhood,
+            new_venue_fields={
+                "latitude": venue.latitude,
+                "longitude": venue.longitude,
+                "external_place_id": venue.external_place_id,
+                "venue_status": venue.venue_status,
+                "created_by_user_id": venue.created_by_user_id,
+                "approved_by_user_id": approved_by_user_id,
+                "approved_at": approved_at,
+                "is_active": venue.is_active,
+            },
+        )
         db.commit()
         db.refresh(new_venue)
     except IntegrityError as exc:

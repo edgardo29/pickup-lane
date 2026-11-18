@@ -11,7 +11,12 @@ import {
   getPriceCents,
   serializePaymentMethods,
 } from './createGamePayment.js'
-import { buildDateTime, getTodayDate } from './createGameSchedule.js'
+import {
+  buildDateTime,
+  COMMUNITY_SCHEDULE_DAYS_AHEAD,
+  getLatestScheduleDate,
+  getTodayDate,
+} from './createGameSchedule.js'
 
 export function getMinimumSpotsForFormat(format) {
   const sideSize = getSideSizeForFormat(format)
@@ -55,6 +60,10 @@ export function validateStep(step, form) {
 
     if (form.date < getTodayDate()) {
       return 'Choose today or a future date.'
+    }
+
+    if (form.date > getLatestScheduleDate()) {
+      return `Choose a date no more than ${COMMUNITY_SCHEDULE_DAYS_AHEAD} days ahead.`
     }
 
     if (form.endTime <= form.startTime) {

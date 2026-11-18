@@ -311,7 +311,8 @@ def host_edit_game(
     game_id: uuid.UUID,
     game_update: GameHostEdit,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_verified_user),
+    # A suspended host may still manage games they already host.
+    current_user: User = Depends(require_verified_user_allowing_suspended),
 ) -> GameDetailRead:
     game = host_edit_game_workflow(db, game_id, game_update, current_user)
     return build_game_detail_read(game, current_user)

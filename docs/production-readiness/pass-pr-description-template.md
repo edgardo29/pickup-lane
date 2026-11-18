@@ -263,11 +263,23 @@ Clear:
 Existing checks for stored values, database-generated defaults, and parameterized SQL continued to pass.
 ```
 
-### Use Exact Names Only When Helpful
+### Describe Things Instead Of Naming Code
 
-An exact table, setting, command, endpoint, class, or configuration name may appear when its identity helps the reviewer understand or locate the change.
+Do not include API endpoint paths, table names, or column names. Describe what the endpoint, table, or column does.
 
-Explain its purpose in the same sentence when the purpose is not obvious.
+Weak:
+
+```text
+Adds `GET /checkout/games/{game_id}/quote` and `game_participants.hold_expires_at`.
+```
+
+Clear:
+
+```text
+A new read-only price check shows the amount due before the player confirms, and added guests hold their spots for two minutes while their payment is pending.
+```
+
+A setting, command, or class name may appear only when its identity helps the reviewer locate the change. Explain its purpose in the same sentence when the purpose is not obvious.
 
 Clear:
 
@@ -560,7 +572,7 @@ Do not return the PR body until every applicable answer is yes.
 5. Can an engineer unfamiliar with the repository understand every phrase without opening the plan?
 6. Do sentences use concrete actors or components, actions, and results?
 7. Does every Changes bullet describe material behavior rather than a file, test, or process artifact?
-8. Are exact technical names explained when their purpose is not obvious?
+8. Is the PR body free of endpoint paths, table names, and column names, and is any other exact name explained when its purpose is not obvious?
 9. Is any scope clarification necessary, concise, and limited to the current PR boundary?
 10. Does every Validation bullet describe a scenario that actually ran and an observable result?
 11. Does Validation lead with proven behavior rather than counts or commands?

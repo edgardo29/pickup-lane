@@ -223,7 +223,7 @@ Leave the pull request open for manual merge. All applicable reviews and any che
 
 After manual merge, confirm that the intended changes reached the base branch and that their verification remains valid. If the page required no pull request, confirm its accepted result directly.
 
-`docs/production-readiness/feature-pages/feature-pass-completion-log.md` is the only feature completion record. Enter the completion date in the pass PR only when the selected page satisfies its specification's Sections 3 and 4 and applicable shared rules, and all applicable Section 5 scenarios have passed.
+`docs/production-readiness/feature-pages/feature-pass-completion-log.md` is the only feature completion record. Enter the completion date in the pass PR only when the selected page satisfies its specification's Sections 3 and 4 and applicable shared rules, and all applicable Section 5 scenarios have passed. If the pass is merged with only blocked work left, enter the merge date followed by "(items left)"; the pass plan's Blocked section lists what remains, and the PR that finishes that work replaces the entry with the completion date.
 
 A connected page pass does not need to be complete first if every requirement
 and scenario for the selected page passes, including its required interactions
