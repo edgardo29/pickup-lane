@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth.js'
 import { useAdminAccess } from '../admin/shared/useAdminAccess.js'
 import { buildGameDetailsLayoutProps } from './gameDetailsLayoutProps.js'
+import { useGameChangeReview } from './useGameChangeReview.js'
 import { useGameDetailsActions } from './useGameDetailsActions.js'
 import { useGameDetailsChat } from './useGameDetailsChat.js'
 import { useGameDetailsData } from './useGameDetailsData.js'
@@ -88,6 +89,16 @@ export function useGameDetailsPageModel() {
     participantSummary,
     viewModel,
   } = derivedState
+  const changeReview = useGameChangeReview({
+    // Only a player with a confirmed booking can have changes to review.
+    enabled: Boolean(
+      firebaseUser &&
+        game?.game_type === 'official' &&
+        currentParticipant?.participant_status === 'confirmed',
+    ),
+    firebaseUser,
+    gameId,
+  })
   const chat = useGameDetailsChat({
     canOpenGameChat: viewModel?.canOpenGameChat || false,
     firebaseUser,
@@ -149,6 +160,7 @@ export function useGameDetailsPageModel() {
     game,
     layoutProps: buildGameDetailsLayoutProps({
       actions,
+      changeReview,
       activeImageIndex,
       activePlayerTab,
       chatDraft,

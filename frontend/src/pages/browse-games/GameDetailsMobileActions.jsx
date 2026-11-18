@@ -19,6 +19,7 @@ function GameDetailsMobileActions({
   isCancellingGame,
   isHost,
   isJoinWindowClosed,
+  isPausedGame,
   isUpdatingGuests,
   mobileActionCount,
   onOpenCancelGameModal,
@@ -63,7 +64,7 @@ function GameDetailsMobileActions({
           className="details-secondary-action details-host-guest-action"
           type="button"
           aria-label={`Manage Guests ${currentGuestCount}/${hostGuestMax}`}
-          disabled={isJoinWindowClosed || isAddingHostGuest || isUpdatingGuests}
+          disabled={isJoinWindowClosed || isPausedGame || isAddingHostGuest || isUpdatingGuests}
           onClick={onOpenHostGuestModal}
         >
           <span className="details-action-icon">

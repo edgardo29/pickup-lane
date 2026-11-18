@@ -4,6 +4,7 @@ import { GAME_CHAT_MESSAGE_MAX_LENGTH } from './gameDetailsConstants.js'
 
 export function buildGameDetailsLayoutProps({
   actions,
+  changeReview,
   activeImageIndex,
   activePlayerTab,
   chatDraft,
@@ -49,6 +50,7 @@ export function buildGameDetailsLayoutProps({
 
   return {
     ...viewModel,
+    changeReview,
     activeImageIndex,
     activePlayerTab,
     chatDraft,

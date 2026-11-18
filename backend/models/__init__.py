@@ -20,6 +20,9 @@ from backend.models.community_publish_attempt_model import CommunityPublishAttem
 from backend.models.durable_job_event_model import DurableJobEvent
 from backend.models.durable_job_model import DurableJob
 from backend.models.durable_worker_heartbeat_model import DurableWorkerHeartbeat
+from backend.models.game_change_removal_request_model import (
+    GameChangeRemovalRequest,
+)
 from backend.models.game_chat_message_detection_model import GameChatMessageDetection
 from backend.models.game_chat_model import GameChat
 from backend.models.game_chat_read_model import GameChatRead
@@ -95,6 +98,7 @@ __all__ = [
     "DurableJobEvent",
     "DurableWorkerHeartbeat",
     "Game",
+    "GameChangeRemovalRequest",
     "GameChat",
     "GameChatMessageDetection",
     "GameChatRead",

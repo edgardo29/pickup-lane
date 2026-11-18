@@ -20,7 +20,10 @@ export async function loadGameCheckout({ firebaseUser, gameId }) {
     game.game_type === 'official'
       ? apiRequest(`/venue-images?venue_id=${game.venue_id}`).catch(() => [])
       : Promise.resolve([]),
-    apiRequest(`/games/${gameId}/participants`),
+    // The player list requires sign-in.
+    firebaseUser
+      ? apiRequest(`/games/${gameId}/participants`, { headers: await getAuthHeaders(firebaseUser) })
+      : Promise.resolve([]),
     firebaseUser ? listUserPaymentMethods(firebaseUser).catch(() => []) : Promise.resolve([]),
   ])
   const images =

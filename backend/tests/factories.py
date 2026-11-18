@@ -216,7 +216,7 @@ def make_community_game_detail(
     values = {
         "id": uuid.uuid4(),
         "game_id": game.id,
-        "payment_methods_snapshot": ["venmo"],
+        "payment_methods_snapshot": [{"type": "venmo", "value": "@test-host"}],
         "payment_instructions_snapshot": "Pay the host before kickoff.",
         "payment_text_moderation_status": "visible",
     }

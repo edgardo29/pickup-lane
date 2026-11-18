@@ -118,7 +118,8 @@ def normalize_cancel_reason(cancel_reason: str | None) -> str | None:
 
 
 def require_cancel_permission(db_game: Game, current_user: User) -> str:
-    if current_user.account_status != "active":
+    # A suspended host may still cancel a game they already host.
+    if current_user.account_status not in {"active", "suspended"}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your account cannot cancel games right now.",
@@ -1287,6 +1288,13 @@ def create_game_cancelled_notifications(
                     "game_cancelled",
                     event_at=now,
                     force_action_null=True,
+                    body=(
+                        "This community game was canceled. Payment disputes and "
+                        "refunds remain between you and the original organizer. "
+                        "Pickup Lane does not process or guarantee refunds."
+                        if db_game.game_type == "community"
+                        else None
+                    ),
                 ),
                 actor_user_id=actor_user_id,
                 related_game_id=db_game.id,

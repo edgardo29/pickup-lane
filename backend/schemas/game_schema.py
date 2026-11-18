@@ -100,6 +100,14 @@ class GameRead(BaseModel):
     deleted_at: datetime | None
 
 
+class GameRosterCountsRead(BaseModel):
+    """Roster totals a game detail shows to every visitor, without names."""
+
+    occupied_spots: int
+    spots_remaining: int
+    waitlist_count: int
+
+
 class GameDetailRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -142,6 +150,7 @@ class GameDetailRead(BaseModel):
     parking_notes: str | None
     cancelled_at: datetime | None
     cancel_reason: str | None
+    roster_counts: GameRosterCountsRead | None = None
 
 
 class GameAvailabilityRead(BaseModel):

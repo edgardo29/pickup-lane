@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
@@ -30,14 +30,26 @@ from backend.schemas import (
     GameUpdate,
     PublicGameParticipantRead,
 )
+from backend.schemas.game_change_removal_schema import (
+    GameChangeRemovalRequestCreate,
+    GameChangeRemovalRequestRead,
+    GameChangeReviewRead,
+)
 from backend.services.auth_service import (
+    get_current_app_user,
     get_optional_current_app_user,
     require_active_admin,
+    require_active_or_suspended_user,
     require_recent_active_admin,
     require_verified_user,
+    require_verified_user_allowing_suspended,
 )
 from backend.services.community_game_edit_service import host_edit_game_workflow
 from backend.services.game_cancellation_service import cancel_game_state_workflow
+from backend.services.game_change_removal_service import (
+    get_game_change_review,
+    submit_game_change_removal_request,
+)
 from backend.services.game_roster_service import (
     add_booking_game_guests_workflow,
     add_host_game_guests_workflow,
@@ -47,6 +59,7 @@ from backend.services.game_roster_service import (
 )
 from backend.services.game_service import (
     build_game_detail_read,
+    build_game_roster_counts,
     create_game_workflow,
     delete_game_workflow,
     get_public_game_or_404,
@@ -96,7 +109,7 @@ def leave_game(
     game_id: uuid.UUID,
     leave_request: GameLeaveCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_verified_user),
+    current_user: User = Depends(require_verified_user_allowing_suspended),
 ) -> GameLeaveRead:
     return leave_game_roster_workflow(db, game_id, current_user)
 
@@ -124,7 +137,7 @@ def add_host_game_guests(
     game_id: uuid.UUID,
     guest_request: GameGuestAddCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_verified_user),
+    current_user: User = Depends(require_verified_user_allowing_suspended),
 ) -> GameGuestAddRead:
     return add_host_game_guests_workflow(db, game_id, guest_request, current_user)
 
@@ -138,7 +151,7 @@ def remove_game_guests(
     game_id: uuid.UUID,
     guest_request: GameGuestRemoveCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_verified_user),
+    current_user: User = Depends(require_verified_user_allowing_suspended),
 ) -> GameGuestRemoveRead:
     return remove_game_guests_workflow(db, game_id, guest_request, current_user)
 
@@ -151,7 +164,7 @@ def remove_game_guests(
 def cancel_game(
     game_id: uuid.UUID,
     cancel_request: GameCancelCreate,
-    current_user: User = Depends(require_verified_user),
+    current_user: User = Depends(require_verified_user_allowing_suspended),
     db: Session = Depends(get_db),
 ) -> GameDetailRead:
     game = cancel_game_state_workflow(db, game_id, cancel_request, current_user)
@@ -201,7 +214,7 @@ def list_game_roster_participants(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_optional_current_app_user),
+    current_user: User = Depends(get_current_app_user),
 ) -> list[GameParticipant]:
     participants = list_public_game_participants(
         db,
@@ -216,6 +229,39 @@ def list_game_roster_participants(
     return participants
 
 
+# What staff changed in an official game since the player booked, and the
+# player's request to leave, if any.
+@router.get(
+    "/{game_id}/change-review",
+    response_model=GameChangeReviewRead,
+    status_code=status.HTTP_200_OK,
+)
+def get_change_review(
+    game_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_active_or_suspended_user),
+) -> GameChangeReviewRead:
+    return get_game_change_review(db, game_id, current_user)
+
+
+# A player asks to leave an official game whose details changed. The booking
+# stays confirmed until staff process the request.
+@router.post(
+    "/{game_id}/change-removal-requests",
+    response_model=GameChangeRemovalRequestRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_change_removal_request(
+    game_id: uuid.UUID,
+    removal_request: GameChangeRemovalRequestCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_verified_user_allowing_suspended),
+):
+    return submit_game_change_removal_request(
+        db, game_id, removal_request.relief_choice, current_user
+    )
+
+
 # This route fetches a single game record by its internal UUID.
 @router.get("/{game_id}", response_model=GameDetailRead, status_code=status.HTTP_200_OK)
 def get_game(
@@ -227,7 +273,9 @@ def get_game(
     game = get_public_game_or_404(db, game_id, current_user)
     if game.public_visibility_status == "hidden":
         response.headers["Cache-Control"] = "private, no-store"
-    return build_game_detail_read(game, current_user)
+    detail = build_game_detail_read(game, current_user)
+    detail.roster_counts = build_game_roster_counts(db, game, now=datetime.now(UTC))
+    return detail
 
 
 # This route returns game records currently stored in the app database.

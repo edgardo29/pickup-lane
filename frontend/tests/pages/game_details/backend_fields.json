@@ -1,0 +1,1292 @@
+{
+  "$defs": {
+    "ChatMessageParticipantRead": {
+      "properties": {
+        "chat_id": {
+          "format": "uuid",
+          "title": "Chat Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "is_pinned": {
+          "title": "Is Pinned",
+          "type": "boolean"
+        },
+        "message_body": {
+          "title": "Message Body",
+          "type": "string"
+        },
+        "message_type": {
+          "title": "Message Type",
+          "type": "string"
+        },
+        "pinned_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pinned At"
+        },
+        "sender_user_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sender User Id"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "chat_id",
+        "sender_user_id",
+        "message_type",
+        "message_body",
+        "is_pinned",
+        "pinned_at",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "ChatMessageParticipantRead",
+      "type": "object"
+    },
+    "CommunityGameDetailPublicRead": {
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "game_id": {
+          "format": "uuid",
+          "title": "Game Id",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "payment_instructions_snapshot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Payment Instructions Snapshot"
+        },
+        "payment_methods_snapshot": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Payment Methods Snapshot",
+          "type": "array"
+        },
+        "payment_text_moderation_status": {
+          "title": "Payment Text Moderation Status",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "game_id",
+        "payment_methods_snapshot",
+        "payment_instructions_snapshot",
+        "payment_text_moderation_status",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "CommunityGameDetailPublicRead",
+      "type": "object"
+    },
+    "GameChangeRemovalRequestRead": {
+      "properties": {
+        "booking_id": {
+          "format": "uuid",
+          "title": "Booking Id",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "relief_choice": {
+          "title": "Relief Choice",
+          "type": "string"
+        },
+        "request_status": {
+          "title": "Request Status",
+          "type": "string"
+        },
+        "submitted_at": {
+          "format": "date-time",
+          "title": "Submitted At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "booking_id",
+        "relief_choice",
+        "request_status",
+        "submitted_at"
+      ],
+      "title": "GameChangeRemovalRequestRead",
+      "type": "object"
+    },
+    "GameChangeReviewRead": {
+      "description": "What changed since the player booked, and their request to leave, if any.",
+      "properties": {
+        "active_request": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GameChangeRemovalRequestRead"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "can_request_removal": {
+          "title": "Can Request Removal",
+          "type": "boolean"
+        },
+        "changes": {
+          "items": {
+            "$ref": "#/$defs/GameDetailChangeRead"
+          },
+          "title": "Changes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "changes",
+        "active_request",
+        "can_request_removal"
+      ],
+      "title": "GameChangeReviewRead",
+      "type": "object"
+    },
+    "GameChatRead": {
+      "properties": {
+        "chat_status": {
+          "title": "Chat Status",
+          "type": "string"
+        },
+        "closed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Closed At"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "game_id": {
+          "format": "uuid",
+          "title": "Game Id",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "last_read_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Read At"
+        },
+        "latest_message_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Latest Message At"
+        },
+        "latest_message_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Latest Message Id"
+        },
+        "latest_message_preview": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Latest Message Preview"
+        },
+        "message_count": {
+          "default": 0,
+          "title": "Message Count",
+          "type": "integer"
+        },
+        "needs_review_count": {
+          "default": 0,
+          "title": "Needs Review Count",
+          "type": "integer"
+        },
+        "removed_count": {
+          "default": 0,
+          "title": "Removed Count",
+          "type": "integer"
+        },
+        "unread_count": {
+          "default": 0,
+          "title": "Unread Count",
+          "type": "integer"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "game_id",
+        "chat_status",
+        "created_at",
+        "updated_at",
+        "closed_at"
+      ],
+      "title": "GameChatRead",
+      "type": "object"
+    },
+    "GameChatReadStateRead": {
+      "properties": {
+        "chat_id": {
+          "format": "uuid",
+          "title": "Chat Id",
+          "type": "string"
+        },
+        "last_read_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Read At"
+        },
+        "last_read_message_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Read Message Id"
+        },
+        "unread_count": {
+          "title": "Unread Count",
+          "type": "integer"
+        },
+        "user_id": {
+          "format": "uuid",
+          "title": "User Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "chat_id",
+        "user_id",
+        "last_read_at",
+        "last_read_message_id",
+        "unread_count"
+      ],
+      "title": "GameChatReadStateRead",
+      "type": "object"
+    },
+    "GameDetailChangeRead": {
+      "description": "One game detail that staff changed after the player booked.",
+      "properties": {
+        "after": {
+          "title": "After"
+        },
+        "before": {
+          "title": "Before"
+        },
+        "changed_at": {
+          "format": "date-time",
+          "title": "Changed At",
+          "type": "string"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "before",
+        "after",
+        "changed_at"
+      ],
+      "title": "GameDetailChangeRead",
+      "type": "object"
+    },
+    "GameDetailRead": {
+      "properties": {
+        "address_snapshot": {
+          "title": "Address Snapshot",
+          "type": "string"
+        },
+        "allow_guests": {
+          "title": "Allow Guests",
+          "type": "boolean"
+        },
+        "cancel_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cancel Reason"
+        },
+        "cancelled_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cancelled At"
+        },
+        "city_snapshot": {
+          "title": "City Snapshot",
+          "type": "string"
+        },
+        "currency": {
+          "title": "Currency",
+          "type": "string"
+        },
+        "custom_cancellation_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Custom Cancellation Text"
+        },
+        "custom_rules_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Custom Rules Text"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Description"
+        },
+        "ends_at": {
+          "format": "date-time",
+          "title": "Ends At",
+          "type": "string"
+        },
+        "environment_type": {
+          "title": "Environment Type",
+          "type": "string"
+        },
+        "format_label": {
+          "title": "Format Label",
+          "type": "string"
+        },
+        "game_notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Game Notes"
+        },
+        "game_player_group": {
+          "title": "Game Player Group",
+          "type": "string"
+        },
+        "game_status": {
+          "title": "Game Status",
+          "type": "string"
+        },
+        "game_type": {
+          "title": "Game Type",
+          "type": "string"
+        },
+        "host_guest_max": {
+          "default": 0,
+          "title": "Host Guest Max",
+          "type": "integer"
+        },
+        "host_user_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Host User Id"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "is_chat_enabled": {
+          "title": "Is Chat Enabled",
+          "type": "boolean"
+        },
+        "join_enforcement_status": {
+          "title": "Join Enforcement Status",
+          "type": "string"
+        },
+        "max_guests_per_booking": {
+          "title": "Max Guests Per Booking",
+          "type": "integer"
+        },
+        "minimum_age": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Minimum Age"
+        },
+        "neighborhood_snapshot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Neighborhood Snapshot"
+        },
+        "parking_notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Parking Notes"
+        },
+        "payment_collection_type": {
+          "title": "Payment Collection Type",
+          "type": "string"
+        },
+        "price_per_player_cents": {
+          "title": "Price Per Player Cents",
+          "type": "integer"
+        },
+        "public_visibility_status": {
+          "title": "Public Visibility Status",
+          "type": "string"
+        },
+        "publish_status": {
+          "title": "Publish Status",
+          "type": "string"
+        },
+        "roster_counts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GameRosterCountsRead"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "skill_level": {
+          "title": "Skill Level",
+          "type": "string"
+        },
+        "starts_at": {
+          "format": "date-time",
+          "title": "Starts At",
+          "type": "string"
+        },
+        "starts_on_local": {
+          "format": "date",
+          "title": "Starts On Local",
+          "type": "string"
+        },
+        "state_snapshot": {
+          "title": "State Snapshot",
+          "type": "string"
+        },
+        "timezone": {
+          "title": "Timezone",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "total_spots": {
+          "title": "Total Spots",
+          "type": "integer"
+        },
+        "venue_id": {
+          "format": "uuid",
+          "title": "Venue Id",
+          "type": "string"
+        },
+        "venue_name_snapshot": {
+          "title": "Venue Name Snapshot",
+          "type": "string"
+        },
+        "waitlist_enabled": {
+          "title": "Waitlist Enabled",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "game_type",
+        "payment_collection_type",
+        "publish_status",
+        "game_status",
+        "public_visibility_status",
+        "join_enforcement_status",
+        "title",
+        "description",
+        "venue_id",
+        "venue_name_snapshot",
+        "address_snapshot",
+        "city_snapshot",
+        "state_snapshot",
+        "neighborhood_snapshot",
+        "starts_at",
+        "ends_at",
+        "starts_on_local",
+        "timezone",
+        "format_label",
+        "game_player_group",
+        "skill_level",
+        "environment_type",
+        "total_spots",
+        "price_per_player_cents",
+        "currency",
+        "minimum_age",
+        "allow_guests",
+        "max_guests_per_booking",
+        "waitlist_enabled",
+        "is_chat_enabled",
+        "custom_rules_text",
+        "custom_cancellation_text",
+        "game_notes",
+        "parking_notes",
+        "cancelled_at",
+        "cancel_reason"
+      ],
+      "title": "GameDetailRead",
+      "type": "object"
+    },
+    "GameGuestAddRead": {
+      "properties": {
+        "added_count": {
+          "title": "Added Count",
+          "type": "integer"
+        },
+        "booking_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Booking Id"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message",
+        "added_count"
+      ],
+      "title": "GameGuestAddRead",
+      "type": "object"
+    },
+    "GameGuestRemoveRead": {
+      "properties": {
+        "booking_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Booking Id"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "removed_count": {
+          "title": "Removed Count",
+          "type": "integer"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message",
+        "removed_count"
+      ],
+      "title": "GameGuestRemoveRead",
+      "type": "object"
+    },
+    "GameImagePublicRead": {
+      "properties": {
+        "game_id": {
+          "format": "uuid",
+          "title": "Game Id",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "image_role": {
+          "title": "Image Role",
+          "type": "string"
+        },
+        "image_url": {
+          "title": "Image Url",
+          "type": "string"
+        },
+        "is_primary": {
+          "title": "Is Primary",
+          "type": "boolean"
+        },
+        "sort_order": {
+          "title": "Sort Order",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "game_id",
+        "image_url",
+        "image_role",
+        "is_primary",
+        "sort_order"
+      ],
+      "title": "GameImagePublicRead",
+      "type": "object"
+    },
+    "GameLeaveRead": {
+      "properties": {
+        "booking_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Booking Id"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "participant_id": {
+          "format": "uuid",
+          "title": "Participant Id",
+          "type": "string"
+        },
+        "refund_eligible": {
+          "title": "Refund Eligible",
+          "type": "boolean"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message",
+        "refund_eligible",
+        "participant_id"
+      ],
+      "title": "GameLeaveRead",
+      "type": "object"
+    },
+    "GameRosterCountsRead": {
+      "description": "Roster totals a game detail shows to every visitor, without names.",
+      "properties": {
+        "occupied_spots": {
+          "title": "Occupied Spots",
+          "type": "integer"
+        },
+        "spots_remaining": {
+          "title": "Spots Remaining",
+          "type": "integer"
+        },
+        "waitlist_count": {
+          "title": "Waitlist Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "occupied_spots",
+        "spots_remaining",
+        "waitlist_count"
+      ],
+      "title": "GameRosterCountsRead",
+      "type": "object"
+    },
+    "PublicGameParticipantRead": {
+      "properties": {
+        "booking_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Booking Id"
+        },
+        "cancellation_type": {
+          "title": "Cancellation Type",
+          "type": "string"
+        },
+        "cancelled_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cancelled At"
+        },
+        "confirmed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Confirmed At"
+        },
+        "display_name_snapshot": {
+          "title": "Display Name Snapshot",
+          "type": "string"
+        },
+        "game_id": {
+          "format": "uuid",
+          "title": "Game Id",
+          "type": "string"
+        },
+        "guest_of_user_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Guest Of User Id"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "joined_at": {
+          "format": "date-time",
+          "title": "Joined At",
+          "type": "string"
+        },
+        "participant_status": {
+          "title": "Participant Status",
+          "type": "string"
+        },
+        "participant_type": {
+          "title": "Participant Type",
+          "type": "string"
+        },
+        "roster_order": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Roster Order"
+        },
+        "user_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "User Id"
+        }
+      },
+      "required": [
+        "id",
+        "game_id",
+        "booking_id",
+        "participant_type",
+        "user_id",
+        "guest_of_user_id",
+        "display_name_snapshot",
+        "participant_status",
+        "cancellation_type",
+        "roster_order",
+        "joined_at",
+        "confirmed_at",
+        "cancelled_at"
+      ],
+      "title": "PublicGameParticipantRead",
+      "type": "object"
+    },
+    "VenueImagePublicRead": {
+      "properties": {
+        "alt_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Alt Text"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Caption"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "image_role": {
+          "title": "Image Role",
+          "type": "string"
+        },
+        "image_url": {
+          "title": "Image Url",
+          "type": "string"
+        },
+        "is_primary": {
+          "title": "Is Primary",
+          "type": "boolean"
+        },
+        "sort_order": {
+          "title": "Sort Order",
+          "type": "integer"
+        },
+        "venue_id": {
+          "format": "uuid",
+          "title": "Venue Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "venue_id",
+        "image_url",
+        "image_role",
+        "is_primary",
+        "sort_order",
+        "alt_text",
+        "caption"
+      ],
+      "title": "VenueImagePublicRead",
+      "type": "object"
+    },
+    "VenueRead": {
+      "properties": {
+        "address_line_1": {
+          "title": "Address Line 1",
+          "type": "string"
+        },
+        "approved_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Approved At"
+        },
+        "approved_by_user_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Approved By User Id"
+        },
+        "city": {
+          "title": "City",
+          "type": "string"
+        },
+        "country_code": {
+          "title": "Country Code",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by_user_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Created By User Id"
+        },
+        "deleted_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Deleted At"
+        },
+        "external_place_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "External Place Id"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "is_active": {
+          "title": "Is Active",
+          "type": "boolean"
+        },
+        "latitude": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Latitude"
+        },
+        "longitude": {
+          "anyOf": [
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Longitude"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "neighborhood": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Neighborhood"
+        },
+        "postal_code": {
+          "title": "Postal Code",
+          "type": "string"
+        },
+        "state": {
+          "title": "State",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "venue_status": {
+          "title": "Venue Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "address_line_1",
+        "city",
+        "state",
+        "postal_code",
+        "country_code",
+        "neighborhood",
+        "latitude",
+        "longitude",
+        "external_place_id",
+        "venue_status",
+        "created_by_user_id",
+        "approved_by_user_id",
+        "approved_at",
+        "is_active",
+        "created_at",
+        "updated_at",
+        "deleted_at"
+      ],
+      "title": "VenueRead",
+      "type": "object"
+    }
+  },
+  "endpoints": {
+    "GET /chat-messages": {
+      "items": {
+        "$ref": "#/$defs/ChatMessageParticipantRead"
+      },
+      "title": "Response List Chat Messages Chat Messages Get",
+      "type": "array"
+    },
+    "GET /community-game-details": {
+      "items": {
+        "$ref": "#/$defs/CommunityGameDetailPublicRead"
+      },
+      "title": "Response List Community Game Details Community Game Details Get",
+      "type": "array"
+    },
+    "GET /game-chats/{game_chat_id}/read-state": {
+      "$ref": "#/$defs/GameChatReadStateRead"
+    },
+    "GET /game-images": {
+      "items": {
+        "$ref": "#/$defs/GameImagePublicRead"
+      },
+      "title": "Response List Game Images Game Images Get",
+      "type": "array"
+    },
+    "GET /games/{game_id}": {
+      "$ref": "#/$defs/GameDetailRead"
+    },
+    "GET /games/{game_id}/change-review": {
+      "$ref": "#/$defs/GameChangeReviewRead"
+    },
+    "GET /games/{game_id}/participants": {
+      "items": {
+        "$ref": "#/$defs/PublicGameParticipantRead"
+      },
+      "title": "Response List Game Roster Participants Games  Game Id  Participants Get",
+      "type": "array"
+    },
+    "GET /venue-images": {
+      "items": {
+        "$ref": "#/$defs/VenueImagePublicRead"
+      },
+      "title": "Response List Venue Images Venue Images Get",
+      "type": "array"
+    },
+    "GET /venues/{venue_id}": {
+      "$ref": "#/$defs/VenueRead"
+    },
+    "POST /chat-messages": {
+      "$ref": "#/$defs/ChatMessageParticipantRead"
+    },
+    "POST /game-chats/for-game/{game_id}": {
+      "$ref": "#/$defs/GameChatRead"
+    },
+    "POST /game-chats/{game_chat_id}/read": {
+      "$ref": "#/$defs/GameChatReadStateRead"
+    },
+    "POST /games/{game_id}/cancel": {
+      "$ref": "#/$defs/GameDetailRead"
+    },
+    "POST /games/{game_id}/change-removal-requests": {
+      "$ref": "#/$defs/GameChangeRemovalRequestRead"
+    },
+    "POST /games/{game_id}/guests/add": {
+      "$ref": "#/$defs/GameGuestAddRead"
+    },
+    "POST /games/{game_id}/guests/remove": {
+      "$ref": "#/$defs/GameGuestRemoveRead"
+    },
+    "POST /games/{game_id}/leave": {
+      "$ref": "#/$defs/GameLeaveRead"
+    }
+  }
+}

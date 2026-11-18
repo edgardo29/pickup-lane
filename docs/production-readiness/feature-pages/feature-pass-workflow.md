@@ -211,7 +211,9 @@ If publication is authorized:
 
 4. Confirm that every "Result" in Feature Pass Plan, Section 2.1 (Backend tests) and Section 2.2 (Frontend tests) is **Pass** and was reviewed in Gate D. Do not introduce additional tests or expand the verification scope during Gate E. If required verification is missing, failed, or invalidated by subsequent changes, stop and return to Gate C.
 
-5. Commit and push normally only after the preceding requirements pass. Create or update the pull request. Confirm its base branch, source branch, title, and description. Inspect the complete pull-request diff and verify that it contains only the exact changes approved in Gate D.
+5. Record the page's completion date in `docs/production-readiness/feature-pages/feature-pass-completion-log.md` as part of the pass PR, following the completion rules below. Merging the PR records the completion; do not change the log after the merge.
+
+6. Commit and push normally only after the preceding requirements pass. Create or update the pull request. Confirm its base branch, source branch, title, and description. Inspect the complete pull-request diff and verify that it contains only the exact changes approved in Gate D.
 
 **Stop publication if any file or artifact is unrelated, unreviewed, or differs from its Gate D-approved contents; any sensitive-information finding remains unresolved; or any required verification or security inspection is missing or failed.**
 
@@ -219,9 +221,9 @@ Return changed or defective work to Gate C for correction and repeat Gate D befo
 
 Leave the pull request open for manual merge. All applicable reviews and any checks required by the repository's existing branch-protection settings must pass before merging. Do not assume unconfigured CI checks exist. Merge only when explicitly authorized.
 
-After manual merge, confirm that the intended changes reached the base branch and that their verification remains valid. If the page required no pull request, confirm its accepted result directly. A successful merge alone does not establish page completion.
+After manual merge, confirm that the intended changes reached the base branch and that their verification remains valid. If the page required no pull request, confirm its accepted result directly.
 
-`docs/production-readiness/feature-pages/feature-pass-completion-log.md` is the only feature completion record. Enter a completion date only after the result is accepted, the selected page satisfies its specification's Sections 3 and 4 and applicable shared rules, and all applicable Section 5 scenarios have passed.
+`docs/production-readiness/feature-pages/feature-pass-completion-log.md` is the only feature completion record. Enter the completion date in the pass PR only when the selected page satisfies its specification's Sections 3 and 4 and applicable shared rules, and all applicable Section 5 scenarios have passed.
 
 A connected page pass does not need to be complete first if every requirement
 and scenario for the selected page passes, including its required interactions

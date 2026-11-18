@@ -50,6 +50,8 @@ export function getJoinLabel({
   isPublished,
   isHost,
   isJoining,
+  isPaused = false,
+  isSuspended = false,
   participantSummary,
   waitlistEnabled,
 }) {
@@ -71,6 +73,14 @@ export function getJoinLabel({
 
   if (currentParticipant) {
     return 'Joined'
+  }
+
+  if (isPaused) {
+    return 'Joining Temporarily Paused'
+  }
+
+  if (isSuspended) {
+    return 'Joining Unavailable'
   }
 
   if (isGameClosed) {
