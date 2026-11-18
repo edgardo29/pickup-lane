@@ -17,8 +17,10 @@ from backend.models import (
     Booking,
     CommunityGameDetail,
     Game,
+    GameCredit,
     GameParticipant,
     User,
+    UserPaymentMethod,
     Venue,
 )
 
@@ -222,6 +224,46 @@ def make_community_game_detail(
     }
     values.update(overrides)
     return _save(db, CommunityGameDetail(**values))
+
+
+def make_saved_card(db: Session, *, user: User, **overrides) -> UserPaymentMethod:
+    """Create an active, unexpired saved card linked to ``user``'s Stripe customer.
+
+    ``user`` must already have a ``stripe_customer_id``.
+    """
+    suffix = uuid.uuid4().hex[:10]
+    values = {
+        "id": uuid.uuid4(),
+        "user_id": user.id,
+        "stripe_customer_id": user.stripe_customer_id,
+        "stripe_payment_method_id": f"pm_test_{suffix}",
+        "card_fingerprint": f"fp_{suffix}",
+        "card_brand": "visa",
+        "card_last4": "4242",
+        "exp_month": 12,
+        "exp_year": _now().year + 3,
+        "method_status": "active",
+        "is_default": True,
+    }
+    values.update(overrides)
+    return _save(db, UserPaymentMethod(**values))
+
+
+def make_game_credit(
+    db: Session, *, user: User, amount_cents: int, **overrides
+) -> GameCredit:
+    """Create active game credit that ``user`` can spend in full."""
+    values = {
+        "id": uuid.uuid4(),
+        "user_id": user.id,
+        "amount_cents": amount_cents,
+        "available_cents": amount_cents,
+        "credit_status": "active",
+        "credit_reason": "admin_credit",
+        "idempotency_key": f"test-credit-{uuid.uuid4().hex}",
+    }
+    values.update(overrides)
+    return _save(db, GameCredit(**values))
 
 
 # Valid production settings, for tests of startup validation. All values are

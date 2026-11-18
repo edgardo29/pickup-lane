@@ -13,6 +13,7 @@ export function GameCheckoutSummaryCard({
   onConfirmBooking,
   platformFee,
   price,
+  quote,
   total,
 }) {
   return (
@@ -31,11 +32,28 @@ export function GameCheckoutSummaryCard({
         />
       )}
       {!isWaitlistCheckout && <CheckoutLine label="Pickup Lane fee" value={formatMoney(platformFee)} />}
+      {quote?.credit_applied_cents > 0 && (
+        <CheckoutLine
+          label="Game credit applied"
+          value={`-${formatMoney(quote.credit_applied_cents)}`}
+        />
+      )}
+      {quote?.minimum_charge_adjustment_cents > 0 && (
+        <CheckoutLine
+          label="Covered by Pickup Lane"
+          value={`-${formatMoney(quote.minimum_charge_adjustment_cents)}`}
+        />
+      )}
       {isWaitlistCheckout && <p className="checkout-summary-note">No charge now</p>}
       <div className="checkout-total">
-        <span>Total</span>
-        <strong>{formatMoney(total)}</strong>
+        <span>{quote ? 'Amount due' : 'Total'}</span>
+        <strong>{formatMoney(quote ? quote.final_amount_due_cents : total)}</strong>
       </div>
+      {quote?.available_credit_cents > 0 && (
+        <p className="checkout-summary-note">
+          Available game credit: {formatMoney(quote.available_credit_cents)}
+        </p>
+      )}
 
       {isWaitlistCheckout && (
         <p className="checkout-summary-waitlist-note">

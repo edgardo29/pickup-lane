@@ -319,7 +319,6 @@ DEFAULT_GAME_DETAILS = {
     "custom_rules_text": None,
     "custom_cancellation_text": None,
     "game_notes": "Bring a white and a dark shirt.",
-    "minimum_age": 18,
 }
 
 GAME_DETAILS_BY_KEY = {
@@ -412,7 +411,6 @@ def seed_games(
                 "total_spots": game_data["total_spots"],
                 "price_per_player_cents": game_data["price_per_player_cents"],
                 "currency": "USD",
-                "minimum_age": details["minimum_age"] if is_community else None,
                 "allow_guests": True,
                 "max_guests_per_booking": 2,
                 "host_guest_max": 0,

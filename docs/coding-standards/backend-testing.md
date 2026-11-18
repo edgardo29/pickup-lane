@@ -203,6 +203,12 @@ Ordinary tests never call Stripe, Firebase, or Cloudflare R2, and the network
 block makes such a call fail. Replace the service with a fake through
 `app.dependency_overrides` or `monkeypatch`.
 
+The root `conftest.py` provides two such fakes. The `firebase` fixture answers
+sign-in checks. The `stripe` fixture turns payments on and answers the Stripe
+calls checkout and the waitlist make; set `stripe.confirm_status` to choose how
+a confirmation turns out, and call `stripe.report(db, payment, status)` to
+simulate Stripe's webhook reporting a payment's new status.
+
 A check against the real service is marked `live` and `enable_socket`. It runs
 only with `pytest --live`, on purpose, and uses separate test credentials,
 never the app's own. The Cloudflare R2 check reads the `R2_TEST_*` values

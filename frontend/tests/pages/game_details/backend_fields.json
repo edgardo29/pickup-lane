@@ -540,17 +540,6 @@
           "title": "Max Guests Per Booking",
           "type": "integer"
         },
-        "minimum_age": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Minimum Age"
-        },
         "neighborhood_snapshot": {
           "anyOf": [
             {
@@ -670,7 +659,6 @@
         "total_spots",
         "price_per_player_cents",
         "currency",
-        "minimum_age",
         "allow_guests",
         "max_guests_per_booking",
         "waitlist_enabled",

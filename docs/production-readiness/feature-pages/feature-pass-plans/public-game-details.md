@@ -53,7 +53,7 @@
 | 19 | Unverified email rejected for protected actions | Yes | Pass |
 | 20 | Suspended player keeps existing actions, blocked from new ones | Yes | Pass |
 | 21 | Removal request after an official game changes | Yes | Pass |
-| 22 | Added guests in a paid official game after a successful charge | No | |
+| 22 | Added guests in a paid official game after a successful charge | Yes | Pass |
 | 24 | Paused game rejects joins and added guests, allows leaving | Yes | Pass |
 | 25 | Resumed game accepts joins; bypassed paused action rejected | Yes | Pass |
 | 26 | Official game edit leaves the booking confirmed | Yes | Pass |
@@ -105,5 +105,4 @@
 
 ## Blocked
 
-- **Scenario 22 (item 10):** blocked by Game Checkout (F17), which owns the paid official add-guest flow and its Stripe charge. Re-run scenario 22 when F17 is complete.
 - **Scenario 28 (item 11):** blocked by the staff action that removes a suspended community host, owned by Community Game Detail and User Detail. Re-run scenario 28 when that action exists.

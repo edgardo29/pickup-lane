@@ -28,7 +28,6 @@ from backend.services.game_rules import (
     game_requires_app_player_payment,
     require_community_game_joining_open,
     require_join_ready_user,
-    require_minimum_age,
     require_roster_window_open,
     validate_guest_count,
 )
@@ -174,7 +173,6 @@ def join_game_roster_workflow(
         )
 
     require_join_ready_user(joining_user)
-    require_minimum_age(joining_user, db_game.minimum_age)
 
     if db_game.host_user_id == joining_user.id:
         raise HTTPException(

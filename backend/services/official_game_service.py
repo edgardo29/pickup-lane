@@ -241,7 +241,6 @@ def build_official_game_data(
         "total_spots": create_request.total_spots,
         "price_per_player_cents": create_request.price_per_player_cents,
         "currency": "USD",
-        "minimum_age": None,
         "allow_guests": create_request.allow_guests,
         "max_guests_per_booking": create_request.max_guests_per_booking,
         "host_guest_max": 0,
@@ -434,7 +433,6 @@ def build_effective_official_game_data(
             "price_per_player_cents", game.price_per_player_cents
         ),
         "currency": game.currency,
-        "minimum_age": game.minimum_age,
         "allow_guests": update_data.get("allow_guests", game.allow_guests),
         "max_guests_per_booking": update_data.get(
             "max_guests_per_booking", game.max_guests_per_booking

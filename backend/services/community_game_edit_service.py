@@ -331,7 +331,6 @@ def host_edit_game_workflow(
             "price_per_player_cents", db_game.price_per_player_cents
         ),
         "currency": db_game.currency,
-        "minimum_age": db_game.minimum_age,
         "allow_guests": db_game.allow_guests,
         "max_guests_per_booking": db_game.max_guests_per_booking,
         "host_guest_max": update_data.get("host_guest_max", db_game.host_guest_max),

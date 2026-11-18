@@ -106,6 +106,10 @@ class GameParticipant(Base):
             ),
             name="ck_game_participants_attendance_requires_decided_at",
         ),
+        CheckConstraint(
+            "(hold_expires_at IS NULL OR participant_status = 'pending_payment')",
+            name="ck_game_participants_hold_requires_pending_payment",
+        ),
         # These indexes support roster lookups, booking joins, and operational
         # views without trying to encode capacity rules at the database level.
         Index("ix_game_participants_game_id", "game_id"),
@@ -213,6 +217,11 @@ class GameParticipant(Base):
         DateTime(timezone=True), nullable=True
     )
     attendance_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # When a guest added to a confirmed booking stops holding a spot while its
+    # separate payment is pending.
+    hold_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")
     )

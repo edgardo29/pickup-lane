@@ -99,14 +99,6 @@ class Game(Base):
             name="ck_games_host_guest_max",
         ),
         CheckConstraint(
-            "(minimum_age IS NULL OR minimum_age >= 13)",
-            name="ck_games_minimum_age",
-        ),
-        CheckConstraint(
-            "(game_type <> 'official' OR minimum_age IS NULL)",
-            name="ck_games_official_minimum_age_null",
-        ),
-        CheckConstraint(
             "(game_type <> 'official' OR host_guest_max = 0)",
             name="ck_games_official_host_guest_max_zero",
         ),
@@ -376,7 +368,6 @@ class Game(Base):
     currency: Mapped[str] = mapped_column(
         CHAR(3), nullable=False, server_default=text("'USD'")
     )
-    minimum_age: Mapped[int | None] = mapped_column(Integer, nullable=True)
     allow_guests: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")
     )

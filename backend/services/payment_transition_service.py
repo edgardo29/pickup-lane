@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from backend.models import Booking, Game, Payment
 from backend.observability.timeouts import PublicTimeoutError
 from backend.services.payment_lifecycle_policy import canonical_fingerprint
+from backend.services.payment_rules import is_guest_checkout_payment
 from backend.services.stripe_service import (
     StripeConfigError,
     create_payment_intent,
@@ -31,6 +32,20 @@ def _creation_identity(payment: Payment, booking: Booking) -> dict[str, object]:
             "participant_count": booking.participant_count,
             "waitlist_entry_id": metadata.get("waitlist_entry_id"),
         }
+    if is_guest_checkout_payment(metadata):
+        # The booking's player count changes when the guests are added, so a
+        # guest payment is identified by its own guest count.
+        return guest_checkout_payment_identity(
+            payment_id=payment.id,
+            booking_id=booking.id,
+            payer_user_id=payment.payer_user_id,
+            provider_customer_id=payment.provider_customer_id,
+            amount_cents=payment.amount_cents,
+            currency=payment.currency,
+            game_id=booking.game_id,
+            guest_count=metadata.get("guest_count"),
+            credit_applied_cents=metadata.get("credit_applied_cents", 0),
+        )
     return {
         "payment_id": str(payment.id),
         "booking_id": str(booking.id),
@@ -42,6 +57,52 @@ def _creation_identity(payment: Payment, booking: Booking) -> dict[str, object]:
         "participant_count": booking.participant_count,
         "credit_applied_cents": metadata.get("credit_applied_cents", 0),
         "checkout_total_cents": metadata.get("checkout_total_cents"),
+    }
+
+
+def guest_checkout_stripe_metadata(
+    payment: Payment, game_id: uuid.UUID
+) -> dict[str, object]:
+    """The metadata a guest payment sends to Stripe."""
+    metadata = dict(payment.payment_metadata or {})
+    return {
+        "source": metadata.get("source"),
+        "payment_id": str(payment.id),
+        "booking_id": str(payment.booking_id),
+        "game_id": str(game_id),
+        "user_id": str(payment.payer_user_id),
+        "guest_count": metadata.get("guest_count"),
+        "credit_applied_cents": metadata.get("credit_applied_cents"),
+        "minimum_charge_adjustment_cents": metadata.get(
+            "minimum_charge_adjustment_cents"
+        ),
+        "stripe_amount_cents": payment.amount_cents,
+    }
+
+
+def guest_checkout_payment_identity(
+    *,
+    payment_id: uuid.UUID,
+    booking_id: uuid.UUID,
+    payer_user_id: uuid.UUID,
+    provider_customer_id: str | None,
+    amount_cents: int,
+    currency: str,
+    game_id: uuid.UUID,
+    guest_count: object,
+    credit_applied_cents: object,
+) -> dict[str, object]:
+    """What a guest payment was created for, shared by checkout and recovery."""
+    return {
+        "payment_id": str(payment_id),
+        "booking_id": str(booking_id),
+        "payer_user_id": str(payer_user_id),
+        "provider_customer_id": provider_customer_id,
+        "amount_cents": amount_cents,
+        "currency": currency,
+        "game_id": str(game_id),
+        "guest_count": guest_count,
+        "credit_applied_cents": credit_applied_cents,
     }
 
 
@@ -57,6 +118,8 @@ def _creation_metadata(payment: Payment, booking: Booking) -> dict[str, object]:
             "waitlist_entry_id": metadata.get("waitlist_entry_id"),
             "authorized_amount_cents": metadata.get("authorized_amount_cents"),
         }
+    if is_guest_checkout_payment(metadata):
+        return guest_checkout_stripe_metadata(payment, booking.game_id)
     return {
         "payment_id": str(payment.id),
         "booking_id": str(booking.id),

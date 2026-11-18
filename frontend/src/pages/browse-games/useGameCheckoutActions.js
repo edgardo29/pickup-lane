@@ -13,13 +13,6 @@ function wait(milliseconds) {
 }
 
 export function describeCheckoutStatus(checkoutStatus) {
-  if (
-    checkoutStatus.booking_status === 'confirmed' &&
-    checkoutStatus.booking_payment_status === 'paid' &&
-    checkoutStatus.payment_status === 'succeeded'
-  ) {
-    return { outcome: 'confirmed', message: '' }
-  }
   if (checkoutStatus.booking_status === 'capacity_conflict') {
     return {
       outcome: 'stopped',
@@ -34,6 +27,21 @@ export function describeCheckoutStatus(checkoutStatus) {
       outcome: 'stopped',
       message: 'Your payment completed after the spot expired. A refund is required.',
     }
+  }
+  // Added guests whose payment arrived too late: the booking itself stays
+  // confirmed, but that payment is being refunded.
+  if (checkoutStatus.compensation_status) {
+    return {
+      outcome: 'stopped',
+      message: 'Your payment completed, but the guests could not be added. A refund is required.',
+    }
+  }
+  if (
+    checkoutStatus.booking_status === 'confirmed' &&
+    checkoutStatus.booking_payment_status === 'paid' &&
+    checkoutStatus.payment_status === 'succeeded'
+  ) {
+    return { outcome: 'confirmed', message: '' }
   }
   if (checkoutStatus.booking_status === 'expired') {
     return {
@@ -140,6 +148,7 @@ export function useGameCheckoutActions({ navigate }) {
       existingParticipant,
       firebaseUser,
       game,
+      isAddGuestsCheckout = false,
       isJoinWindowClosed,
       isPaymentResume,
       paymentMethodId,
@@ -152,7 +161,9 @@ export function useGameCheckoutActions({ navigate }) {
         !appUser?.id ||
         !firebaseUser ||
         isJoinWindowClosed ||
-        (existingParticipant && !isPaymentResume)
+        (!isAddGuestsCheckout && existingParticipant && !isPaymentResume) ||
+        (isAddGuestsCheckout &&
+          (existingParticipant?.participant_status !== 'confirmed' || effectiveGuestCount <= 0))
       ) {
         return null
       }
@@ -166,6 +177,7 @@ export function useGameCheckoutActions({ navigate }) {
 
       try {
         const paymentIntent = await createGameCheckoutPaymentIntent({
+          addGuests: isAddGuestsCheckout,
           firebaseUser,
           gameId: game.id,
           guestCount: effectiveGuestCount,
@@ -234,6 +246,7 @@ export function useGameCheckoutActions({ navigate }) {
       game,
       isAddGuestsCheckout,
       isJoinWindowClosed,
+      waitlistPaymentMethodId,
     }) => {
       const isExistingConfirmedPlayer = existingParticipant?.participant_status === 'confirmed'
       if (
@@ -260,6 +273,7 @@ export function useGameCheckoutActions({ navigate }) {
           guestCount: effectiveGuestCount,
           firebaseUser,
           isAddGuestsCheckout,
+          waitlistPaymentMethodId,
         })
         navigate(`/games/${game.id}`, { replace: true })
       } catch (requestError) {

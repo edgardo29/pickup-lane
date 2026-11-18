@@ -141,7 +141,6 @@ def build_game_detail_read(
         total_spots=game.total_spots,
         price_per_player_cents=game.price_per_player_cents,
         currency=game.currency,
-        minimum_age=game.minimum_age,
         allow_guests=game.allow_guests,
         max_guests_per_booking=game.max_guests_per_booking,
         host_guest_max=game.host_guest_max if is_host_or_admin else 0,
@@ -254,7 +253,6 @@ def build_game_create_data(
         "total_spots": request_data["total_spots"],
         "price_per_player_cents": price_per_player_cents,
         "currency": "USD",
-        "minimum_age": None if is_official else 18,
         "allow_guests": request_data["allow_guests"],
         "max_guests_per_booking": request_data["max_guests_per_booking"],
         "host_guest_max": None,
@@ -810,6 +808,13 @@ def build_capacity_holding_participant_condition(now: datetime):
             Booking.expires_at.is_not(None),
             Booking.expires_at > now,
             Booking.payment_status.in_(ACTIVE_PAYMENT_HOLD_BOOKING_STATUSES),
+        ),
+        # A guest being added to a confirmed booking holds a spot until its
+        # own payment hold ends.
+        and_(
+            GameParticipant.participant_status == "pending_payment",
+            GameParticipant.hold_expires_at.is_not(None),
+            GameParticipant.hold_expires_at > now,
         ),
     )
 
@@ -1430,7 +1435,6 @@ def update_game_workflow(
             "price_per_player_cents", db_game.price_per_player_cents
         ),
         "currency": update_data.get("currency", db_game.currency),
-        "minimum_age": update_data.get("minimum_age", db_game.minimum_age),
         "allow_guests": update_data.get("allow_guests", db_game.allow_guests),
         "max_guests_per_booking": update_data.get(
             "max_guests_per_booking", db_game.max_guests_per_booking

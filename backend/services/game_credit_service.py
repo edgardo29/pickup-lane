@@ -76,10 +76,9 @@ def calculate_game_credit_application(
     minimum_charge_adjustment_cents = 0
     stripe_amount_cents = remaining_due_cents
 
-    if (
-        credit_applied_cents > 0
-        and 0 < remaining_due_cents < minimum_stripe_charge_cents
-    ):
+    # Pickup Lane covers a positive balance below Stripe's minimum charge,
+    # whether or not any credit was applied, instead of charging the card.
+    if 0 < remaining_due_cents < minimum_stripe_charge_cents:
         minimum_charge_adjustment_cents = remaining_due_cents
         stripe_amount_cents = 0
 
@@ -210,7 +209,9 @@ def get_checkout_redeem_usages_for_update(
     db: Session,
     booking_id: uuid.UUID,
     user_id: uuid.UUID | None = None,
+    payment_id: uuid.UUID | None = None,
 ) -> list[GameCreditUsage]:
+    """Lock a booking's credit usage; with payment_id, only that payment's."""
     statement = (
         select(GameCreditUsage)
         .join(GameCredit, GameCreditUsage.game_credit_id == GameCredit.id)
@@ -228,6 +229,8 @@ def get_checkout_redeem_usages_for_update(
     )
     if user_id is not None:
         statement = statement.where(GameCredit.user_id == user_id)
+    if payment_id is not None:
+        statement = statement.where(GameCreditUsage.payment_id == payment_id)
 
     return list(db.scalars(statement).all())
 
@@ -320,15 +323,26 @@ def reserve_game_credits(
     payment_id: uuid.UUID | None = None,
     now: datetime,
     idempotency_scope: str,
+    reuse_existing: bool = True,
 ) -> list[GameCreditUsage]:
+    """Reserve credit for a booking.
+
+    By default a repeated checkout reuses the booking's existing reservation.
+    Guests added to a confirmed booking pass reuse_existing=False, because the
+    booking's earlier credit belongs to the original checkout.
+    """
     if amount_cents <= 0:
         return []
 
-    existing_usages = [
-        usage
-        for usage in get_checkout_redeem_usages_for_update(db, booking_id, user_id)
-        if usage.usage_status in CONSUMING_REDEEM_STATUSES
-    ]
+    existing_usages = (
+        [
+            usage
+            for usage in get_checkout_redeem_usages_for_update(db, booking_id, user_id)
+            if usage.usage_status in CONSUMING_REDEEM_STATUSES
+        ]
+        if reuse_existing
+        else []
+    )
     if existing_usages:
         existing_total = sum(usage.amount_cents for usage in existing_usages)
         if existing_total != amount_cents:
@@ -388,30 +402,39 @@ def redeem_reserved_game_credits(
     *,
     now: datetime,
     user_id: uuid.UUID | None = None,
+    payment_id: uuid.UUID | None = None,
 ) -> list[GameCreditUsage]:
-    usages = get_checkout_redeem_usages_for_update(db, booking_id, user_id)
+    usages = get_checkout_redeem_usages_for_update(db, booking_id, user_id, payment_id)
     for usage in usages:
-        if usage.usage_status == REDEEMED_USAGE_STATUS:
-            continue
-        if usage.usage_status != RESERVED_USAGE_STATUS:
-            raise GameCreditLedgerError(
-                "Only reserved game credit usage can be redeemed."
-            )
-
-        game_credit = lock_game_credit(db, usage.game_credit_id)
-        if game_credit is None:
-            raise GameCreditLedgerError("Game credit grant was not found.")
-        if game_credit.credit_status == "reversed":
-            raise GameCreditLedgerError("Reversed game credit cannot be redeemed.")
-
-        usage.usage_status = REDEEMED_USAGE_STATUS
-        usage.redeemed_at = usage.redeemed_at or now
-        usage.updated_at = now
-        db.add(usage)
-        mark_credit_used_if_fully_redeemed(db, game_credit, now=now)
+        redeem_reserved_game_credit_usage_record(db, usage, now=now)
 
     db.flush()
     return usages
+
+
+def redeem_reserved_game_credit_usage_record(
+    db: Session,
+    usage: GameCreditUsage,
+    *,
+    now: datetime,
+) -> GameCreditUsage:
+    if usage.usage_status == REDEEMED_USAGE_STATUS:
+        return usage
+    if usage.usage_status != RESERVED_USAGE_STATUS:
+        raise GameCreditLedgerError("Only reserved game credit usage can be redeemed.")
+
+    game_credit = lock_game_credit(db, usage.game_credit_id)
+    if game_credit is None:
+        raise GameCreditLedgerError("Game credit grant was not found.")
+    if game_credit.credit_status == "reversed":
+        raise GameCreditLedgerError("Reversed game credit cannot be redeemed.")
+
+    usage.usage_status = REDEEMED_USAGE_STATUS
+    usage.redeemed_at = usage.redeemed_at or now
+    usage.updated_at = now
+    db.add(usage)
+    mark_credit_used_if_fully_redeemed(db, game_credit, now=now)
+    return usage
 
 
 def release_reserved_game_credits(
@@ -421,8 +444,9 @@ def release_reserved_game_credits(
     now: datetime,
     reason_code: str,
     user_id: uuid.UUID | None = None,
+    payment_id: uuid.UUID | None = None,
 ) -> list[GameCreditUsage]:
-    usages = get_checkout_redeem_usages_for_update(db, booking_id, user_id)
+    usages = get_checkout_redeem_usages_for_update(db, booking_id, user_id, payment_id)
     released_usages: list[GameCreditUsage] = []
 
     for usage in usages:

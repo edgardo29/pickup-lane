@@ -317,3 +317,141 @@ def firebase(monkeypatch: pytest.MonkeyPatch) -> FakeFirebase:
     monkeypatch.setattr(auth, "get_user", fake.get_user)
     monkeypatch.setattr(auth, "delete_user", fake.delete_user)
     return fake
+
+
+# Stripe, faked like Firebase above. App modules are imported inside functions:
+# importing them at module level would load the app's settings too early.
+
+
+class FakeStripe:
+    """Answers the Stripe calls checkout makes, without the network."""
+
+    def __init__(self) -> None:
+        self.intents: dict = {}
+        self.cards: dict = {}
+        # What confirming a payment returns: "succeeded", "requires_action",
+        # "requires_payment_method", or "processing".
+        self.confirm_status = "succeeded"
+        self.created: list[dict] = []
+
+    def create_payment_intent(
+        self, *, amount_cents, currency, idempotency_key, metadata, customer_id=None
+    ):
+        from backend.services.stripe_service import StripePaymentIntentResult
+
+        for intent in self.intents.values():
+            if intent.metadata.get("_key") == idempotency_key:
+                return intent
+        intent_id = f"pi_test_{uuid.uuid4().hex[:12]}"
+        intent = StripePaymentIntentResult(
+            id=intent_id,
+            client_secret=f"{intent_id}_secret",
+            status="requires_payment_method",
+            amount_cents=amount_cents,
+            currency=currency.lower(),
+            customer_id=customer_id,
+            metadata={
+                **{key: str(value) for key, value in metadata.items()},
+                "_key": idempotency_key,
+            },
+        )
+        self.intents[intent_id] = intent
+        self.created.append({"amount_cents": amount_cents, "metadata": metadata})
+        return intent
+
+    def confirm_payment_intent(
+        self,
+        payment_intent_id,
+        *,
+        payment_method_id,
+        return_url=None,
+        off_session=False,
+        idempotency_key=None,
+    ):
+        return self._set_status(payment_intent_id, self.confirm_status)
+
+    def retrieve_payment_intent(self, payment_intent_id):
+        return self.intents[payment_intent_id]
+
+    def retrieve_payment_method(self, payment_method_id):
+        return self.cards[payment_method_id]
+
+    def _set_status(self, payment_intent_id, status):
+        from backend.services.stripe_service import StripePaymentIntentResult
+
+        intent = self.intents[payment_intent_id]
+        updated = StripePaymentIntentResult(
+            id=intent.id,
+            client_secret=intent.client_secret,
+            status=status,
+            latest_charge_id=f"ch_{intent.id}" if status == "succeeded" else None,
+            amount_cents=intent.amount_cents,
+            amount_received_cents=intent.amount_cents if status == "succeeded" else 0,
+            currency=intent.currency,
+            customer_id=intent.customer_id,
+            metadata=intent.metadata,
+            failure_code="card_declined"
+            if status == "requires_payment_method"
+            else None,
+        )
+        self.intents[payment_intent_id] = updated
+        return updated
+
+    def report(self, db, payment, status: str) -> None:
+        """Simulate Stripe telling the app a payment's new status."""
+        from backend.models import Payment
+        from backend.services.stripe_webhook_service import (
+            apply_authoritative_payment_intent_observation,
+            lock_booking_payment_domain,
+        )
+
+        observation = self._set_status(payment.provider_payment_intent_id, status)
+        # A real webhook runs in a fresh session; drop what this test session
+        # remembers so the handler reads the current rows.
+        db.expire_all()
+        lock_booking_payment_domain(db, payment)
+        apply_authoritative_payment_intent_observation(
+            db,
+            payment=db.get(Payment, payment.id),
+            observation=observation,
+            source=f"test_webhook_{uuid.uuid4().hex[:8]}",
+            now=database_now(db),
+        )
+        db.commit()
+
+
+@pytest.fixture
+def stripe(monkeypatch: pytest.MonkeyPatch) -> FakeStripe:
+    """Turn payments on and replace Stripe with FakeStripe for this test."""
+    from backend.services import (
+        checkout_service,
+        game_waitlist_service,
+        payment_method_service,
+        payment_transition_service,
+    )
+
+    fake = FakeStripe()
+    for module in (checkout_service, game_waitlist_service, payment_transition_service):
+        for name in (
+            "create_payment_intent",
+            "confirm_payment_intent",
+            "retrieve_payment_intent",
+            "retrieve_payment_method",
+        ):
+            if hasattr(module, name):
+                monkeypatch.setattr(module, name, getattr(fake, name))
+    monkeypatch.setattr(checkout_service, "stripe_payments_enabled", lambda: True)
+    monkeypatch.setattr(checkout_service, "get_stripe_currency", lambda: "USD")
+    monkeypatch.setattr(
+        payment_method_service,
+        "verify_saved_payment_method_with_stripe",
+        lambda *args, **kwargs: None,
+    )
+    return fake
+
+
+def database_now(db) -> datetime:
+    """Checkout and payments read PostgreSQL's clock, so tests build times from it."""
+    from sqlalchemy import func, select
+
+    return db.scalar(select(func.now()))

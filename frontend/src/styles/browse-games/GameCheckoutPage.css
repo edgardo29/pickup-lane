@@ -766,6 +766,23 @@
   margin-top: 10px;
 }
 
+.checkout-waitlist-consent {
+  margin-top: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--text-body);
+  font-size: 0.86rem;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.checkout-waitlist-consent input {
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: var(--lime);
+}
+
 .checkout-policy {
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr);

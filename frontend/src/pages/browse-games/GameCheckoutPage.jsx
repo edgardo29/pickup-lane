@@ -17,6 +17,7 @@ import { GameCheckoutPaymentSelector } from './GameCheckoutPaymentSelector.jsx'
 import { buildGameCheckoutViewModel } from './gameCheckoutViewModel.js'
 import { useGameCheckoutActions } from './useGameCheckoutActions.js'
 import { useGameCheckoutData } from './useGameCheckoutData.js'
+import { useGameCheckoutQuote } from './useGameCheckoutQuote.js'
 import { useAuth } from '../../hooks/useAuth.js'
 import {
   createPaymentMethodOperationId,
@@ -54,6 +55,7 @@ function GameCheckoutPage() {
       : 0
   ))
   const [agreed, setAgreed] = useState(false)
+  const [autoChargeConsent, setAutoChargeConsent] = useState(false)
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState('')
   const [setupClientSecret, setSetupClientSecret] = useState('')
   const [setupError, setSetupError] = useState('')
@@ -111,6 +113,25 @@ function GameCheckoutPage() {
     selectedPaymentMethodId: effectiveSelectedPaymentMethodId,
     venue: checkoutData.venue,
   })
+
+  const isOfficialInAppGame = Boolean(
+    checkoutData.game?.game_type === 'official' &&
+      checkoutData.game?.payment_collection_type === 'in_app',
+  )
+  const isStripeCheckout = Boolean(isOfficialInAppGame && !checkout.isWaitlistCheckout)
+  const isPaidWaitlistCheckout = Boolean(
+    isOfficialInAppGame && checkout.isWaitlistCheckout && !isAddGuestsCheckout,
+  )
+  const usesCardSelection = isStripeCheckout || isPaidWaitlistCheckout
+  const { quote, quoteError, quoteStatus } = useGameCheckoutQuote({
+    addGuests: isAddGuestsCheckout,
+    enabled: checkoutData.status === 'success' && isStripeCheckout,
+    firebaseUser,
+    gameId,
+    guestCount: checkout.effectiveGuestCount,
+  })
+  // Until the quote loads, assume a card may be needed.
+  const paymentRequired = quote ? quote.payment_required : true
 
   useEffect(() => {
     resetSubmitError()
@@ -275,12 +296,6 @@ function GameCheckoutPage() {
     )
   }
 
-  const isStripeCheckout = Boolean(
-    checkoutData.game?.game_type === 'official' &&
-      checkoutData.game?.payment_collection_type === 'in_app' &&
-      !checkout.isWaitlistCheckout &&
-      !isAddGuestsCheckout,
-  )
   const stripePaymentsEnabled = areStripePaymentsEnabled()
   const isStripeReady = hasStripeCheckoutSupport()
   const stripePaymentsDisabled = isStripeCheckout && !stripePaymentsEnabled
@@ -325,7 +340,12 @@ function GameCheckoutPage() {
         return
       }
 
-      if (!usesSavedPaymentMethod) {
+      if (quoteStatus !== 'success') {
+        setCheckoutActionError(quoteError || 'Loading your price...')
+        return
+      }
+
+      if (paymentRequired && !usesSavedPaymentMethod) {
         setCheckoutActionError('Add a payment method to continue.')
         return
       }
@@ -338,13 +358,26 @@ function GameCheckoutPage() {
         existingParticipant: checkout.existingParticipant,
         firebaseUser,
         game: checkoutData.game,
+        isAddGuestsCheckout,
         isJoinWindowClosed: checkout.isJoinWindowClosed,
         isPaymentResume: checkout.isPaymentResume,
-        paymentMethodId: effectiveSelectedPaymentMethodId,
+        paymentMethodId: paymentRequired ? effectiveSelectedPaymentMethodId : '',
         returnUrl: `${window.location.origin}/games/${checkoutData.game.id}/checkout`,
         stripePromise,
       })
       return
+    }
+
+    if (isPaidWaitlistCheckout) {
+      if (!selectedUsablePaymentMethod) {
+        setCheckoutActionError('Add a card to join this waitlist.')
+        return
+      }
+
+      if (!autoChargeConsent) {
+        setCheckoutActionError('Agree to the possible later charge to join this waitlist.')
+        return
+      }
     }
 
     setCheckoutActionError('')
@@ -357,6 +390,7 @@ function GameCheckoutPage() {
       game: checkoutData.game,
       isAddGuestsCheckout,
       isJoinWindowClosed: checkout.isJoinWindowClosed,
+      waitlistPaymentMethodId: isPaidWaitlistCheckout ? selectedUsablePaymentMethod.id : '',
     })
   }
   const renderLayout = () => (
@@ -364,6 +398,13 @@ function GameCheckoutPage() {
       address={checkout.address}
       agreed={agreed}
       appUser={appUser}
+      autoChargeConsent={autoChargeConsent}
+      isPaidWaitlistCheckout={isPaidWaitlistCheckout}
+      onAutoChargeConsentChange={(nextConsent) => {
+        setAutoChargeConsent(nextConsent)
+        setCheckoutActionError('')
+      }}
+      usesCardSelection={usesCardSelection}
       checkoutActionMessage={checkoutActionMessage}
       confirmLabel={confirmLabel}
       effectiveGuestCount={checkout.effectiveGuestCount}
@@ -400,6 +441,9 @@ function GameCheckoutPage() {
       price={checkout.price}
       primaryImage={checkout.primaryImage}
       projectedGuestCount={checkout.projectedGuestCount}
+      quote={quote}
+      quoteError={quoteError}
+      quoteStatus={quoteStatus}
       setupError={!setupClientSecret ? setupError : ''}
       submitError={submitError}
       stripeStatusMessage={stripeStatusMessage}
@@ -412,7 +456,7 @@ function GameCheckoutPage() {
   return (
     <>
       {renderLayout()}
-      {isPaymentSelectorOpen && isStripeCheckout && checkoutData.paymentMethods.length > 0 && (
+      {isPaymentSelectorOpen && usesCardSelection && checkoutData.paymentMethods.length > 0 && (
         <GameCheckoutPaymentSelector
           canAddPaymentMethod={canAddPaymentMethod}
           onAddNewCard={handleAddCardFromSelector}

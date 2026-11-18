@@ -13,6 +13,7 @@ function GameCheckoutLayout({
   address,
   agreed,
   appUser,
+  autoChargeConsent,
   canAddPaymentMethod,
   checkoutActionMessage,
   confirmLabel,
@@ -25,6 +26,7 @@ function GameCheckoutLayout({
   isExistingParticipantBlocked,
   isGuestSelectionLocked,
   isJoinWindowClosed,
+  isPaidWaitlistCheckout,
   isSubmitting,
   isStripeCheckout,
   isStripeReady,
@@ -33,6 +35,7 @@ function GameCheckoutLayout({
   maxSelectableGuests,
   minGuestCount,
   onAddPaymentMethod,
+  onAutoChargeConsentChange,
   onBack,
   onChangePaymentMethod,
   onConfirmBooking,
@@ -45,6 +48,9 @@ function GameCheckoutLayout({
   price,
   primaryImage,
   projectedGuestCount,
+  quote,
+  quoteError,
+  quoteStatus,
   setupError,
   submitError,
   stripePaymentsDisabled,
@@ -52,12 +58,19 @@ function GameCheckoutLayout({
   stripeUnavailable,
   title,
   total,
+  usesCardSelection,
 }) {
-  const needsPaymentMethod = isStripeCheckout && isStripeReady && !paymentMethod
+  const isPriceUnavailable = isStripeCheckout && quoteStatus !== 'success'
+  const needsPaymentMethod =
+    (isStripeCheckout && isStripeReady && !paymentMethod && quote?.payment_required === true) ||
+    (isPaidWaitlistCheckout && !paymentMethod)
+  const needsAutoChargeConsent = isPaidWaitlistCheckout && !autoChargeConsent
   const confirmDisabled =
     !agreed ||
     stripePaymentsDisabled ||
+    isPriceUnavailable ||
     needsPaymentMethod ||
+    needsAutoChargeConsent ||
     isSubmitting ||
     isBlockedByCapacity ||
     isJoinWindowClosed ||
@@ -68,9 +81,13 @@ function GameCheckoutLayout({
     ? 'Accept the terms to continue.'
     : stripePaymentsDisabled
       ? 'Official game payments are disabled for this demo.'
+      : isPriceUnavailable
+        ? quoteError || 'Loading your price...'
       : needsPaymentMethod
         ? 'Add a payment method to continue.'
-        : checkoutActionMessage
+        : needsAutoChargeConsent
+          ? 'Agree to the possible later charge to join this waitlist.'
+          : checkoutActionMessage
 
   return (
     <div className="checkout-page">
@@ -107,19 +124,24 @@ function GameCheckoutLayout({
             />
 
             <GameCheckoutPaymentCard
+              autoChargeConsent={autoChargeConsent}
               canAddPaymentMethod={canAddPaymentMethod}
-              isStripeCheckout={isStripeCheckout}
+              isPaidWaitlistCheckout={isPaidWaitlistCheckout}
+              isStripeCheckout={usesCardSelection}
               onAddPaymentMethod={onAddPaymentMethod}
+              onAutoChargeConsentChange={onAutoChargeConsentChange}
               onChangePaymentMethod={onChangePaymentMethod}
               paymentMethod={paymentMethod}
               paymentMethods={paymentMethods}
+              paymentRequired={quote ? quote.payment_required : true}
               setupError={setupError}
               stripePaymentsDisabled={stripePaymentsDisabled}
               stripeStatusMessage={stripeStatusMessage}
               stripeUnavailable={stripeUnavailable}
+              waitlistChargeCents={total}
             />
 
-            <GameCheckoutPolicyCard />
+            <GameCheckoutPolicyCard game={game} />
 
             <GameCheckoutAgreementCard
               agreed={agreed}
@@ -154,6 +176,7 @@ function GameCheckoutLayout({
             onConfirmBooking={onConfirmBooking}
             platformFee={platformFee}
             price={price}
+            quote={isStripeCheckout ? quote : null}
             total={total}
           />
         </div>

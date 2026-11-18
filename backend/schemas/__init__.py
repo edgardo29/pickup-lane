@@ -236,8 +236,10 @@ from backend.schemas.chat_message_schema import (
     ChatMessageRead,
 )
 from backend.schemas.checkout_schema import (
+    GameCheckoutGuestPaymentIntentCreate,
     GameCheckoutPaymentIntentCreate,
     GameCheckoutPaymentIntentRead,
+    GameCheckoutQuoteRead,
     GameCheckoutStatusRead,
 )
 from backend.schemas.community_game_detail_schema import (
@@ -637,8 +639,10 @@ __all__ = [
     "GameChatRead",
     "GameChatReadStateRead",
     "GameChatUpdate",
+    "GameCheckoutGuestPaymentIntentCreate",
     "GameCheckoutPaymentIntentCreate",
     "GameCheckoutPaymentIntentRead",
+    "GameCheckoutQuoteRead",
     "GameCheckoutStatusRead",
     "GameCreate",
     "GameCreditBalanceRead",
