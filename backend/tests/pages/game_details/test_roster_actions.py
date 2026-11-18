@@ -6,11 +6,18 @@ import pytest
 from sqlalchemy import func, select
 
 from backend.models import GameParticipant, Payment
-from backend.tests.factories import make_booking, make_game, make_participant, make_user
+from backend.tests.conftest import database_now
+from backend.tests.factories import (
+    make_booking,
+    make_game,
+    make_participant,
+    make_saved_card,
+    make_user,
+)
 
 
-def player(db):
-    return make_user(db, date_of_birth=date(1990, 1, 1))
+def player(db, **overrides):
+    return make_user(db, date_of_birth=date(1990, 1, 1), **overrides)
 
 
 def active_count(db, game):
@@ -217,7 +224,7 @@ def test_suspended_player_cannot_add_checkout_guests_to_existing_booking(
 
 
 @pytest.mark.page("F16", 22)
-def test_paid_official_guests_are_refused_until_secure_checkout_is_available(
+def test_paid_official_guests_cannot_skip_the_checkout_charge(
     clock, db, client, firebase
 ):
     game = make_game(
@@ -255,3 +262,32 @@ def test_paid_official_join_cannot_bypass_secure_checkout(clock, db, client, fir
     assert response.status_code == 503
     assert active_count(db, game) == 0
     assert db.scalar(select(func.count(Payment.id))) == 0
+
+
+@pytest.mark.page("F16", 22)
+def test_paid_official_guests_are_added_after_their_charge_succeeds(
+    db, client, firebase, stripe
+):
+    game = make_game(
+        db,
+        starts_at=database_now(db) + timedelta(days=2),
+        allow_guests=True,
+        max_guests_per_booking=2,
+    )
+    owner = player(db, stripe_customer_id="cus_test_f16_owner")
+    card = make_saved_card(db, user=owner)
+    booking = make_booking(db, game=game, buyer=owner)
+    make_participant(db, game=game, booking=booking, user=owner)
+
+    response = client.post(
+        f"/checkout/games/{game.id}/guest-payment-intent",
+        headers=firebase.sign_in(owner),
+        json={"guest_count": 1, "payment_method_id": str(card.id)},
+    )
+
+    assert response.status_code == 201, response.text
+    payment = db.scalars(select(Payment).where(Payment.booking_id == booking.id)).one()
+    assert (payment.amount_cents, payment.payment_status) == (1000, "succeeded")
+    assert active_count(db, game) == 2
+    db.refresh(booking)
+    assert booking.participant_count == 2

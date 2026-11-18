@@ -98,7 +98,7 @@ order, not required completion prerequisites.
     <tr>
       <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;">F17</td>
       <td style="border: 1px solid #777; padding: 6px 10px;">Game Checkout</td>
-      <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;"></td>
+      <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;">2026-11-18</td>
     </tr>
     <tr>
       <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;">F18</td>

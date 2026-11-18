@@ -71,6 +71,7 @@ from backend.services.payment_lifecycle_policy import (
 from backend.services.payment_rules import (
     COLLECTED_PAYMENT_STATUSES,
     PENDING_PAYMENT_STATUSES,
+    is_guest_checkout_payment,
 )
 from backend.services.refund_event_service import (
     get_refund_attempt_by_provider_refund_id,
@@ -1581,6 +1582,21 @@ def apply_payment_intent_succeeded(
         )
         return
 
+    if is_guest_checkout_payment(payment.payment_metadata):
+        guest_payment_error = apply_guest_payment_succeeded(
+            db,
+            game=game,
+            booking=booking,
+            payment=payment,
+            payment_intent=payment_intent,
+            now=now,
+        )
+        if guest_payment_error is not None:
+            mark_event_failed(event, guest_payment_error)
+            return
+        mark_event_processed(event, now)
+        return
+
     if booking.booking_status in {"confirmed", "partially_cancelled"}:
         if payment.payment_status not in COLLECTED_PAYMENT_STATUSES:
             payment.payment_status = "succeeded"
@@ -1740,6 +1756,197 @@ def apply_payment_intent_succeeded(
             now=now,
         )
     mark_event_processed(event, now)
+
+
+def get_locked_pending_payment_guests(
+    db: Session, booking: Booking, payment: Payment
+) -> list[GameParticipant]:
+    """The guests a guest payment is paying for that are still waiting on it."""
+    guest_ids = {
+        str(guest_id)
+        for guest_id in (payment.payment_metadata or {}).get(
+            "guest_participant_ids", []
+        )
+    }
+    return [
+        guest
+        for guest in get_locked_booking_participants(
+            db, booking.id, {"pending_payment"}
+        )
+        if str(guest.id) in guest_ids
+    ]
+
+
+def apply_guest_payment_succeeded(
+    db: Session,
+    *,
+    game: Game,
+    booking: Booking,
+    payment: Payment,
+    payment_intent: dict[str, Any],
+    now: datetime,
+) -> str | None:
+    """Add the guests a payment covered, or refund it when they can't be added."""
+    from backend.services.checkout_service import (
+        add_paid_guests_to_booking,
+        cancel_pending_guests,
+    )
+
+    if payment.payment_status in COLLECTED_PAYMENT_STATUSES:
+        if payment.provider_charge_id is None:
+            payment.provider_charge_id = get_latest_charge_id(payment_intent)
+            payment.updated_at = now
+            db.add(payment)
+        return None
+
+    metadata = payment.payment_metadata or {}
+    pending_guests = get_locked_pending_payment_guests(db, booking, payment)
+    hold_is_valid = (
+        booking.booking_status in {"confirmed", "partially_cancelled"}
+        and len(pending_guests) == metadata.get("guest_count")
+        and all(
+            guest.hold_expires_at is not None and guest.hold_expires_at > now
+            for guest in pending_guests
+        )
+    )
+
+    payment.payment_status = "succeeded"
+    payment.provider_status = "succeeded"
+    payment.provider_charge_id = get_latest_charge_id(payment_intent)
+    payment.paid_at = payment.paid_at or now
+    payment.failure_code = None
+    payment.failure_message = None
+    payment.updated_at = now
+    db.add(payment)
+
+    compensation_reason = None
+    if not hold_is_valid:
+        compensation_reason = (
+            "booking_cancelled"
+            if booking.booking_status == "cancelled"
+            else "reservation_expired"
+        )
+    elif count_roster_players(db, booking.game_id, now=now) > game.total_spots:
+        compensation_reason = "capacity_conflict"
+
+    if compensation_reason is not None:
+        try:
+            release_reserved_game_credits(
+                db,
+                booking.id,
+                now=now,
+                reason_code="guest_payment_not_applied",
+                user_id=booking.buyer_user_id,
+                payment_id=payment.id,
+            )
+        except ValueError as exc:
+            return str(exc)
+        cancel_pending_guests(
+            db,
+            pending_guests,
+            now=now,
+            reason="Guest payment succeeded after the guests could no longer be added.",
+        )
+        ensure_payment_compensation(
+            db,
+            payment=payment,
+            booking=booking,
+            reason=compensation_reason,
+            now=now,
+        )
+    else:
+        try:
+            redeem_reserved_game_credits(
+                db,
+                booking.id,
+                now=now,
+                user_id=booking.buyer_user_id,
+                payment_id=payment.id,
+            )
+        except ValueError as exc:
+            return str(exc)
+        add_paid_guests_to_booking(
+            db,
+            booking,
+            pending_guests,
+            subtotal_cents=int(metadata.get("subtotal_cents", 0)),
+            discount_cents=int(metadata.get("credit_applied_cents", 0))
+            + int(metadata.get("minimum_charge_adjustment_cents", 0)),
+            charged_cents=payment.amount_cents,
+            now=now,
+            reason="Stripe payment_intent.succeeded confirmed added guests.",
+        )
+
+    sync_game_capacity_status(db, game)
+    game.updated_at = now
+    db.add(game)
+    return None
+
+
+def apply_guest_payment_failed_or_canceled(
+    db: Session,
+    *,
+    booking: Booking,
+    payment: Payment,
+    payment_intent: dict[str, Any],
+    now: datetime,
+    is_canceled: bool,
+) -> str | None:
+    """Drop the guests a failed payment was for and release their credit."""
+    from backend.services.checkout_service import cancel_pending_guests
+
+    terminal_payment_status = "canceled" if is_canceled else "failed"
+    if payment.payment_status == terminal_payment_status:
+        return None
+
+    try:
+        release_reserved_game_credits(
+            db,
+            booking.id,
+            now=now,
+            reason_code="guest_payment_failed",
+            user_id=booking.buyer_user_id,
+            payment_id=payment.id,
+        )
+    except ValueError as exc:
+        return str(exc)
+
+    cancel_pending_guests(
+        db,
+        get_locked_pending_payment_guests(db, booking, payment),
+        now=now,
+        reason="Guest payment failed, so the guests were not added.",
+    )
+    failure_code, failure_message = get_payment_failure_fields(
+        payment_intent,
+        fallback_code=(
+            "payment_intent_canceled"
+            if is_canceled
+            else "payment_intent_payment_failed"
+        ),
+        fallback_message=(
+            "Stripe payment intent was canceled."
+            if is_canceled
+            else "Stripe payment intent failed."
+        ),
+    )
+    payment.payment_status = terminal_payment_status
+    payment.provider_status = exact_provider_payment_status(
+        str(payment_intent.get("status") or terminal_payment_status)
+    )
+    payment.provider_charge_id = get_latest_charge_id(payment_intent)
+    payment.failure_code = failure_code
+    payment.failure_message = failure_message
+    payment.paid_at = None
+    payment.updated_at = now
+    db.add(payment)
+
+    game = get_locked_game(db, booking.game_id)
+    if game is not None:
+        sync_game_capacity_status(db, game)
+        game.updated_at = now
+        db.add(game)
+    return None
 
 
 def record_capacity_conflict_after_success(
@@ -2096,6 +2303,21 @@ def apply_payment_intent_failed_or_canceled(
         mark_event_ignored(
             event, "Failure or cancel event arrived after payment success."
         )
+        return
+
+    if is_guest_checkout_payment(payment.payment_metadata):
+        guest_payment_error = apply_guest_payment_failed_or_canceled(
+            db,
+            booking=booking,
+            payment=payment,
+            payment_intent=payment_intent,
+            now=now,
+            is_canceled=is_canceled,
+        )
+        if guest_payment_error is not None:
+            mark_event_failed(event, guest_payment_error)
+            return
+        mark_event_processed(event, now)
         return
 
     waitlist_entry = get_waitlist_auto_promote_entry(db, payment)

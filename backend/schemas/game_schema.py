@@ -77,7 +77,6 @@ class GameRead(BaseModel):
     total_spots: int
     price_per_player_cents: int
     currency: str
-    minimum_age: int | None
     allow_guests: bool
     max_guests_per_booking: int
     host_guest_max: int
@@ -138,7 +137,6 @@ class GameDetailRead(BaseModel):
     total_spots: int
     price_per_player_cents: int
     currency: str
-    minimum_age: int | None
     allow_guests: bool
     max_guests_per_booking: int
     host_guest_max: int = 0

@@ -61,6 +61,9 @@ def upgrade() -> None:
         sa.Column("marked_attendance_by_user_id", postgresql.UUID(as_uuid=True)),
         sa.Column("attendance_decided_at", sa.DateTime(timezone=True)),
         sa.Column("attendance_notes", sa.Text()),
+        # When a guest added to a confirmed booking stops holding a spot while
+        # its separate payment is pending.
+        sa.Column("hold_expires_at", sa.DateTime(timezone=True)),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -94,6 +97,10 @@ def upgrade() -> None:
             name="ck_game_participants_confirmed_requires_confirmed_at",
         ),
         sa.CheckConstraint("currency = 'USD'", name="ck_game_participants_currency"),
+        sa.CheckConstraint(
+            "(hold_expires_at IS NULL OR participant_status = 'pending_payment')",
+            name="ck_game_participants_hold_requires_pending_payment",
+        ),
         sa.CheckConstraint(
             "(participant_type <> 'guest' OR guest_name IS NOT NULL)",
             name="ck_game_participants_guest_requires_guest_name",

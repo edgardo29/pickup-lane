@@ -4,19 +4,24 @@ import {
   formatPaymentMethodExpiration,
   isPaymentMethodExpired,
 } from '../../lib/paymentMethodCards.js'
-import { formatPaymentMethod } from './browseGameFormatters.js'
+import { formatMoney, formatPaymentMethod } from './browseGameFormatters.js'
 
 export function GameCheckoutPaymentCard({
+  autoChargeConsent = false,
   canAddPaymentMethod = true,
+  isPaidWaitlistCheckout = false,
   isStripeCheckout,
   onAddPaymentMethod,
+  onAutoChargeConsentChange,
   onChangePaymentMethod,
   paymentMethod,
   paymentMethods = [],
+  paymentRequired = true,
   setupError = '',
   stripePaymentsDisabled,
   stripeStatusMessage,
   stripeUnavailable,
+  waitlistChargeCents = 0,
 }) {
   if (isStripeCheckout) {
     const hasSavedCards = paymentMethods.length > 0
@@ -61,17 +66,38 @@ export function GameCheckoutPaymentCard({
             </span>
           </div>
         )}
-        {!stripePaymentsDisabled && !stripeUnavailable && !hasSavedCards && (
+        {!stripePaymentsDisabled && !stripeUnavailable && !hasSavedCards && !paymentRequired && (
+          <p className="checkout-payment-note">Nothing is due, so no card is needed.</p>
+        )}
+        {!stripePaymentsDisabled && !stripeUnavailable && !hasSavedCards && paymentRequired && (
           <div className="checkout-payment-empty">
             <div>
               <strong>No payment method</strong>
-              <span>Add a card to reserve your spot.</span>
+              <span>
+                {isPaidWaitlistCheckout
+                  ? 'Add a card to join this waitlist.'
+                  : 'Add a card to reserve your spot.'}
+              </span>
             </div>
             <button disabled={!canAddPaymentMethod} type="button" onClick={onAddPaymentMethod}>
               <CreditCard aria-hidden="true" />
               <span>Add card</span>
             </button>
           </div>
+        )}
+        {isPaidWaitlistCheckout && (
+          <label className="checkout-waitlist-consent">
+            <input
+              checked={autoChargeConsent}
+              type="checkbox"
+              onChange={(event) => onAutoChargeConsentChange(event.target.checked)}
+            />
+            <span>
+              If a spot opens for your whole party, Pickup Lane will charge this card{' '}
+              {formatMoney(waitlistChargeCents)}. You won't be charged now, and leaving the
+              waitlist before a spot opens costs nothing.
+            </span>
+          </label>
         )}
         {setupError && (
           <FormErrorMessage className="checkout-payment-error">

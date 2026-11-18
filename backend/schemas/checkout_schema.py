@@ -13,6 +13,15 @@ class GameCheckoutPaymentIntentCreate(BaseModel):
     return_url: str | None = None
 
 
+# Guests added to the player's existing confirmed booking.
+class GameCheckoutGuestPaymentIntentCreate(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
+    guest_count: int = Field(ge=1, le=2)
+    payment_method_id: UUID | None = None
+    return_url: str | None = None
+
+
 class GameCheckoutPaymentIntentRead(BaseModel):
     client_secret: str | None
     booking_id: UUID
@@ -35,6 +44,18 @@ class GameCheckoutPaymentIntentRead(BaseModel):
     payment_status: str | None = None
     provider_status: str | None = None
     compensation_status: str | None = None
+
+
+# What a proposed party would cost after credit, before the player confirms.
+class GameCheckoutQuoteRead(BaseModel):
+    subtotal_cents: int
+    platform_fee_cents: int
+    checkout_total_cents: int
+    available_credit_cents: int
+    credit_applied_cents: int
+    minimum_charge_adjustment_cents: int
+    final_amount_due_cents: int
+    payment_required: bool
 
 
 class GameCheckoutStatusRead(BaseModel):

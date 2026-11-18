@@ -422,7 +422,6 @@ Core official and community game schedule, listing, and lifecycle record. Source
 | `total_spots` | `INTEGER` | No | — | — |
 | `price_per_player_cents` | `INTEGER` | No | — | — |
 | `currency` | `CHAR(3)` | No | server `'USD'` | — |
-| `minimum_age` | `INTEGER` | Yes | — | — |
 | `allow_guests` | `BOOLEAN` | No | server `true` | — |
 | `max_guests_per_booking` | `INTEGER` | No | server `2` | — |
 | `host_guest_max` | `INTEGER` | No | server `0` | — |
@@ -466,10 +465,8 @@ Core official and community game schedule, listing, and lifecycle record. Source
   - `ck_games_host_guest_max`: `host_guest_max >= 0`
   - `ck_games_join_enforcement_status`: `join_enforcement_status IN ('open', 'paused')`
   - `ck_games_max_guests_per_booking`: `max_guests_per_booking >= 0`
-  - `ck_games_minimum_age`: `(minimum_age IS NULL OR minimum_age >= 13)`
   - `ck_games_no_payment_requires_free`: `(payment_collection_type <> 'none' OR price_per_player_cents = 0)`
   - `ck_games_official_host_guest_max_zero`: `(game_type <> 'official' OR host_guest_max = 0)`
-  - `ck_games_official_minimum_age_null`: `(game_type <> 'official' OR minimum_age IS NULL)`
   - `ck_games_official_no_custom_cancellation`: `(game_type <> 'official' OR custom_cancellation_text IS NULL)`
   - `ck_games_official_no_custom_rules`: `(game_type <> 'official' OR custom_rules_text IS NULL)`
   - `ck_games_official_payment_collection`: `(game_type <> 'official' OR payment_collection_type = 'in_app')`
@@ -878,6 +875,7 @@ Roster places for players and guests. Sources: [model](../../backend/models/game
 | `marked_attendance_by_user_id` | `UUID` | Yes | — | FK → `users.id` |
 | `attendance_decided_at` | `TIMESTAMP WITH TIME ZONE` | Yes | — | — |
 | `attendance_notes` | `TEXT` | Yes | — | — |
+| `hold_expires_at` | `TIMESTAMP WITH TIME ZONE` | Yes | — | — |
 | `created_at` | `TIMESTAMP WITH TIME ZONE` | No | server `now()` | — |
 | `updated_at` | `TIMESTAMP WITH TIME ZONE` | No | server `now()` | — |
 
@@ -895,6 +893,7 @@ Roster places for players and guests. Sources: [model](../../backend/models/game
   - `ck_game_participants_currency`: `currency = 'USD'`
   - `ck_game_participants_guest_requires_guest_name`: `(participant_type <> 'guest' OR guest_name IS NOT NULL)`
   - `ck_game_participants_guest_requires_owner`: `(participant_type <> 'guest' OR guest_of_user_id IS NOT NULL)`
+  - `ck_game_participants_hold_requires_pending_payment`: `(hold_expires_at IS NULL OR participant_status = 'pending_payment')`
   - `ck_game_participants_non_guest_requires_user`: `(participant_type NOT IN ('registered_user', 'host', 'admin_added') OR user_id IS NOT NULL)`
   - `ck_game_participants_owner_only_for_guest`: `(participant_type = 'guest' OR guest_of_user_id IS NULL)`
   - `ck_game_participants_participant_status`: `participant_status IN ('pending_payment', 'confirmed', 'waitlisted', 'cancelled', 'late_cancelled', 'removed', 'refunded')`

@@ -42,6 +42,21 @@ PAGE_ENDPOINTS = {
         "GET /chat-messages",
         "POST /chat-messages",
     ],
+    "game_checkout": [
+        "GET /games/{game_id}",
+        "GET /games/{game_id}/participants",
+        "GET /game-images",
+        "GET /venue-images",
+        "GET /venues/{venue_id}",
+        "GET /user-payment-methods",
+        "POST /user-payment-methods/setup-intent",
+        "GET /checkout/games/{game_id}/quote",
+        "POST /checkout/games/{game_id}/payment-intent",
+        "POST /checkout/games/{game_id}/guest-payment-intent",
+        "GET /checkout/bookings/{booking_id}/status",
+        "POST /games/{game_id}/join",
+        "POST /games/{game_id}/booking-guests/add",
+    ],
 }
 
 

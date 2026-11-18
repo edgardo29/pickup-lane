@@ -54,7 +54,6 @@ ACTIVE_BOOKING_STATUSES = {
 }
 JOINABLE_GAME_STATUSES = OPEN_GAME_STATUSES
 OFFICIAL_FORCED_FIELDS = {
-    "minimum_age",
     "host_guest_max",
     "custom_rules_text",
     "custom_cancellation_text",
@@ -134,9 +133,6 @@ def build_game_conflict_detail(exc: IntegrityError) -> str:
 
     if "ux_games_one_active_community_game_per_host_date" in error_text:
         return "You already have a community game on this date."
-
-    if "ck_games_official_minimum_age_null" in error_text:
-        return "Official games require minimum_age to be null."
 
     if "ck_games_official_host_guest_max_zero" in error_text:
         return "Official games require host_guest_max to be 0."
@@ -230,7 +226,6 @@ def normalize_official_game_invariants(
     if normalized_data.get("game_type") != "official":
         return normalized_data
 
-    normalized_data["minimum_age"] = None
     normalized_data["host_guest_max"] = 0
     normalized_data["custom_rules_text"] = None
     normalized_data["custom_cancellation_text"] = None
@@ -413,19 +408,7 @@ def validate_game_business_rules(game_data: dict[str, object]) -> None:
             ),
         )
 
-    if game_data["minimum_age"] is not None and game_data["minimum_age"] < 13:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="minimum_age must be null or greater than or equal to 13.",
-        )
-
     if game_data["game_type"] == "official":
-        if game_data["minimum_age"] is not None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Official games require minimum_age to be null.",
-            )
-
         if game_data["host_guest_max"] != 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -627,27 +610,6 @@ def require_join_ready_user(user: User) -> None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Finish your profile before joining a game.",
-        )
-
-
-def require_minimum_age(user: User, minimum_age: int | None) -> None:
-    if minimum_age is None or user.date_of_birth is None:
-        return
-
-    today = datetime.now(UTC).date()
-    user_age = (
-        today.year
-        - user.date_of_birth.year
-        - (
-            (today.month, today.day)
-            < (user.date_of_birth.month, user.date_of_birth.day)
-        )
-    )
-
-    if user_age < minimum_age:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"You must be at least {minimum_age} years old to join this game.",
         )
 
 

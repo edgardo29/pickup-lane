@@ -38,15 +38,26 @@ export async function loadGameCheckout({ firebaseUser, gameId }) {
   }
 }
 
+// Version of the paid-waitlist charge consent the player agrees to.
+export const WAITLIST_AUTO_CHARGE_CONSENT_VERSION = 'waitlist-auto-charge-v1'
+
 export async function confirmGameCheckout({
   firebaseUser,
   gameId,
   guestCount,
   isAddGuestsCheckout,
+  waitlistPaymentMethodId = '',
 }) {
   const endpoint = isAddGuestsCheckout
     ? `/games/${gameId}/booking-guests/add`
     : `/games/${gameId}/join`
+  const payload = { guest_count: guestCount }
+  // A paid official waitlist needs a saved card and consent to a later charge.
+  if (waitlistPaymentMethodId) {
+    payload.payment_method_id = waitlistPaymentMethodId
+    payload.auto_charge_consent_accepted = true
+    payload.auto_charge_consent_version = WAITLIST_AUTO_CHARGE_CONSENT_VERSION
+  }
 
   return apiRequest(endpoint, {
     method: 'POST',
@@ -54,11 +65,12 @@ export async function confirmGameCheckout({
       ...(await getAuthHeaders(firebaseUser)),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ guest_count: guestCount }),
+    body: JSON.stringify(payload),
   })
 }
 
 export async function createGameCheckoutPaymentIntent({
+  addGuests = false,
   firebaseUser,
   gameId,
   guestCount,
@@ -75,7 +87,12 @@ export async function createGameCheckoutPaymentIntent({
     payload.return_url = returnUrl
   }
 
-  return apiRequest(`/checkout/games/${gameId}/payment-intent`, {
+  // Added guests are paid for separately on the player's existing booking.
+  const endpoint = addGuests
+    ? `/checkout/games/${gameId}/guest-payment-intent`
+    : `/checkout/games/${gameId}/payment-intent`
+
+  return apiRequest(endpoint, {
     method: 'POST',
     headers: {
       ...(await getAuthHeaders(firebaseUser)),
@@ -87,6 +104,18 @@ export async function createGameCheckoutPaymentIntent({
 
 export async function getGameCheckoutStatus({ bookingId, firebaseUser }) {
   return apiRequest(`/checkout/bookings/${bookingId}/status`, {
+    headers: await getAuthHeaders(firebaseUser),
+  })
+}
+
+// The price, the player's credit, and the amount due for a proposed party.
+export async function loadGameCheckoutQuote({ addGuests, firebaseUser, gameId, guestCount }) {
+  const params = new URLSearchParams({ guest_count: String(guestCount) })
+  if (addGuests) {
+    params.set('add_guests', 'true')
+  }
+
+  return apiRequest(`/checkout/games/${gameId}/quote?${params}`, {
     headers: await getAuthHeaders(firebaseUser),
   })
 }

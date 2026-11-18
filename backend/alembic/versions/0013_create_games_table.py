@@ -87,7 +87,6 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("'USD'"),
         ),
-        sa.Column("minimum_age", sa.Integer()),
         sa.Column(
             "allow_guests", sa.Boolean(), nullable=False, server_default=sa.text("true")
         ),
@@ -191,19 +190,12 @@ def upgrade() -> None:
             "max_guests_per_booking >= 0", name="ck_games_max_guests_per_booking"
         ),
         sa.CheckConstraint(
-            "(minimum_age IS NULL OR minimum_age >= 13)", name="ck_games_minimum_age"
-        ),
-        sa.CheckConstraint(
             "(payment_collection_type <> 'none' OR price_per_player_cents = 0)",
             name="ck_games_no_payment_requires_free",
         ),
         sa.CheckConstraint(
             "(game_type <> 'official' OR host_guest_max = 0)",
             name="ck_games_official_host_guest_max_zero",
-        ),
-        sa.CheckConstraint(
-            "(game_type <> 'official' OR minimum_age IS NULL)",
-            name="ck_games_official_minimum_age_null",
         ),
         sa.CheckConstraint(
             "(game_type <> 'official' OR custom_cancellation_text IS NULL)",

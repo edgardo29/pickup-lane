@@ -77,7 +77,6 @@ export function game(overrides = {}) {
     total_spots: 14,
     price_per_player_cents: 1000,
     currency: 'USD',
-    minimum_age: 18,
     allow_guests: true,
     max_guests_per_booking: 2,
     waitlist_enabled: true,

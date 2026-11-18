@@ -3,6 +3,7 @@ import { ArrowLeft, CircleDollarSign, CircleHelp, ClipboardList, Info, MapPin } 
 import { GameChatCard } from './GameDetailsChat.jsx'
 import { GameChangeReviewCard } from './GameChangeReviewCard.jsx'
 import { GameGallery } from './GameDetailsGallery.jsx'
+import { COMMUNITY_PAYMENT_RESPONSIBILITY_TEXT } from './gamePolicyText.js'
 import { HostPaymentSection } from './GameDetailsHostPayment.jsx'
 import { WhereToGoCard } from './GameDetailsLocation.jsx'
 import GameDetailsMobileActions from './GameDetailsMobileActions.jsx'
@@ -110,9 +111,7 @@ export function GameDetailsMainColumn({
 
       {game.game_type === 'community' && (
         <p className="details-community-payment-notice">
-          Payment happens outside Pickup Lane, directly with the organizer. Payment disputes
-          and refunds remain between you and the original organizer; Pickup Lane does not
-          process or guarantee refunds.
+          {COMMUNITY_PAYMENT_RESPONSIBILITY_TEXT}
         </p>
       )}
 

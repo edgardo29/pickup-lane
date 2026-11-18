@@ -1,4 +1,5 @@
 import { LEGAL_POLICY_IDS } from '../../features/legal/legalPolicies.js'
+import { getCommunityCancellationText } from './gamePolicyText.js'
 
 export function canUseGameChat(game, participants, user) {
   if (!game?.is_chat_enabled || !user?.id) {
@@ -116,8 +117,7 @@ export function buildRuleItems(game) {
       actionLabel: 'View full policy',
       policyId: LEGAL_POLICY_IDS.cancellationRefunds,
       text: isCommunityGame
-        ? game.custom_cancellation_text ||
-          'Review the host payment note before canceling. Pickup Lane does not refund off-app payments.'
+        ? getCommunityCancellationText(game)
         : 'Cancel 24+ hours before game time to stay eligible for a refund or game credit.',
     },
     {
@@ -154,7 +154,7 @@ export function buildRuleItems(game) {
     {
       title: 'Age Requirement',
       kind: 'age',
-      text: `Players must be ${game.minimum_age || 18} years or older to play. Age rules apply to every rostered player.`,
+      text: 'Players must be 18 years or older to play. Age rules apply to every rostered player.',
     },
   ]
 
