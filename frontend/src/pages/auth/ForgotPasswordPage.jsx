@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   LockIcon,
@@ -26,24 +26,38 @@ export function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
+  const [emailError, setEmailError] = useState('')
+  const isMounted = useRef(false)
+
+  useEffect(() => {
+    isMounted.current = true
+    return () => {
+      isMounted.current = false
+    }
+  }, [])
 
   async function handleResetPassword(event) {
     event.preventDefault()
     setStatus('submitting')
     setError('')
+    setEmailError('')
 
     const trimmedEmail = email.trim()
 
     if (!isValidEmail(trimmedEmail)) {
-      setError('Enter a valid email.')
+      setEmailError('Enter a valid email.')
       setStatus('idle')
       return
     }
 
     try {
       await sendPasswordReset(trimmedEmail)
+      if (!isMounted.current) return
+
       navigate('/check-email', { state: { email: trimmedEmail.toLowerCase() } })
     } catch (requestError) {
+      if (!isMounted.current) return
+
       if (requestError?.code?.includes('auth/user-not-found')) {
         navigate('/check-email', { state: { email: trimmedEmail.toLowerCase() } })
         return
@@ -65,6 +79,8 @@ export function ForgotPasswordPage() {
 
         <form className="auth-form" noValidate onSubmit={handleResetPassword}>
           <AuthField
+            aria-describedby={emailError ? 'forgot-password-email-error' : undefined}
+            aria-invalid={Boolean(emailError)}
             autoComplete="email"
             icon={<MailIcon />}
             inputMode="email"
@@ -76,6 +92,11 @@ export function ForgotPasswordPage() {
             value={email}
           />
 
+          {emailError && (
+            <div id="forgot-password-email-error">
+              <FormErrorMessage>{emailError}</FormErrorMessage>
+            </div>
+          )}
           <FormErrorMessage>{error}</FormErrorMessage>
 
           <button className="auth-primary-button" disabled={status === 'submitting'} type="submit">
