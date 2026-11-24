@@ -9,7 +9,9 @@ from base64 import urlsafe_b64decode, urlsafe_b64encode
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
+from sqlalchemy import select
 
+from backend.models import Booking, GameParticipant, Notification
 from backend.settings import SettingsError, build_settings
 from backend.tests.factories import (
     PRODUCTION_CURSOR_SIGNING_SECRET,
@@ -49,25 +51,33 @@ def test_edited_cursor_is_rejected(clock, db, client, browse):
     body["payload"]["starts_at"] = chicago(10).isoformat()
     edited = f"{b64encode(json.dumps(body).encode())}.{signature}"
 
+    tables = [Booking.__table__, GameParticipant.__table__, Notification.__table__]
+    before = {t.name: db.execute(select(t)).all() for t in tables}
     response = client.get("/games/browse", params={"limit": 2, "cursor": edited})
 
     assert response.status_code == 400
     assert response.json()["detail"] == "cursor is invalid."
+    assert {t.name: db.execute(select(t)).all() for t in tables} == before
 
 
 @pytest.mark.page("F15", 18)
 @pytest.mark.parametrize("cursor", ["not-a-cursor", "abc.def", "...", "e30."])
-def test_made_up_cursor_is_rejected(clock, client, cursor):
+def test_made_up_cursor_is_rejected(clock, db, client, cursor):
+    tables = [Booking.__table__, GameParticipant.__table__, Notification.__table__]
+    before = {t.name: db.execute(select(t)).all() for t in tables}
     response = client.get("/games/browse", params={"cursor": cursor})
 
     assert response.status_code == 400
     assert response.json()["detail"] == "cursor is invalid."
+    assert {t.name: db.execute(select(t)).all() for t in tables} == before
 
 
 @pytest.mark.page("F15", 18)
 def test_cursor_from_another_date_is_rejected(clock, db, client, browse):
     tomorrow_cursor = first_page_cursor(db, browse, days=1)
 
+    tables = [Booking.__table__, GameParticipant.__table__, Notification.__table__]
+    before = {t.name: db.execute(select(t)).all() for t in tables}
     response = client.get(
         "/games/browse",
         params={"starts_on": "2026-06-15", "limit": 2, "cursor": tomorrow_cursor},
@@ -75,6 +85,7 @@ def test_cursor_from_another_date_is_rejected(clock, db, client, browse):
 
     assert response.status_code == 400
     assert response.json()["detail"] == "cursor does not match the current query."
+    assert {t.name: db.execute(select(t)).all() for t in tables} == before
 
 
 def build(env: dict[str, str]):

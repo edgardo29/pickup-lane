@@ -30,6 +30,7 @@ export function useBrowseGamesPageModel() {
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const activeDateKeyRef = useRef('')
+  const loadedDateKeyRef = useRef('')
   const listGenerationRef = useRef(0)
   const rawDateKeyRef = useRef(rawDateKey)
   const requestVersionRef = useRef(0)
@@ -83,6 +84,7 @@ export function useBrowseGamesPageModel() {
         ? dedupeGames([...currentGames, ...(pageData.games || [])])
         : dedupeGames(pageData.games || [])
     ))
+    loadedDateKeyRef.current = pageData.browse_date || ''
     activeDateKeyRef.current = pageData.browse_date || ''
   }, [])
 
@@ -92,6 +94,7 @@ export function useBrowseGamesPageModel() {
       requestVersionRef.current = requestVersion
 
       if (!silent) {
+        loadedDateKeyRef.current = ''
         listGenerationRef.current = getNextBrowseListGeneration(listGenerationRef.current)
         setStatus('loading')
         setError('')
@@ -146,7 +149,8 @@ export function useBrowseGamesPageModel() {
   )
 
   useEffect(() => {
-    if (requestedDateKey && browseMeta?.browse_date === requestedDateKey) {
+    // Metadata survives a date change, but cleared results cannot be reused.
+    if (requestedDateKey && loadedDateKeyRef.current === requestedDateKey) {
       activeDateKeyRef.current = requestedDateKey
       return undefined
     }
@@ -154,6 +158,7 @@ export function useBrowseGamesPageModel() {
     if (
       !requestedDateKey
       && browseMeta?.browse_date
+      && loadedDateKeyRef.current === browseMeta.browse_date
       && browseMeta.browse_date === browseMeta.browse_today
     ) {
       // Today's games are already shown; only the missing or invalid link needs
@@ -266,6 +271,7 @@ export function useBrowseGamesPageModel() {
     }
 
     requestVersionRef.current += 1
+    loadedDateKeyRef.current = ''
     activeDateKeyRef.current = nextDateKey
     setStatus('loading')
     setError('')
