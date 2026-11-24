@@ -12,6 +12,7 @@ import { act, render, screen } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider, useParams } from 'react-router-dom'
 import { afterEach, vi } from 'vitest'
 import { loadBrowseGamesPage } from '../../../src/pages/browse-games/browseGamesApi.js'
+import { AuthContext } from '../../../src/context/authContext.js'
 import BrowseGamesPage from '../../../src/pages/browse-games/BrowseGamesPage.jsx'
 import { checkBackendAnswer } from '../../backendFields.js'
 import backendFields from './backend_fields.json'
@@ -48,7 +49,12 @@ function gameId(number) {
 // 3 of 14 spots filled.
 export function card(overrides = {}) {
   const number = nextCardNumber++
-  const { occupied = 3, total = 14, availabilityStatus, ...rest } = overrides
+  const { occupied = 3, total = 14, availabilityStatus, date = TODAY, ...rest } = overrides
+  const startsAt = rest.starts_at ?? `${date}T23:00:00Z`
+  const endsAt = rest.ends_at ?? new Date(Date.parse(startsAt) + 3_600_000).toISOString()
+  const hour = new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit', hourCycle: 'h23', timeZone: 'America/Chicago',
+  }).format(new Date(startsAt))
   return {
     id: gameId(number),
     game_type: 'official',
@@ -59,10 +65,10 @@ export function card(overrides = {}) {
     city_snapshot: 'Chicago',
     state_snapshot: 'IL',
     location_label: 'Chicago, IL',
-    starts_at: '2026-06-15T23:00:00Z',
-    ends_at: '2026-06-16T00:00:00Z',
-    starts_on_local: '2026-06-15',
-    time_group_key: '18:00',
+    starts_at: startsAt,
+    ends_at: endsAt,
+    starts_on_local: date,
+    time_group_key: `${hour}:00`,
     timezone: 'America/Chicago',
     game_player_group: 'coed',
     format_label: '7v7',
@@ -78,7 +84,7 @@ export function card(overrides = {}) {
     price_per_player_cents: 1000,
     currency: 'USD',
     price_label: '$10',
-    registration_closes_at: '2026-06-15T23:00:00Z',
+    registration_closes_at: new Date(Date.parse(startsAt) + 300_000).toISOString(),
     primary_image_url: null,
     ...rest,
   }
@@ -132,7 +138,7 @@ function GameDetailsStub() {
 }
 
 // Render Browse at `path`, after a previous page so Back can be tested.
-export function renderBrowse(path = '/games/browse') {
+export function renderBrowse(path = '/games/browse', { signedIn = false } = {}) {
   const router = createMemoryRouter(
     [
       { path: '/', element: <p>Previous page</p> },
@@ -141,8 +147,11 @@ export function renderBrowse(path = '/games/browse') {
     ],
     { initialEntries: ['/', path], initialIndex: 1 },
   )
-  render(<RouterProvider router={router} />)
-  return router
+  const auth = signedIn
+    ? { appUser: { id: '00000000-0000-4000-8000-000000000123', role: 'player' }, firebaseUser: { uid: 'browse-player' } }
+    : { appUser: null, firebaseUser: null }
+  const view = render(<AuthContext.Provider value={auth}><RouterProvider router={router} /></AuthContext.Provider>)
+  return { router, unmount: view.unmount }
 }
 
 export function linkDate(router) {
@@ -163,4 +172,20 @@ export async function waitForCards() {
 
 export function selectedDateButton() {
   return document.querySelector('[aria-current="date"]')
+}
+
+// Cards with increasing starts, as one ordered API batch returns them.
+export function cards(count, prefix, { date = TODAY, minuteOffset = 0 } = {}) {
+  return Array.from({ length: count }, (_, index) => {
+    const start = new Date(Date.parse(`${date}T23:00:00Z`) + (index + minuteOffset) * 60_000)
+    return card({ date, display_title: `${prefix} ${index + 1}`, starts_at: start.toISOString() })
+  })
+}
+
+export function cardLink(title) {
+  return screen.getByRole('heading', { level: 3, name: title }).closest('a')
+}
+
+export function hourSection(label) {
+  return screen.getByRole('heading', { level: 2, name: label }).closest('section')
 }

@@ -1,109 +1,90 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { loadBrowseGamesPage } from '../../../src/pages/browse-games/browseGamesApi.js'
-import {
-  card,
-  linkDate,
-  page,
-  renderBrowse,
-  selectedDateButton,
-  TODAY,
-  waitForCards,
-} from './browseTestKit.jsx'
+import { card, linkDate, page, renderBrowse, selectedDateButton, TODAY, waitForCards } from './browseTestKit.jsx'
 
-vi.mock('../../../src/pages/browse-games/browseGamesApi.js', () => ({
-  loadBrowseGamesPage: vi.fn(),
-}))
-vi.mock('../../../src/components/app/AppNav.jsx', () => ({
-  default: () => null,
-}))
-
-function visibleDateLabels() {
-  return screen
-    .getAllByRole('button', { name: /^Browse games on/ })
-    .map((button) => button.getAttribute('aria-label').replace('Browse games on ', ''))
-}
+vi.mock('../../../src/pages/browse-games/browseGamesApi.js', () => ({ loadBrowseGamesPage: vi.fn() }))
+vi.mock('../../../src/components/app/AppNav.jsx', () => ({ default: () => null }))
 
 const originalTimeZone = process.env.TZ
+afterEach(() => { process.env.TZ = originalTimeZone })
 
-afterEach(() => {
-  process.env.TZ = originalTimeZone
+function visibleDateLabels() {
+  return screen.getAllByRole('button', { name: /^Browse games on/ }).map((button) => button.textContent)
+}
+
+async function openToday() {
+  loadBrowseGamesPage.mockResolvedValue(page({ games: [card()] }))
+  const view = renderBrowse(`/games/browse?date=${TODAY}`)
+  await waitForCards()
+  return view
+}
+
+it("F15-4: the strip offers exactly fourteen dates in two sets of seven", async () => {
+  const user = userEvent.setup()
+  await openToday()
+  expect(visibleDateLabels()).toEqual(['MONJun15', 'TUEJun16', 'WEDJun17', 'THUJun18', 'FRIJun19', 'SATJun20', 'SUNJun21'])
+  await user.click(screen.getByRole('button', { name: 'Next week' }))
+  expect(visibleDateLabels()).toEqual(['MONJun22', 'TUEJun23', 'WEDJun24', 'THUJun25', 'FRIJun26', 'SATJun27', 'SUNJun28'])
 })
 
-describe('Browse date strip', () => {
-  it('F15-4: fourteen dates come in two sets of seven; arrows switch sets without changing the date', async () => {
-    const user = userEvent.setup()
-    loadBrowseGamesPage.mockResolvedValue(page({ games: [card()] }))
-    const router = renderBrowse(`/games/browse?date=${TODAY}`)
-    await waitForCards()
-    const previous = screen.getByRole('button', { name: 'Previous week' })
-    const next = screen.getByRole('button', { name: 'Next week' })
+it("F15-4: arrows change sets without changing the selected date", async () => {
+  const user = userEvent.setup()
+  const { router } = await openToday()
+  loadBrowseGamesPage.mockImplementation(({ startsOn }) => Promise.resolve(page({ date: startsOn, games: [card({ date: startsOn })] })))
+  await user.click(screen.getByRole('button', { name: 'Next week' }))
+  expect(linkDate(router)).toBe(TODAY)
+  await user.click(screen.getByRole('button', { name: 'Previous week' }))
+  expect(selectedDateButton()).toHaveAccessibleName('Browse games on MON Jun 15')
+  expect(loadBrowseGamesPage).toHaveBeenCalledTimes(1)
+})
 
-    const firstSet = visibleDateLabels()
-    expect(previous).toBeDisabled()
-    expect(next).toBeEnabled()
+it("F15-4: arrows are disabled at the ends", async () => {
+  const user = userEvent.setup()
+  await openToday()
+  expect(screen.getByRole('button', { name: 'Previous week' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Next week' })).toBeEnabled()
+  await user.click(screen.getByRole('button', { name: 'Next week' }))
+  expect(screen.getByRole('button', { name: 'Next week' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Previous week' })).toBeEnabled()
+})
 
-    await user.click(next)
-    const secondSet = visibleDateLabels()
-    expect(next).toBeDisabled()
-    expect(previous).toBeEnabled()
+it.each([['spring', '2026-03-01', ['SUNMar1', 'MONMar2', 'TUEMar3', 'WEDMar4', 'THUMar5', 'FRIMar6', 'SATMar7', 'SUNMar8', 'MONMar9', 'TUEMar10', 'WEDMar11', 'THUMar12', 'FRIMar13', 'SATMar14']], ['fall', '2026-10-25', ['SUNOct25', 'MONOct26', 'TUEOct27', 'WEDOct28', 'THUOct29', 'FRIOct30', 'SATOct31', 'SUNNov1', 'MONNov2', 'TUENov3', 'WEDNov4', 'THUNov5', 'FRINov6', 'SATNov7']]])("F15-22: fourteen consecutive market dates span the %s daylight-saving change", async (_label, today, expected) => {
+  process.env.TZ = 'Asia/Tokyo'
+  const user = userEvent.setup()
+  loadBrowseGamesPage.mockResolvedValue(page({ today, date: today, games: [card({ date: today })] }))
+  renderBrowse(`/games/browse?date=${today}`)
+  await waitForCards()
+  const first = visibleDateLabels()
+  await user.click(screen.getByRole('button', { name: 'Next week' }))
+  expect([...first, ...visibleDateLabels()]).toEqual(expected)
+})
 
-    expect(firstSet).toEqual([
-      'MON Jun 15', 'TUE Jun 16', 'WED Jun 17', 'THU Jun 18', 'FRI Jun 19', 'SAT Jun 20', 'SUN Jun 21',
-    ])
-    expect(secondSet).toEqual([
-      'MON Jun 22', 'TUE Jun 23', 'WED Jun 24', 'THU Jun 25', 'FRI Jun 26', 'SAT Jun 27', 'SUN Jun 28',
-    ])
-    expect(linkDate(router)).toBe(TODAY)
-    expect(loadBrowseGamesPage).toHaveBeenCalledTimes(1)
-  })
+it("F15-32: dates and arrows have clear accessible labels", async () => {
+  await openToday()
+  const strip = screen.getByLabelText('Browse games by date')
+  expect(within(strip).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
+    'Browse games on MON Jun 15', 'Browse games on TUE Jun 16', 'Browse games on WED Jun 17', 'Browse games on THU Jun 18', 'Browse games on FRI Jun 19', 'Browse games on SAT Jun 20', 'Browse games on SUN Jun 21',
+  ])
+  expect(screen.getByRole('button', { name: 'Previous week' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Next week' })).toBeInTheDocument()
+})
 
-  it('F15-22: across the daylight-saving change the strip still has 14 consecutive market dates', async () => {
-    const user = userEvent.setup()
-    process.env.TZ = 'Asia/Tokyo'
-    loadBrowseGamesPage.mockResolvedValue(
-      page({ today: '2026-10-25', date: '2026-10-25', games: [card()] }),
-    )
-    renderBrowse('/games/browse?date=2026-10-25')
-    await waitForCards()
+it("F15-32: assistive technology can identify the selected date", async () => {
+  await openToday()
+  expect(document.querySelectorAll('[aria-current="date"]')).toHaveLength(1)
+  expect(selectedDateButton()).toHaveAccessibleName('Browse games on MON Jun 15')
+})
 
-    const firstSet = visibleDateLabels()
-    await user.click(screen.getByRole('button', { name: 'Next week' }))
-    const secondSet = visibleDateLabels()
-
-    expect([...firstSet, ...secondSet]).toEqual([
-      'SUN Oct 25', 'MON Oct 26', 'TUE Oct 27', 'WED Oct 28', 'THU Oct 29', 'FRI Oct 30', 'SAT Oct 31',
-      'SUN Nov 1', 'MON Nov 2', 'TUE Nov 3', 'WED Nov 4', 'THU Nov 5', 'FRI Nov 6', 'SAT Nov 7',
-    ])
-  })
-
-  it('F15-32: dates and arrows have clear labels and show selected and disabled states', async () => {
-    loadBrowseGamesPage.mockResolvedValue(page({ games: [card()] }))
-    renderBrowse(`/games/browse?date=${TODAY}`)
-    await waitForCards()
-
-    const strip = screen.getByLabelText('Browse games by date')
-    const dateButtons = within(strip).getAllByRole('button')
-    expect(dateButtons).toHaveLength(7)
-    expect(selectedDateButton()).toHaveAccessibleName('Browse games on MON Jun 15')
-    expect(dateButtons.filter((button) => button.getAttribute('aria-current') === 'date')).toHaveLength(1)
-    expect(screen.getByRole('button', { name: 'Previous week' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Next week' })).toBeEnabled()
-  })
-
-  it('F15-32: a date can be chosen with the keyboard', async () => {
-    const user = userEvent.setup()
-    loadBrowseGamesPage
-      .mockResolvedValueOnce(page({ games: [card()] }))
-      .mockResolvedValueOnce(page({ date: '2026-06-16', games: [card({ display_title: 'Tuesday Field' })] }))
-    const router = renderBrowse(`/games/browse?date=${TODAY}`)
-    await waitForCards()
-
-    screen.getByRole('button', { name: 'Browse games on TUE Jun 16' }).focus()
-    await user.keyboard('{Enter}')
-
-    expect(await screen.findByRole('heading', { name: 'Tuesday Field' })).toBeInTheDocument()
-    expect(linkDate(router)).toBe('2026-06-16')
-  })
+it("F15-32: the keyboard can select another date", async () => {
+  const user = userEvent.setup()
+  loadBrowseGamesPage.mockResolvedValueOnce(page({ games: [card()] }))
+    .mockResolvedValueOnce(page({ date: '2026-06-16', games: [card({ date: '2026-06-16', display_title: 'Tuesday Field' })] }))
+  const { router } = renderBrowse(`/games/browse?date=${TODAY}`)
+  await waitForCards()
+  screen.getByRole('button', { name: 'Browse games on TUE Jun 16' }).focus()
+  await user.keyboard('{Enter}')
+  expect(await waitForCards()).toEqual(['Tuesday Field'])
+  expect(linkDate(router)).toBe('2026-06-16')
 })

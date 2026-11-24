@@ -1,151 +1,274 @@
 import { act, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { loadBrowseGamesPage } from '../../../src/pages/browse-games/browseGamesApi.js'
-import {
-  addDays,
-  card,
-  cardTitles,
-  deferred,
-  linkDate,
-  page,
-  renderBrowse,
-  selectedDateButton,
-  TODAY,
-  waitForCards,
-} from './browseTestKit.jsx'
+import { addDays, card, cards, cardTitles, deferred, linkDate, page, renderBrowse, selectedDateButton, TODAY, waitForCards } from './browseTestKit.jsx'
 
-vi.mock('../../../src/pages/browse-games/browseGamesApi.js', () => ({
-  loadBrowseGamesPage: vi.fn(),
-}))
-vi.mock('../../../src/components/app/AppNav.jsx', () => ({
-  default: () => null,
-}))
+vi.mock('../../../src/pages/browse-games/browseGamesApi.js', () => ({ loadBrowseGamesPage: vi.fn() }))
+vi.mock('../../../src/components/app/AppNav.jsx', () => ({ default: () => null }))
 
 function requestedDates() {
   return loadBrowseGamesPage.mock.calls.map(([options]) => options.startsOn)
 }
 
-describe('Browse date links', () => {
-  it('F15-2: no date in the link loads today and writes today into the link', async () => {
-    const response = deferred()
-    loadBrowseGamesPage.mockReturnValueOnce(response.promise)
+async function chooseTuesday() {
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Browse games on TUE Jun 16' }))
+}
 
-    const router = renderBrowse('/games/browse')
+it("F15-2: opening Browse without a date loads today", async () => {
+  loadBrowseGamesPage.mockResolvedValue(page({ games: [card({ display_title: 'Today Field' })] }))
+  renderBrowse()
+  expect(await waitForCards()).toEqual(['Today Field'])
+  expect(requestedDates()).toEqual([undefined])
+})
 
+it("F15-2: opening Browse without a date replaces the link with today", async () => {
+  loadBrowseGamesPage.mockResolvedValue(page({ games: [card()] }))
+  const { router } = renderBrowse()
+  await waitForCards()
+  expect(linkDate(router)).toBe(TODAY)
+  expect(router.state.historyAction).toBe('REPLACE')
+  await act(async () => router.navigate(-1))
+  expect(router.state.location.pathname).toBe('/')
+})
+
+it("F15-2: the initial loading state lasts until the first response", async () => {
+  const response = deferred()
+  loadBrowseGamesPage.mockReturnValueOnce(response.promise)
+  renderBrowse()
+  expect(await screen.findByRole('status')).toHaveTextContent('Loading games')
+  await act(async () => response.resolve(page({ games: [card()] })))
+  await waitForCards()
+  expect(screen.queryByRole('status')).not.toBeInTheDocument()
+})
+
+it("F15-3: a valid linked date selects that date and loads its games", async () => {
+  const date = addDays(TODAY, 9)
+  loadBrowseGamesPage.mockResolvedValue(page({ date, games: [card({ date, display_title: 'Later Field' })] }))
+  renderBrowse(`/games/browse?date=${date}`)
+  expect(await waitForCards()).toEqual(['Later Field'])
+  expect(requestedDates()).toEqual([date])
+  expect(selectedDateButton()).toHaveAccessibleName('Browse games on WED Jun 24')
+})
+
+it("F15-3: the visible set contains the linked date", async () => {
+  const date = addDays(TODAY, 9)
+  loadBrowseGamesPage.mockResolvedValue(page({ date, games: [card({ date })] }))
+  renderBrowse(`/games/browse?date=${date}`)
+  await waitForCards()
+  expect(screen.getAllByRole('button', { name: /^Browse games on/ }).map((button) => button.textContent)).toEqual([
+    'MONJun22', 'TUEJun23', 'WEDJun24', 'THUJun25', 'FRIJun26', 'SATJun27', 'SUNJun28',
+  ])
+})
+
+it("F15-5: choosing a date adds a normal history entry", async () => {
+  const next = deferred()
+  loadBrowseGamesPage
+    .mockResolvedValueOnce(page({ games: [card({ display_title: 'Today Field' })] }))
+    .mockReturnValueOnce(next.promise)
+  const { router } = renderBrowse(`/games/browse?date=${TODAY}`)
+  await waitForCards()
+  await chooseTuesday()
+
+  expect(linkDate(router)).toBe('2026-06-16')
+  expect(router.state.historyAction).toBe('PUSH')
+
+  await act(async () => next.resolve(page({ date: '2026-06-16', games: [card({ date: '2026-06-16', display_title: 'Tuesday Field' })] })))
+  await waitForCards()
+})
+
+it("F15-5: old cards clear while the selected date loads", async () => {
+  const next = deferred()
+  loadBrowseGamesPage
+    .mockResolvedValueOnce(page({ games: [card({ display_title: 'Today Field' })] }))
+    .mockReturnValueOnce(next.promise)
+  renderBrowse(`/games/browse?date=${TODAY}`)
+  await waitForCards()
+  await chooseTuesday()
+
+  expect(cardTitles()).toEqual([])
+  expect(await screen.findByRole('status')).toHaveTextContent('Loading games')
+
+  await act(async () => next.resolve(page({ date: '2026-06-16', games: [card({ date: '2026-06-16', display_title: 'Tuesday Field' })] })))
+  await waitForCards()
+})
+
+it("F15-5: old pagination clears on changing date", async () => {
+  const user = userEvent.setup()
+  const next = deferred()
+  loadBrowseGamesPage
+    .mockResolvedValueOnce(page({ games: cards(40, 'Today'), hasMore: true, nextCursor: 'today-more', timeGroups: [{ group_key: '18:00', total_games: 60 }, { group_key: '19:00', total_games: 21 }] }))
+    .mockResolvedValueOnce(page({ games: cards(40, 'Later', { minuteOffset: 40 }), hasMore: true, nextCursor: 'today-after-41', timeGroups: [{ group_key: '18:00', total_games: 60 }, { group_key: '19:00', total_games: 21 }] }))
+    .mockReturnValueOnce(next.promise)
+  renderBrowse(`/games/browse?date=${TODAY}`)
+  await waitForCards()
+  await user.click(screen.getByRole('button', { name: 'Load More' }))
+  await screen.findByRole('heading', { name: 'Later 40' })
+  expect(cardTitles()).toHaveLength(80)
+  expect(screen.getByRole('button', { name: 'Load More' })).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Browse games on TUE Jun 16' }))
+  expect(screen.queryByRole('button', { name: 'Load More' })).not.toBeInTheDocument()
+  await act(async () => next.resolve(page({ date: '2026-06-16', games: [card({ date: '2026-06-16' })] })))
+  await waitForCards()
+  expect(screen.queryByRole('button', { name: 'Load More' })).not.toBeInTheDocument()
+})
+
+it.each(['first-load', 'load-more'])("F15-5: an old %s error clears on changing date", async (kind) => {
+  const user = userEvent.setup()
+  const next = deferred()
+  let view
+  if (kind === 'first-load') {
+    loadBrowseGamesPage.mockRejectedValueOnce(new Error('Old request failed'))
+    view = renderBrowse(`/games/browse?date=${TODAY}`)
+    await screen.findByRole('heading', { name: 'Could not load games' })
+  } else {
+    loadBrowseGamesPage.mockResolvedValueOnce(page({ games: cards(40, 'Today'), hasMore: true, nextCursor: 'today-more', timeGroups: [{ group_key: '18:00', total_games: 41 }] }))
+      .mockRejectedValueOnce(new Error('Old request failed'))
+    view = renderBrowse(`/games/browse?date=${TODAY}`)
+    await waitForCards()
+    await user.click(screen.getByRole('button', { name: 'Load More' }))
+    await screen.findByText('Old request failed')
+  }
+  loadBrowseGamesPage.mockReturnValueOnce(next.promise)
+  await act(async () => view.router.navigate('/games/browse?date=2026-06-16'))
+  expect(screen.queryByText('Old request failed')).not.toBeInTheDocument()
+  await act(async () => next.resolve(page({ date: '2026-06-16', games: [card({ date: '2026-06-16' })] })))
+  await waitForCards()
+  expect(screen.queryByText('Old request failed')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
+})
+
+it.each(['loading', 'loaded', 'failed'])("F15-5 F15-27: Back restores the prior date when the other request is %s", async (state) => {
+  const next = deferred()
+  loadBrowseGamesPage
+    .mockResolvedValueOnce(page({ games: [card({ display_title: 'Today Field' })] }))
+    .mockReturnValueOnce(next.promise)
+  const { router } = renderBrowse(`/games/browse?date=${TODAY}`)
+  await waitForCards()
+  await chooseTuesday()
+  expect(await screen.findByRole('status')).toHaveTextContent('Loading games')
+
+  if (state === 'loaded') {
+    await act(async () => next.resolve(page({ date: '2026-06-16', games: [card({ date: '2026-06-16', display_title: 'Tuesday Field' })] })))
+    await waitForCards()
+  } else if (state === 'failed') {
+    await act(async () => next.reject(new Error('Tuesday unavailable')))
+    await screen.findByRole('heading', { name: 'Could not load games' })
+  }
+
+  loadBrowseGamesPage.mockResolvedValueOnce(page({ games: [card({ display_title: 'Today Again' })] }))
+  await act(async () => router.navigate(-1))
+  expect(await waitForCards()).toEqual(['Today Again'])
+  expect(linkDate(router)).toBe(TODAY)
+  expect(selectedDateButton()).toHaveAccessibleName('Browse games on MON Jun 15')
+
+  if (state === 'loading') {
+    await act(async () => next.resolve(page({ date: '2026-06-16', games: [card({ date: '2026-06-16', display_title: 'Tuesday Field' })] })))
+    expect(cardTitles()).toEqual(['Today Again'])
+    expect(linkDate(router)).toBe(TODAY)
+  }
+})
+
+it("F15-5: selection shows the set containing the chosen date", async () => {
+  loadBrowseGamesPage.mockResolvedValueOnce(page({ games: [card()] }))
+    .mockResolvedValueOnce(page({ date: '2026-06-23', games: [card({ date: '2026-06-23' })] }))
+  const { router } = renderBrowse(`/games/browse?date=${TODAY}`)
+  await waitForCards()
+  await act(async () => router.navigate('/games/browse?date=2026-06-23'))
+  await waitForCards()
+  expect(selectedDateButton()).toHaveAccessibleName('Browse games on TUE Jun 23')
+})
+
+it.each(['2026-02-30', 'soon'])("F15-19: an invalid date %s loads today", async (badDate) => {
+  loadBrowseGamesPage.mockResolvedValue(page({ games: [card({ display_title: 'Today Field' })] }))
+  renderBrowse(`/games/browse?date=${badDate}`)
+  await waitForCards()
+
+  expect(cardTitles()).toEqual(['Today Field'])
+  expect(selectedDateButton()).toHaveAccessibleName('Browse games on MON Jun 15')
+  expect(requestedDates()).toEqual([undefined])
+})
+
+it.each(['2026-02-30', 'soon'])("F15-19: an invalid date %s is corrected by replacing history", async (badDate) => {
+  loadBrowseGamesPage.mockResolvedValue(page({ games: [card({ display_title: 'Today Field' })] }))
+  const { router } = renderBrowse(`/games/browse?date=${badDate}`)
+  await waitForCards()
+
+  expect(linkDate(router)).toBe(TODAY)
+  expect(router.state.historyAction).toBe('REPLACE')
+  await act(async () => router.navigate(-1))
+  expect(router.state.location.pathname).toBe('/')
+})
+
+it.each([['2026-06-12', TODAY], ['2026-07-15', '2026-06-28']])("F15-20: date %s opens the nearest available date", async (linkedDate, shownDate) => {
+  loadBrowseGamesPage.mockResolvedValue(page({ date: shownDate, games: [card({ date: shownDate })] }))
+  const { router } = renderBrowse(`/games/browse?date=${linkedDate}`)
+  await waitForCards()
+  expect(linkDate(router)).toBe(shownDate)
+})
+
+it.each([['2026-06-12', TODAY], ['2026-07-15', '2026-06-28']])("F15-20: correcting date %s replaces its history entry", async (linkedDate, shownDate) => {
+  loadBrowseGamesPage.mockResolvedValue(page({ date: shownDate, games: [card({ date: shownDate })] }))
+  const { router } = renderBrowse(`/games/browse?date=${linkedDate}`)
+  await waitForCards()
+
+  expect(router.state.historyAction).toBe('REPLACE')
+  await act(async () => router.navigate(-1))
+  expect(router.state.location.pathname).toBe('/')
+})
+
+it.each(['loaded', 'loading', 'failed'])("F15-36: an invalid link restores today when the other request is %s", async (state) => {
+  const next = deferred()
+  loadBrowseGamesPage.mockImplementation(({ startsOn = TODAY }) => Promise.resolve(page({
+    date: startsOn,
+    games: [card({ date: startsOn, display_title: startsOn === TODAY ? 'Today Field' : 'Other Date Field' })],
+  })))
+  const { router } = renderBrowse(`/games/browse?date=${TODAY}`)
+  await waitForCards()
+
+  if (state !== 'loaded') {
+    loadBrowseGamesPage.mockReturnValueOnce(next.promise)
+    await chooseTuesday()
     expect(await screen.findByRole('status')).toHaveTextContent('Loading games')
-    await act(async () => response.resolve(page({ games: [card({ display_title: 'Today Field' })] })))
-    expect(await waitForCards()).toEqual(['Today Field'])
-    expect(requestedDates()).toEqual([undefined])
-    expect(linkDate(router)).toBe(TODAY)
-    expect(router.state.historyAction).toBe('REPLACE')
-  })
+    if (state === 'failed') {
+      await act(async () => next.reject(new Error('Tuesday unavailable')))
+      await screen.findByRole('heading', { name: 'Could not load games' })
+    }
+  }
 
-  it('F15-3: a valid date link selects that date and shows its seven-date set', async () => {
-    const linkedDate = addDays(TODAY, 9)
-    loadBrowseGamesPage.mockResolvedValue(
-      page({ date: linkedDate, games: [card({ display_title: 'Later Field' })] }),
-    )
+  await act(async () => router.navigate('/games/browse?date=not-a-date'))
+  expect(await waitForCards()).toEqual(['Today Field'])
+  expect(selectedDateButton()).toHaveAccessibleName('Browse games on MON Jun 15')
+  expect(linkDate(router)).toBe(TODAY)
 
-    renderBrowse(`/games/browse?date=${linkedDate}`)
-
-    expect(await waitForCards()).toEqual(['Later Field'])
-    expect(requestedDates()).toEqual([linkedDate])
-    expect(await screen.findByRole('button', { name: 'Browse games on WED Jun 24' }))
-      .toHaveAttribute('aria-current', 'date')
-    const visibleDates = screen.getAllByRole('button', { name: /^Browse games on/ })
-    expect(visibleDates.map((button) => button.textContent)).toEqual([
-      'MONJun22', 'TUEJun23', 'WEDJun24', 'THUJun25', 'FRIJun26', 'SATJun27', 'SUNJun28',
-    ])
-  })
-
-  it('F15-5: choosing another date adds a history entry, clears the list while loading, and Back returns', async () => {
-    const user = userEvent.setup()
-    const nextDate = addDays(TODAY, 2)
-    const nextDateResponse = deferred()
-    loadBrowseGamesPage
-      .mockResolvedValueOnce(page({ games: [card({ display_title: 'Today Field' })] }))
-      .mockReturnValueOnce(nextDateResponse.promise)
-      .mockResolvedValueOnce(page({ games: [card({ display_title: 'Today Field Again' })] }))
-    const router = renderBrowse(`/games/browse?date=${TODAY}`)
-    await waitForCards()
-
-    await user.click(screen.getByRole('button', { name: 'Browse games on WED Jun 17' }))
-
-    expect(router.state.historyAction).toBe('PUSH')
-    expect(linkDate(router)).toBe(nextDate)
-    expect(await screen.findByRole('status')).toHaveTextContent('Loading games')
-    expect(cardTitles()).toEqual([])
-
-    await act(async () => nextDateResponse.resolve(
-      page({ date: nextDate, games: [card({ display_title: 'Wednesday Field' })] }),
-    ))
-    expect(await waitForCards()).toEqual(['Wednesday Field'])
-
-    await act(async () => router.navigate(-1))
-    expect(linkDate(router)).toBe(TODAY)
-    expect(await screen.findByRole('heading', { name: 'Today Field Again' })).toBeInTheDocument()
-    expect(requestedDates()).toEqual([TODAY, nextDate, TODAY])
-  })
-
-  it.each([
-    ['an impossible date', '2026-02-30'],
-    ['text that is not a date', 'soon'],
-  ])('F15-19: opening a link with %s shows today and replaces the link', async (_label, badDate) => {
-    loadBrowseGamesPage.mockResolvedValue(page({ games: [card({ display_title: 'Today Field' })] }))
-
-    const router = renderBrowse(`/games/browse?date=${badDate}`)
-
-    expect(await waitForCards()).toEqual(['Today Field'])
-    expect(requestedDates()).toEqual([undefined])
-    expect(linkDate(router)).toBe(TODAY)
-    expect(router.state.historyAction).toBe('REPLACE')
-    await act(async () => router.navigate(-1))
-    expect(router.state.location.pathname).toBe('/')
-  })
-
-  it.each([
-    ['before today', addDays(TODAY, -3), TODAY],
-    ['after the last available day', addDays(TODAY, 30), addDays(TODAY, 13)],
-  ])('F15-20: a link to a date %s is replaced with the nearest available day', async (_label, linkedDate, shownDate) => {
-    loadBrowseGamesPage.mockResolvedValue(page({ date: shownDate, games: [card()] }))
-
-    const router = renderBrowse(`/games/browse?date=${linkedDate}`)
-
-    await waitForCards()
-    expect(linkDate(router)).toBe(shownDate)
-    expect(router.state.historyAction).toBe('REPLACE')
-  })
-
-  it('F15-36: an invalid link while today is open keeps today and replaces the link', async () => {
-    loadBrowseGamesPage.mockResolvedValue(page({ games: [card({ display_title: 'Today Field' })] }))
-    const router = renderBrowse(`/games/browse?date=${TODAY}`)
-    await waitForCards()
-
-    await act(async () => router.navigate('/games/browse?date=not-a-date'))
-
-    expect(linkDate(router)).toBe(TODAY)
-    expect(router.state.historyAction).toBe('REPLACE')
+  if (state === 'loading') {
+    await act(async () => next.resolve(page({ date: '2026-06-16', games: [card({ date: '2026-06-16', display_title: 'Tuesday Field' })] })))
     expect(cardTitles()).toEqual(['Today Field'])
-    await act(async () => router.navigate(-1))
     expect(linkDate(router)).toBe(TODAY)
-  })
+  }
+})
 
-  it('F15-36: an invalid link while another date is open switches to today', async () => {
-    const otherDate = addDays(TODAY, 2)
-    loadBrowseGamesPage
-      .mockResolvedValueOnce(page({ date: otherDate, games: [card({ display_title: 'Wednesday Field' })] }))
-      .mockResolvedValueOnce(page({ games: [card({ display_title: 'Today Field' })] }))
-    const router = renderBrowse(`/games/browse?date=${otherDate}`)
-    await waitForCards()
+it("F15-36: an invalid link on another date switches results and selection to today", async () => {
+  loadBrowseGamesPage.mockResolvedValueOnce(page({ date: '2026-06-17', games: [card({ date: '2026-06-17', display_title: 'Wednesday Field' })] }))
+    .mockImplementation(({ startsOn = TODAY }) => Promise.resolve(page({
+      date: startsOn,
+      games: [card({ date: startsOn, display_title: startsOn === TODAY ? 'Today Field' : 'Other Date Field' })],
+    })))
+  const { router } = renderBrowse('/games/browse?date=2026-06-17')
+  await waitForCards()
+  await act(async () => router.navigate('/games/browse?date=not-a-date'))
+  expect(await waitForCards()).toEqual(['Today Field'])
+  expect(selectedDateButton()).toHaveAccessibleName('Browse games on MON Jun 15')
+})
 
-    await act(async () => router.navigate('/games/browse?date=not-a-date'))
-
-    expect(await screen.findByRole('heading', { name: 'Today Field' })).toBeInTheDocument()
-    expect(cardTitles()).toEqual(['Today Field'])
-    expect(requestedDates()).toEqual([otherDate, undefined])
-    expect(linkDate(router)).toBe(TODAY)
-    expect(router.state.historyAction).toBe('REPLACE')
-    expect(selectedDateButton()).toHaveAccessibleName('Browse games on MON Jun 15')
-  })
+it("F15-36: an invalid link introduced while Browse is open is replaced", async () => {
+  loadBrowseGamesPage.mockResolvedValue(page({ games: [card()] }))
+  const { router } = renderBrowse(`/games/browse?date=${TODAY}`)
+  await waitForCards()
+  await act(async () => router.navigate('/games/browse?date=not-a-date'))
+  expect(linkDate(router)).toBe(TODAY)
+  expect(router.state.historyAction).toBe('REPLACE')
+  await act(async () => router.navigate(-1))
+  expect(linkDate(router)).toBe(TODAY)
 })
