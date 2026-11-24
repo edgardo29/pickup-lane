@@ -13,7 +13,9 @@ from backend.schemas import (
     UserPaymentMethodSyncCreate,
 )
 from backend.services.auth_service import (
+    require_active_or_suspended_user,
     require_active_user,
+    require_recent_active_or_suspended_user,
     require_recent_active_user,
 )
 from backend.services.payment_method_service import (
@@ -47,7 +49,9 @@ def list_current_user_payment_methods(
         ge=1,
         le=MAX_COLLECTION_LIMIT,
     ),
-    current_user: User = Depends(require_active_user),
+    # A suspended player can still see and remove their cards; adding a card
+    # and changing the default stay with active accounts.
+    current_user: User = Depends(require_active_or_suspended_user),
     db: Session = Depends(get_db),
 ) -> list[UserPaymentMethod]:
     return list_current_user_payment_methods_workflow(
@@ -139,7 +143,7 @@ def set_current_user_default_payment_method(
 def detach_current_user_payment_method(
     payment_method_id: uuid.UUID,
     idempotency_key: uuid.UUID = Header(alias="Idempotency-Key"),
-    current_user: User = Depends(require_recent_active_user),
+    current_user: User = Depends(require_recent_active_or_suspended_user),
     db: Session = Depends(get_db),
 ) -> UserPaymentMethod:
     return detach_saved_payment_method(

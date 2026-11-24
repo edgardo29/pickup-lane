@@ -410,9 +410,17 @@
   margin: 0;
 }
 
+.checkout-payment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .checkout-payment-change {
   min-height: 32px;
   padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
   border: 1px solid rgba(248, 250, 252, 0.1);
   border-radius: 8px;
   color: rgba(248, 250, 252, 0.9);
@@ -1106,7 +1114,7 @@
     display: grid;
   }
 
-  .checkout-payment-change {
+  .checkout-payment-actions {
     justify-self: start;
   }
 

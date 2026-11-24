@@ -111,6 +111,7 @@ Run every command from the repository root.
 |---|---|
 | Run all backend tests | `backend/.venv/bin/pytest` |
 | Run one page's tests | `backend/.venv/bin/pytest backend/tests/pages/browse_games` |
+| Run one test, e.g. for a failure check | `backend/.venv/bin/pytest "backend/tests/pages/payment_methods/test_default_and_removal.py::test_an_expired_card_can_be_removed"` |
 | Run the migration checks | `backend/.venv/bin/pytest backend/tests/migrations` |
 | Also run live checks | `backend/.venv/bin/pytest --live` |
 | Force a clean rebuild of the test database | `backend/.venv/bin/pytest --rebuild-test-db` |

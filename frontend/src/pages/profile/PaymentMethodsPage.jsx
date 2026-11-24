@@ -36,16 +36,31 @@ import {
 
 const MAX_SAVED_PAYMENT_METHODS = 5
 
+const CHECKOUT_PATH_PATTERN = /^\/games\/[^/]+\/checkout\/?$/
+
+// Only an in-app checkout address can be the return destination; anything
+// else, including another site written to look local, returns to Profile.
 function getSafeReturnPath(value) {
-  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) {
+  if (typeof value !== 'string' || !value.startsWith('/')) {
     return ''
   }
 
-  return value
+  let url
+  try {
+    url = new URL(value, window.location.origin)
+  } catch {
+    return ''
+  }
+
+  if (url.origin !== window.location.origin || !CHECKOUT_PATH_PATTERN.test(url.pathname)) {
+    return ''
+  }
+
+  return `${url.pathname}${url.search}`
 }
 
 export function PaymentMethodsPage() {
-  const { currentUser: firebaseUser } = useAuth()
+  const { appUser, currentUser: firebaseUser } = useAuth()
   const { runWithStepUp } = useStepUp()
   const location = useLocation()
   const searchParams = new URLSearchParams(location.search)
@@ -67,6 +82,9 @@ export function PaymentMethodsPage() {
   const stripePaymentsEnabled = areStripePaymentsEnabled()
   const stripeReady = hasStripeCheckoutSupport()
   const hasReachedSavedCardLimit = paymentMethods.length >= MAX_SAVED_PAYMENT_METHODS
+  // A suspended player keeps their saved cards and can remove them, but cannot
+  // add a card or change the default.
+  const isSuspended = appUser?.account_status === 'suspended'
 
   const loadPaymentMethods = useCallback(async () => {
     if (!firebaseUser) {
@@ -121,7 +139,7 @@ export function PaymentMethodsPage() {
   }
 
   async function handleStartAddCard() {
-    if (!firebaseUser || !stripeReady || hasReachedSavedCardLimit) {
+    if (!firebaseUser || !stripeReady || hasReachedSavedCardLimit || isSuspended) {
       return
     }
 
@@ -259,34 +277,50 @@ export function PaymentMethodsPage() {
               <div>
                 <h2>Saved cards</h2>
               </div>
-              <button
-                className="profile-primary-action"
-                disabled={
-                  !stripeReady ||
-                  setupStatus === 'loading' ||
-                  Boolean(setupClientSecret) ||
-                  hasReachedSavedCardLimit
-                }
-                onClick={handleStartAddCard}
-                type="button"
-              >
-                {setupStatus === 'loading' ? 'Starting...' : 'Add card'}
-              </button>
+              {!isSuspended && (
+                <button
+                  className="profile-primary-action"
+                  disabled={
+                    !stripeReady ||
+                    setupStatus === 'loading' ||
+                    Boolean(setupClientSecret) ||
+                    hasReachedSavedCardLimit
+                  }
+                  onClick={handleStartAddCard}
+                  type="button"
+                >
+                  {setupStatus === 'loading' ? 'Starting...' : 'Add card'}
+                </button>
+              )}
             </div>
 
-            {!stripePaymentsEnabled && (
+            {isSuspended && (
+              <p className="payment-methods-alert">
+                Your account is suspended. You can view and remove saved cards, but you
+                can't add a card or change your default.
+              </p>
+            )}
+
+            {!isSuspended && !stripePaymentsEnabled && (
               <p className="payment-methods-alert payment-methods-alert--error">
                 Card payments are disabled for this demo.
               </p>
             )}
 
-            {stripePaymentsEnabled && !stripeReady && (
+            {!isSuspended && stripePaymentsEnabled && !stripeReady && (
               <p className="payment-methods-alert payment-methods-alert--error">
-                Stripe publishable key is not configured.
+                Adding cards isn't available right now.
               </p>
             )}
 
             {error && <p className="payment-methods-alert payment-methods-alert--error">{error}</p>}
+            {/* The setup window shows its own errors; when setup could not
+                start, that window is closed, so show the error here. */}
+            {setupError && !setupClientSecret && (
+              <p className="payment-methods-alert payment-methods-alert--error" role="alert">
+                {setupError}
+              </p>
+            )}
             {successMessage && (
               <p className="payment-methods-alert payment-methods-alert--inline">
                 <span>{successMessage}</span>
@@ -302,9 +336,9 @@ export function PaymentMethodsPage() {
               <PaymentMethodsEmptyState
                 title="No saved cards yet"
                 message={
-                  stripePaymentsEnabled
+                  stripeReady && !isSuspended
                     ? 'Add a card to speed up official game checkout.'
-                    : 'Card setup is unavailable while demo payments are disabled.'
+                    : ''
                 }
               />
             )}
@@ -313,6 +347,7 @@ export function PaymentMethodsPage() {
               <div className="payment-methods-list">
                 {paymentMethods.map((method) => (
                   <PaymentMethodRow
+                    canMakeDefault={!isSuspended}
                     isMenuOpen={activeMenuPaymentMethodId === method.id}
                     key={method.id}
                     method={method}
@@ -389,6 +424,7 @@ function PaymentMethodsEmptyState({ message = '', title }) {
 }
 
 function PaymentMethodRow({
+  canMakeDefault,
   isMenuOpen,
   method,
   onMenuToggle,
@@ -420,7 +456,7 @@ function PaymentMethodRow({
         </button>
         {isMenuOpen && (
           <div className="payment-method-row__menu" role="menu">
-            {!method.is_default && (
+            {canMakeDefault && !method.is_default && (
               <button
                 role="menuitem"
                 type="button"
