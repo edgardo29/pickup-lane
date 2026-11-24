@@ -12,15 +12,17 @@ split. The [Production Launch Pass Completion
 Log](production-launch-pass-completion-log.md) records completed major passes.
 
 Each major pass has its own folder under
-`docs/production-readiness/pass-records/`, such as `pass-01/`. The folder
-holds three kinds of files:
+`docs/production-readiness/production-launch/production-launch-pass-plans/`, named with the same ID and
+title as its branch without the `production-launch/` prefix, such as
+`PL06-backend-api-and-http-foundations/`. The folder holds three kinds of
+files:
 
-- **Stage 0 file** (`pass-01-stage-0.md`): the Stage 0 assessment and split
+- **Stage 0 file** (`PL06-stage-0.md`): the Stage 0 assessment and split
   decision.
 - **Plan files**: the engineering plan only. An unsplit pass has one,
-  `pass-01-plan.md`. A split pass has one per minor pass, such as
-  `pass-01a-plan.md` and `pass-01b-plan.md`.
-- **Pass record** (`pass-01-record.md`): the major-pass record. It holds
+  `PL06-plan.md`. A split pass has one per minor pass, such as
+  `PL06a-plan.md` and `PL06b-plan.md`.
+- **Pass record** (`PL06-record.md`): the major-pass record. It holds
   review results, verification evidence, deferred obligations, and the state
   of every requirement. When the pass is split, one record covers all of its
   minor passes.
@@ -109,7 +111,7 @@ not design the implementation.
    decision.
 
 When the major pass begins, create its folder and write the Stage 0 result in
-`pass-NN-stage-0.md` using
+`PLNN-stage-0.md` using
 `production-launch-stage-0-template.md`. State whether the pass will run as
 one major pass, be divided into minor passes, or is blocked, and explain why.
 Assign every major-pass requirement to the pass responsible for completing it.
@@ -134,8 +136,8 @@ Before implementation, read the complete
 then use it to write the engineering plan for the executable major or minor
 pass. Inspect the relevant code and documents while preparing the plan.
 
-Save the plan as its own file in the pass folder: `pass-NN-plan.md` for an
-unsplit pass, or `pass-NNa-plan.md`, `pass-NNb-plan.md`, and so on for each
+Save the plan as its own file in the pass folder: `PLNN-plan.md` for an
+unsplit pass, or `PLNNa-plan.md`, `PLNNb-plan.md`, and so on for each
 minor pass. The plan file contains only the plan. Gate A is complete when the
 plan is ready for Gate B review.
 
@@ -157,7 +159,7 @@ Gate B is approved only when the plan has no important omission or conflict,
 each requirement has a workable design and verification method, and every
 delayed obligation still identifies who or which pass will complete it and by
 when. Save the findings, corrections, and approval or blocker reason in the
-pass record (`pass-NN-record.md`), creating it if it does not exist yet. Do not
+pass record (`PLNN-record.md`), creating it if it does not exist yet. Do not
 add them to the plan file. Gate B approval does not itself
 authorize changes to an external service, publishing Git changes, or starting
 work beyond the current assignment.
@@ -295,8 +297,8 @@ release.
 The Production Launch Pass Completion Log stays a two-column major-pass
 completion record; it does not track individual requirements or evidence. Each
 major pass has one pass record at
-`docs/production-readiness/pass-records/pass-NN/pass-NN-record.md`, where `NN`
-is its two-digit pass number. The pass record holds review results,
+`docs/production-readiness/production-launch/production-launch-pass-plans/PLNN-<pass title>/PLNN-record.md`,
+where `NN` is its two-digit pass number. The pass record holds review results,
 verification evidence, and deferred obligations created by the pass or
 assigned to it by another pass. Minor passes have no separate records; the
 major pass's record covers them. Blockers found at Stage 0 stay in the Stage 0

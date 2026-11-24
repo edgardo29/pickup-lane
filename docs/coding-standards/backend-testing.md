@@ -27,8 +27,8 @@ All backend tests live in `backend/tests/`. Pytest settings are in
 pytest.ini          pytest settings and registered markers
 backend/tests/
   conftest.py       test setup: synthetic settings, test-database check,
-                    schema rebuild, per-test rollback, and the client, db,
-                    committed_db, and clock fixtures
+                    schema reuse or rebuild, per-test rollback, and the
+                    client, db, committed_db, and clock fixtures
   factories.py      builds test data: make_user, make_game, make_booking, ...
   migrations/       the standard pytest-alembic migration checks
   cloudflare_r2/    live check against a real Cloudflare R2 test bucket
@@ -39,8 +39,9 @@ backend/tests/
   domains/<area>/   business-rule guarantees, e.g. domains/bookings/
 ```
 
-A page folder is named after the page specification's file name, with
-underscores instead of dashes: `browse-games.md` becomes `pages/browse_games/`.
+A page folder is named after the page specification's file name, without
+the page ID and `-spec.md`, and with underscores instead of dashes:
+`F15-browse-games-spec.md` becomes `pages/browse_games/`.
 Create any folder only when its first test is written.
 
 ## 3. Where a test goes
@@ -112,6 +113,7 @@ Run every command from the repository root.
 | Run one page's tests | `backend/.venv/bin/pytest backend/tests/pages/browse_games` |
 | Run the migration checks | `backend/.venv/bin/pytest backend/tests/migrations` |
 | Also run live checks | `backend/.venv/bin/pytest --live` |
+| Force a clean rebuild of the test database | `backend/.venv/bin/pytest --rebuild-test-db` |
 | Re-save the frontend pages' backend fields files | `backend/.venv/bin/python -m backend.tests.frontend_fields.save` |
 
 Every run:
@@ -121,10 +123,21 @@ Every run:
    it is `TEST_DATABASE_URL`, and an environment variable of the same name
    (used by CI) takes precedence.
 2. Refuses to start unless the database is `pickup_lane_test_db`.
-3. Rebuilds that database's schema from the Alembic migrations, so it is never
-   out of date and needs no manual rebuild.
-4. Runs each test in a transaction that is rolled back afterward.
-5. Blocks network access to anything other than this machine
+3. Waits for any other run using the test database to finish, so two runs
+   never share it at once.
+4. Reuses the test database's schema when all of these hold, and otherwise
+   rebuilds it from the Alembic migrations:
+   - it was built from the current migration files (a fingerprint of
+     `backend/alembic/env.py` and every file in `backend/alembic/versions/`
+     is recorded at each rebuild, outside the rebuilt schema);
+   - its applied migration matches the latest migration;
+   - every table is empty, so nothing is left from an earlier run, such as
+     one stopped in the middle of a test.
+
+   `--rebuild-test-db` always rebuilds. A rebuild never needs to be run by
+   hand otherwise.
+5. Runs each test in a transaction that is rolled back afterward.
+6. Blocks network access to anything other than this machine
    (pytest-socket).
 
 The migration checks use `pickup_lane_migration_test_db`, on the same server
@@ -262,8 +275,11 @@ specification.
 ## 11. Rules for AI agents
 
 - Do not run tests, rebuild databases, run migrations, or start the application
-  unless the user explicitly says to. Running pytest rebuilds the test
+  unless the user explicitly says to. Running pytest can rebuild the test
   database schema.
 - Reading files, searching, and compile checks are always allowed.
 - After running tests, report the exact commands, the results, and anything
   not run.
+- Before any test run expected to take more than two minutes, or a series of
+  runs such as a page's failure checks, tell the user the expected duration and
+  what drives it, and wait for approval.

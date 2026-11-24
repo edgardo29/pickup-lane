@@ -39,8 +39,9 @@ frontend/tests/
 frontend/e2e/       Playwright workflows, one `<workflow>.spec.js` file each
 ```
 
-A page folder is named after the page specification's file name, with
-underscores instead of dashes: `browse-games.md` becomes `pages/browse_games/`.
+A page folder is named after the page specification's file name, without
+the page ID and `-spec.md`, and with underscores instead of dashes:
+`F15-browse-games-spec.md` becomes `pages/browse_games/`.
 Create a page folder only when its first test is written. Within a page folder,
 use one file per topic, named `<topic>.test.jsx`.
 
@@ -154,3 +155,6 @@ only. They are not part of the frontend test suite, and lint skips them.
 - Reading files, searching, and lint checks are always allowed.
 - After running tests, report the exact commands, the results, and anything
   not run.
+- Before any test run expected to take more than two minutes, or a series of
+  runs such as a page's failure checks, tell the user the expected duration and
+  what drives it, and wait for approval.

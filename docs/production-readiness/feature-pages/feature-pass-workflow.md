@@ -25,8 +25,8 @@ program still owns its separate evidence and completion decision.
 ## 1. Gate A — Read the documents
 
 **Branch.** Before the pass's first file change, create its branch from
-`develop`, named `feature/<page ID>-<page name>`: the page ID from
-`page-inventory.md`, then the page specification's file name, for example
+`develop`, named `feature/<page ID>-<page name>`: the page specification's
+file name without `-spec.md`. For example, `F15-browse-games-spec.md` gives
 `feature/F15-browse-games`. Use one branch and one pull request per page pass.
 The pull request targets `develop`; merging `develop` into `main` is a separate
 step outside the pass.
@@ -63,8 +63,8 @@ tests show what is currently implemented. They do not replace or override the
 specifications.
 
 If two authoritative documents conflict, identify the exact conflicting
-requirements and stop the affected work until the conflict is resolved. Do not
-invent a decision.
+requirements and stop the affected work until the user resolves the conflict,
+then follow "Decided open questions" in Gate B. Do not invent a decision.
 
 ## 2. Gate B — Check current behavior against the specification
 
@@ -76,6 +76,13 @@ tests prove. When those sections rely on a rule defined in another
 specification, check the code against that specification's rule too. Decide
 what already works, what still needs verification, what is missing or
 incomplete, and what is blocked by a decision or dependency.
+
+**Open questions.** If the specification does not decide something the page
+needs, is unclear, or conflicts with another specification, stop the affected
+work and bring the question to the user. Until the user decides, list the
+question in the Feature Pass Plan's Blocked section. After the user decides,
+follow "Decided open questions" in Gate B before changing the plan, code, or
+tests.
 
 Follow the page through the frontend, API, database, background work, and
 external services it actually uses, including error and recovery behavior
@@ -96,11 +103,41 @@ rule in that template. Use the exact rules in the page specification's
 Sections 3 and 4 and its numbered Section 5 scenarios as the fixed
 list. The Feature Pass Plan records, without copying the specification, Section 1 (Page
 requirements: whether each requirement is in the code), Section 2 (Test
-scenarios: whether each scenario has a backend test in Section 2.1 and a
-frontend test in Section 2.2, as it requires), and Section 3 (Work to do).
+scenarios: one row per specified case, backend in Section 2.1 and frontend in
+Section 2.2, with the Section 1 requirements each case proves), and Section 3
+(Work to do). Every Section 1 requirement must be named by at least one test
+row; add a row and its test to Section 3 (Work to do) for any requirement that
+is not.
 Before implementation, have the complete Feature Pass Plan reviewed against the
 specification and the inspected code and tests. Correct any defects, then
 review the corrected Feature Pass Plan again.
+
+### Decided open questions
+
+When the user decides an open question or approves a change to required
+behavior, update the documents in this order before changing code or tests:
+
+1. **Page specification:**
+   - In Section 3 (Main Functionality) or Section 4 (Important Behavior &
+     Decisions), add, change, or remove the text so it states the decided
+     behavior.
+   - In Section 5 (Tests & Edge Cases), add, change, or remove the scenarios
+     and expected results the decision affects.
+   - In Section 6 (Open Items to Resolve), remove the item the decision
+     resolves.
+   - If the behavior follows a rule owned by another specification, state the
+     page's behavior and reference the owning section, for example "see User
+     Detail, Section 4.10". If the decision changes that rule itself, update
+     the owning specification the same way.
+2. **Feature Pass Plan:**
+   - Section 1: add, change, or remove the affected requirement rows, citing
+     the updated specification section, and set "In the code?" from the
+     current code.
+   - Section 2: add, change, or remove the affected case rows.
+   - Section 3: add the code and test work the decision requires, and remove
+     the question from the Blocked section.
+
+Do not change code or tests for that decision until both documents reflect it.
 
 ## 3. Gate C — Implement and verify the page
 
@@ -118,12 +155,12 @@ from memory of earlier passes.
    - Feature Pass Plan, Section 1 (Page requirements): set "In the code?" to **Yes** for each
      requirement fixed.
    - Feature Pass Plan, Section 2.1 (Backend tests) and Section 2.2 (Frontend
-     tests): set "Test exists?" to **Yes** for each test added, and fill in
-     "Result" with **Pass** or **Fail** for each test run.
+     tests): fill in Test for each test written, and What was broken and
+     Where once its failure verification is done.
 
    Always update before stopping or switching chats.
-3. Before setting a test row to **Yes** or **Pass**, confirm:
-   - the test exists and proves that exact scenario, not only that it
+3. Before filling in a row's Test, What was broken, and Where, confirm:
+   - the test exists and proves that row's expected result, not only that it
      carries the scenario's marker or name;
    - every faked API answer matches what the real server returns for that
      kind of user (for example signed out, unverified, or suspended),
@@ -134,22 +171,29 @@ from memory of earlier passes.
      folder, page marker or name, one file per topic, exact status codes, a
      database check after each successful change, a nothing-changed check
      after each rejected request, and every allowed value of a status or role
-     the behavior depends on.
+     the behavior depends on;
+   - the test has completed the test failure verification below.
 4. When the pass changes the database schema, update
    `docs/production-readiness/data-model-baseline.md` in the same pass.
 5. If new work is found, add it to Feature Pass Plan, Section 3 (Work to do)
    before starting it.
-6. Gate C is done when every "In the code?" is **Yes**, and every "Test
-   exists?" is **Yes** and every "Result" is **Pass** in both Section 2.1 and
-   Section 2.2.
+6. **Open questions.** If the specification does not decide something the page
+   needs, is unclear, or conflicts with another specification, stop the
+   affected work and bring the question to the user. Until the user decides,
+   list the question in the Feature Pass Plan's Blocked section. After the
+   user decides, follow "Decided open questions" in Gate B before changing the
+   plan, code, or tests.
+7. Before finishing, run the full backend and frontend test suites and the
+   linters (Ruff and ESLint). Gate C is done when they pass, every "In the
+   code?" is **Yes**, every row in Section 2.1 and Section 2.2 has Test, What
+   was broken, and Where filled in, and every Section 1 requirement is named
+   by at least one test row whose test proves it.
 
 Use the reviewed Feature Pass Plan to identify the remaining work. Resolve technical
 choices using the specifications, current repository, approved architecture,
 and applicable engineering standards. Use
 `docs/production-readiness/database-architecture.md` for
-approved database changes that have not yet been implemented. Stop affected
-work if an unresolved product decision could change the required behavior.
-If implementation reveals an incorrect Feature Pass Plan, update it and
+approved database changes that have not yet been implemented. If implementation reveals an incorrect Feature Pass Plan, update it and
 review the correction before relying on it.
 
 Follow Sections 3 and 4 of the selected page specification and the shared
@@ -170,6 +214,76 @@ When shared behavior changes, verify affected pages and other callers. A
 check of the shared code alone does not prove that each caller uses it
 correctly.
 
+### Test coverage
+
+For each requirement and scenario in the specification, identify every
+distinct expected result, with the behavior and conditions it applies to. Each
+one is a specified case. A scenario or requirement with several expected
+results has several specified cases, and so several tests.
+
+Write one test for each specified case. A test verifies exactly one specified
+case, and no specified case has more than one test. Every test must complete
+Test failure verification.
+
+### Test failure verification
+
+Every test in the page's backend and frontend test folders must demonstrate that it
+detects an incorrect implementation of a behavior required by the
+specification. This applies whether the application behavior already existed,
+was incomplete, or was missing when the pass began.
+
+For each test:
+
+1. **Identify the expected result.** Use the page specification and Feature
+   Pass Plan to identify the specific expected result being verified. The test
+   name alone does not establish that result.
+2. **Select the test before the failure check.** Identify the test and its
+   expected result before running it against incorrect code.
+3. **Demonstrate failure using either method:**
+   - *Previous implementation:* run the test against the application code from
+     before the behavior was implemented or corrected.
+   - *Temporary defect:* temporarily change application code, not test code,
+     so the selected expected result becomes incorrect or absent.
+
+   If the previous implementation cannot execute the test far enough to check
+   the selected expected result, use the temporary-defect method. For each check,
+   run only the tests selected for it, not the page's whole test folder.
+4. **Confirm the failure is valid.** The test must execute and fail because an
+   assertion or explicit exception expectation detects the selected incorrect
+   result. The change must not merely invalidate test setup or prerequisites.
+   Import errors, setup failures, unrelated exceptions, and failures of
+   unrelated assertions do not count.
+
+   The selected incorrect result must actually occur. If something else still
+   prevents it, the failure does not count. Correct the failure check as
+   follows:
+   - **Another validation in the application code blocks it:** disable that
+     validation too, in the same temporary change.
+   - **A database constraint blocks it:** make the temporary change also
+     satisfy the constraint, for example by also clearing the field the
+     constraint checks.
+   - **The test's own setup blocks it**, for example because the test does not
+     fake an outside service, so the action fails no matter what: add the
+     missing fake to the test, so the action succeeds when the protection is
+     missing.
+5. **Count only verified tests.** One change may verify several preselected
+   tests, but each must independently fail for its own selected expected
+   result. Other tests that happen to fail do not count.
+6. **Restore and confirm.** Restore any temporary application-code changes,
+   confirm the files match their contents from before the check, and confirm
+   the tests pass with the intended implementation.
+7. **Record the check** in the test's row in Feature Pass Plan, Section 2.1
+   (backend) or Section 2.2 (frontend): What was broken and Where (file name),
+   or "Failed before the change" and "—".
+8. **Repeat when invalidated.** If a test's behavior-checking assertions
+   change, or application code affecting the specific behavior verified by a
+   recorded failure check changes afterward, repeat that test's failure
+   verification. Changes unrelated to that behavior do not invalidate the
+   check.
+
+A test's row is complete only when the test passes with the intended
+implementation and has completed this failure verification.
+
 ## 4. Gate D — Review corrections and completed work
 
 **Before starting,** re-read these coding standards in full, in
@@ -179,6 +293,8 @@ correctly.
 from memory of earlier passes.
 
 Conduct an independent, read-only review of the completed page pass against every item in its approved Feature Pass Plan, Sections 3–5 of the selected page specification, and the applicable coding standards.
+
+Gate D is review only. Do not run tests, linters, builds, or the app, and do not change code, tests, or data. Read the code, the tests, and the Feature Pass Plan, and rely on the test-suite results Gate C reported. The only tool Gate D runs is Gitleaks, for the security review below.
 
 Every Gate D round is a complete review from the start, including the round
 after corrections. Do not review only the diff or only the corrected items.
@@ -191,11 +307,16 @@ after corrections. Do not review only the diff or only the corrected items.
   against that rule.
 - Open each test listed in Feature Pass Plan, Section 2, and check it against
   the Gate C test checks above.
+- Check that every Section 1 requirement is named by at least one test row,
+  and that the row's test actually proves each requirement it names.
+- Check that every row in Feature Pass Plan, Section 2.1 and Section 2.2 has
+  Test, What was broken, and Where filled in, and that each recorded change
+  breaks the expected result in its row.
 
 Report findings as a short, plain list of the issues. Give further detail
 only when asked.
 
-Examine the relevant implementation, directly affected dependencies, and verification results from Gate C. Confirm that the required behavior, failure handling, prohibited effects, and applicable test scenarios have been addressed.
+Examine the relevant implementation, directly affected dependencies, and the test-suite results Gate C reported. Confirm that the required behavior, failure handling, prohibited effects, and applicable test scenarios have been addressed.
 
 **Limit the review to the selected page pass and its directly affected dependencies.** If shared code changed, review only the other pages named in the re-check items in Feature Pass Plan, Section 3 (Work to do). If a directly affected page or dependency was omitted, report the specific connection and return to Gate C to update the Feature Pass Plan. Review the updated Feature Pass Plan before continuing. Do not investigate unrelated features, files, or repository issues.
 
@@ -229,11 +350,11 @@ If a real credential was exposed, determine whether it reached Git history, logs
 
 Gate D is strictly read-only. Return identified problems to Gate C for correction.
 
-After corrections, rerun the verification affected by those corrections. Repeat Gitleaks and manual sensitive-information inspection, then conduct a new independent Gate D review of the complete corrected work.
+Gate C makes the corrections and reruns the affected tests. Then repeat Gitleaks and manual sensitive-information inspection, then conduct a new independent Gate D review of the complete corrected work.
 
 If corrections change the Feature Pass Plan or its re-check items in Section 3 (Work to do), update and review the Feature Pass Plan before proceeding.
 
-Approve Gate D only when the selected page pass satisfies its assessed requirements, the required verification has passed, and no blocking findings remain.
+Approve Gate D only when the selected page pass satisfies its assessed requirements, the test-suite results Gate C reported show the required tests pass, and no blocking findings remain.
 
 When Gate D approves the page, replace the items in Feature Pass Plan, Section 3 (Work to do) with "None. All work is done."
 
@@ -251,7 +372,7 @@ If publication is authorized:
 
 3. **Run Gitleaks against the exact staged contents and manually inspect them for secrets and prohibited sensitive information.** Also inspect any publication artifacts outside the staged files. Confirm that every item matches what was approved in Gate D, that inspection coverage is complete, and that no unresolved sensitive-information findings remain.
 
-4. Confirm that every "Result" in Feature Pass Plan, Section 2.1 (Backend tests) and Section 2.2 (Frontend tests) is **Pass** and was reviewed in Gate D. Do not introduce additional tests or expand the verification scope during Gate E. If required verification is missing, failed, or invalidated by subsequent changes, stop and return to Gate C.
+4. Confirm that every row in Feature Pass Plan, Section 2.1 (Backend tests) and Section 2.2 (Frontend tests) has Test, What was broken, and Where filled in, that the full test suites pass, and that both were reviewed in Gate D. Do not introduce additional tests or expand the verification scope during Gate E. If required verification is missing, failed, or invalidated by subsequent changes, stop and return to Gate C.
 
 5. Record the page's completion date in `docs/production-readiness/feature-pages/feature-pass-completion-log.md` as part of the pass PR, following the completion rules below. Merging the PR records the completion; do not change the log after the merge.
 

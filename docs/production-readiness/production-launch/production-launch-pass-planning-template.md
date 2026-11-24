@@ -5,9 +5,9 @@
 **Parent pass:** [Pass NN — official Production Launch Requirements name]  
 **Executable unit:** [Whole parent, or child name and bounded outcome]  
 **Assigned production-launch requirements:** [Exact requirement IDs]  
-**Stage 0 file:** [Link to `docs/production-readiness/pass-records/pass-NN/pass-NN-stage-0.md`]
+**Stage 0 file:** [Link to `docs/production-readiness/production-launch/production-launch-pass-plans/PLNN-<pass title>/PLNN-stage-0.md`]
 
-Save this plan as its own file in the pass folder: `pass-NN-plan.md` for an unsplit pass, or `pass-NNa-plan.md`, `pass-NNb-plan.md`, and so on for each minor pass. The file contains only the plan: no Stage 0 assessment, gate headings, review findings, or verification evidence. Every executable unit needs a written, independently reviewed plan. A child plan covers its assigned work while the pass record (`pass-NN-record.md`) tracks the whole pass.
+Save this plan as its own file in the pass folder: `PLNN-plan.md` for an unsplit pass, or `PLNNa-plan.md`, `PLNNb-plan.md`, and so on for each minor pass. The file contains only the plan: no Stage 0 assessment, gate headings, review findings, or verification evidence. Every executable unit needs a written, independently reviewed plan. A child plan covers its assigned work while the pass record (`PLNN-record.md`) tracks the whole pass.
 
 ## 1. Purpose, scope, and starting point
 
