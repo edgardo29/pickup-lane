@@ -418,15 +418,102 @@ def firebase(monkeypatch: pytest.MonkeyPatch) -> FakeFirebase:
 
 
 class FakeStripe:
-    """Answers the Stripe calls checkout makes, without the network."""
+    """Answers the Stripe calls checkout and card management make, without the network."""
 
     def __init__(self) -> None:
         self.intents: dict = {}
         self.cards: dict = {}
+        self.setup_intents: dict = {}
+        # The card each customer has as its Stripe default, if any.
+        self.customer_defaults: dict = {}
+        self.detached: set[str] = set()
+        # Names of Stripe calls that should fail, to simulate a provider error.
+        self.failing: set[str] = set()
         # What confirming a payment returns: "succeeded", "requires_action",
         # "requires_payment_method", or "processing".
         self.confirm_status = "succeeded"
         self.created: list[dict] = []
+
+    def _fail_if_set(self, name: str) -> None:
+        if name in self.failing:
+            raise RuntimeError(f"Stripe {name} failed.")
+
+    def create_customer(self, *, email, name, idempotency_key, metadata):
+        from backend.services.stripe_service import StripeCustomerResult
+
+        self._fail_if_set("create_customer")
+        return StripeCustomerResult(id=f"cus_test_{uuid.uuid4().hex[:12]}")
+
+    def create_setup_intent(self, *, customer_id, idempotency_key, metadata):
+        from backend.services.stripe_service import StripeSetupIntentResult
+
+        self._fail_if_set("create_setup_intent")
+        setup_id = f"seti_test_{uuid.uuid4().hex[:12]}"
+        setup_intent = StripeSetupIntentResult(
+            id=setup_id,
+            client_secret=f"{setup_id}_secret",
+            status="requires_payment_method",
+            customer_id=customer_id,
+            payment_method_id=None,
+        )
+        self.setup_intents[setup_id] = setup_intent
+        return setup_intent
+
+    def retrieve_setup_intent(self, setup_intent_id):
+        self._fail_if_set("retrieve_setup_intent")
+        return self.setup_intents[setup_intent_id]
+
+    def enter_card(
+        self,
+        setup_intent_id,
+        *,
+        fingerprint,
+        brand="visa",
+        last4="4242",
+        exp_month=12,
+        exp_year=2035,
+    ):
+        """The player enters a card in Stripe's form and Stripe accepts it."""
+        from backend.services.stripe_service import (
+            StripePaymentMethodCardResult,
+            StripeSetupIntentResult,
+        )
+
+        setup_intent = self.setup_intents[setup_intent_id]
+        card_id = f"pm_test_{uuid.uuid4().hex[:12]}"
+        self.cards[card_id] = StripePaymentMethodCardResult(
+            id=card_id,
+            customer_id=setup_intent.customer_id,
+            card_fingerprint=fingerprint,
+            card_brand=brand,
+            card_last4=last4,
+            exp_month=exp_month,
+            exp_year=exp_year,
+        )
+        self.setup_intents[setup_intent_id] = StripeSetupIntentResult(
+            id=setup_intent.id,
+            client_secret=setup_intent.client_secret,
+            status="succeeded",
+            customer_id=setup_intent.customer_id,
+            payment_method_id=card_id,
+        )
+        return card_id
+
+    def set_customer_default_payment_method(
+        self, *, customer_id, payment_method_id, idempotency_key=None
+    ):
+        self._fail_if_set("set_customer_default_payment_method")
+        self.customer_defaults[customer_id] = payment_method_id
+
+    def clear_customer_default_payment_method(
+        self, *, customer_id, idempotency_key=None
+    ):
+        self._fail_if_set("clear_customer_default_payment_method")
+        self.customer_defaults.pop(customer_id, None)
+
+    def detach_payment_method(self, payment_method_id, idempotency_key=None):
+        self._fail_if_set("detach_payment_method")
+        self.detached.add(payment_method_id)
 
     def create_payment_intent(
         self, *, amount_cents, currency, idempotency_key, metadata, customer_id=None
@@ -534,6 +621,17 @@ def stripe(monkeypatch: pytest.MonkeyPatch) -> FakeStripe:
         ):
             if hasattr(module, name):
                 monkeypatch.setattr(module, name, getattr(fake, name))
+    for name in (
+        "create_customer",
+        "create_setup_intent",
+        "retrieve_setup_intent",
+        "retrieve_payment_method",
+        "set_customer_default_payment_method",
+        "clear_customer_default_payment_method",
+        "detach_payment_method",
+    ):
+        monkeypatch.setattr(payment_method_service, name, getattr(fake, name))
+    monkeypatch.setattr(payment_method_service, "stripe_payments_enabled", lambda: True)
     monkeypatch.setattr(checkout_service, "stripe_payments_enabled", lambda: True)
     monkeypatch.setattr(checkout_service, "get_stripe_currency", lambda: "USD")
     monkeypatch.setattr(

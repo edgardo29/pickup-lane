@@ -218,9 +218,22 @@ block makes such a call fail. Replace the service with a fake through
 
 The root `conftest.py` provides two such fakes. The `firebase` fixture answers
 sign-in checks. The `stripe` fixture turns payments on and answers the Stripe
-calls checkout and the waitlist make; set `stripe.confirm_status` to choose how
-a confirmation turns out, and call `stripe.report(db, payment, status)` to
-simulate Stripe's webhook reporting a payment's new status.
+calls that checkout, the waitlist, and saved-card management make:
+
+- Set `stripe.confirm_status` to choose how a payment confirmation turns out,
+  and call `stripe.report(db, payment, status)` to simulate Stripe's webhook
+  reporting a payment's new status.
+- Call `stripe.enter_card(setup_intent_id, fingerprint=...)` to simulate the
+  player entering a card in Stripe's form. `stripe.setup_intents`,
+  `stripe.customer_defaults`, and `stripe.detached` record what Stripe was
+  asked to do.
+- Add a Stripe call's name to `stripe.failing`, such as
+  `"detach_payment_method"`, to make that call fail.
+
+The `stripe` fixture skips the check that asks Stripe whether a saved card is
+still valid (`verify_saved_payment_method_with_stripe`); a test of that check
+turns it back on with `monkeypatch`. Publish fees call Stripe from their own
+module, which the fixture does not cover.
 
 A check against the real service is marked `live` and `enable_socket`. It runs
 only with `pytest --live`, on purpose, and uses separate test credentials,
