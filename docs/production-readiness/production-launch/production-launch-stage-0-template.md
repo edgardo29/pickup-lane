@@ -1,6 +1,6 @@
 # Pass NN — [Official Production Launch Requirements name]: Stage 0
 
-[Save as `docs/production-readiness/pass-records/pass-NN/pass-NN-stage-0.md`.
+[Save as `docs/production-readiness/production-launch/production-launch-pass-plans/PLNN-<pass title>/PLNN-stage-0.md`.
 Replace all bracketed guidance with the actual assessment. This file records
 what is done, what is missing, and whether the pass is split. It contains no
 plan, design, review findings, or verification evidence.]

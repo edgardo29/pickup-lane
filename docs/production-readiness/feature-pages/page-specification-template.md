@@ -4,8 +4,10 @@ Use this template for one distinct page experience. Keep the six main sections;
 remove all instructional text and sample rows when writing a page. Add only the
 subsections the page needs, numbered within their main section (for example,
 3.1, 3.2). See
-[docs/production-readiness/feature-pages/pages/public/browse-games.md](pages/public/browse-games.md) for a
-completed example of this format.
+[docs/production-readiness/feature-pages/pages/player-facing/F15-browse-games-spec.md](pages/player-facing/F15-browse-games-spec.md) for a
+completed example of this format. Save a new specification as
+`<page ID>-<page name>-spec.md` under `pages/player-facing/` for a page players
+or visitors see, or under `pages/admin/` for a staff page.
 
 Before writing, review the relevant frontend and backend behavior, existing
 documentation, feature notes, and tests. Verify established decisions before

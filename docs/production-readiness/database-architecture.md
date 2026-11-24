@@ -247,9 +247,9 @@ returns, game_credits holds newly issued credit, and game_credit_usage records
 restoration of previously redeemed credit where applicable. Each financial
 leg uses a stable request-scoped operation key and its existing booking or
 payment link. This follows [Edit Official Game
-§4.7](feature-pages/pages/admin/edit-official-game.md#47-player-notice-and-withdrawal) and
+§4.7](feature-pages/pages/admin/F31-edit-official-game-spec.md#47-player-notice-and-withdrawal) and
 [Official Game Manage
-§4.3](feature-pages/pages/admin/official-game-manage.md#43-removing-players).
+§4.3](feature-pages/pages/admin/F30-official-game-manage-spec.md#43-removing-players).
 
 The exact physical names and server defaults for the request's choice,
 status, and timestamp columns are migration-level details not prescribed by
@@ -294,8 +294,8 @@ routine from creating a duplicate. No field-reservation system,
 venue table/column, approval workflow, or venue uniqueness constraint is
 approved; a uniqueness rule on address could incorrectly combine different
 facilities. See [Create Official Game
-§4.3](feature-pages/pages/admin/create-official-game.md#43-venues) and
-[Edit Game §4.3](feature-pages/pages/hosting/edit-game.md#43-location-and-save-outcome).
+§4.3](feature-pages/pages/admin/F29-create-official-game-spec.md#43-venues) and
+[Edit Game §4.3](feature-pages/pages/player-facing/F18-edit-game-spec.md#43-location-and-save-outcome).
 
 ## 4. Implementation considerations
 

@@ -11,8 +11,9 @@ Start here for a feature pass. For the 21 production-launch passes, start with
    complete specification under `docs/production-readiness/feature-pages/pages/` and any other
    specification it names as the source of a shared rule.
 2. Check `docs/production-readiness/feature-pages/feature-pass-completion-log.md` and any
-   existing assessment for that page under
-   `docs/production-readiness/feature-pages/feature-pass-plans/`.
+   existing plan for that page under
+   `docs/production-readiness/feature-pages/feature-pass-plans/`, named by its
+   page ID and name, such as `F15-browse-games-plan.md`.
 3. Read `docs/production-readiness/feature-pages/feature-pass-workflow.md` and follow Gate A
    onward. Read `docs/production-readiness/feature-pages/feature-pass-planning-template.md`
    in full when you reach Gate B. Read the supporting documents in Section 2
@@ -59,6 +60,6 @@ merge boundaries. Do not include credentials or private information in changes
 or review evidence.
 
 Final legal wording remains open in the Terms of Service, Privacy Policy, and
-Cancellation & Refunds Policy specifications under
-`docs/production-readiness/feature-pages/pages/public/`. Each specification's Section 6
+Cancellation & Refunds Policy specifications (F02, F03, and F04) under
+`docs/production-readiness/feature-pages/pages/player-facing/`. Each specification's Section 6
 identifies its unresolved items.

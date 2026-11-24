@@ -14,7 +14,7 @@ page specifications, start with `docs/production-readiness/feature-pages/README.
    any exact upstream requirement the pass cites.
 2. Check `docs/production-readiness/production-launch/production-launch-pass-completion-log.md`
    and any existing pass folder under
-   `docs/production-readiness/pass-records/` (named `pass-NN/`). The log
+   `docs/production-readiness/production-launch/production-launch-pass-plans/` (named `PLNN-<pass title>/`). The log
    records completed major passes; a blank date does not identify active work.
 3. Read `docs/production-readiness/production-launch/production-launch-pass-workflow.md`
    and begin at Stage 0. Read
@@ -74,10 +74,11 @@ and tests show what exists, not what is required. If these sources conflict,
 identify the exact passages and stop the affected work for a decision. Do not
 invent a rule or change a Production Launch Requirement without amending it.
 
-Each major pass has a folder under `docs/production-readiness/pass-records/`
-holding its Stage 0 file (`pass-NN-stage-0.md`), its plan files
-(`pass-NN-plan.md`, or `pass-NNa-plan.md` and so on when split), and its pass
-record (`pass-NN-record.md`) with review results, verification evidence, and
+Each major pass has a folder under
+`docs/production-readiness/production-launch/production-launch-pass-plans/`, named `PLNN-<pass title>/`,
+holding its Stage 0 file (`PLNN-stage-0.md`), its plan files
+(`PLNN-plan.md`, or `PLNNa-plan.md` and so on when split), and its pass
+record (`PLNN-record.md`) with review results, verification evidence, and
 deferred obligations. Pass 03 creates
 `docs/production-readiness/verification-map.md` for planned coverage; a
 planned check is not completed evidence. The completion log stays limited to

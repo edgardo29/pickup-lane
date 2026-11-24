@@ -12,6 +12,7 @@ Network access is blocked by pytest-socket (see ``pytest.ini``). Tests marked
 ``live`` call real outside services and run only with ``pytest --live``.
 """
 
+import hashlib
 import os
 import time
 import uuid
@@ -26,6 +27,11 @@ from fastapi.testclient import TestClient
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TEST_DATABASE_NAME = "pickup_lane_test_db"
+# The test database keeps its schema between runs while it still matches the
+# migrations. The record of what it was built from lives outside the public
+# schema, which every rebuild drops.
+TEST_DATABASE_META_SCHEMA = "pickup_lane_test_meta"
+TEST_DATABASE_LOCK_KEY = 6150421
 
 # Settings every test run uses. All values are synthetic.
 SYNTHETIC_SETTINGS = {
@@ -65,6 +71,11 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         action="store_true",
         help="also run tests marked live, which call real outside services",
     )
+    parser.addoption(
+        "--rebuild-test-db",
+        action="store_true",
+        help="rebuild the test database schema even if it is current",
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -94,33 +105,116 @@ def pytest_collection_modifyitems(
             item.add_marker(skip_live)
 
 
-@pytest.fixture(scope="session")
-def _test_database():
-    """Check the database, then rebuild its schema from the migrations."""
-    from alembic import command
+def _migration_fingerprint() -> str:
+    """A digest of every file the test schema is built from."""
+    alembic_dir = REPO_ROOT / "backend" / "alembic"
+    digest = hashlib.sha256()
+    for path in sorted(
+        [alembic_dir / "env.py", *(alembic_dir / "versions").glob("*.py")]
+    ):
+        digest.update(path.name.encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def _alembic_config(engine):
     from alembic.config import Config
+
+    config = Config()
+    config.set_main_option("script_location", str(REPO_ROOT / "backend" / "alembic"))
+    config.attributes["connection"] = engine
+    return config
+
+
+def _schema_is_reusable(engine, fingerprint: str) -> bool:
+    """True when the schema was built from these migrations and holds no rows."""
+    from alembic.script import ScriptDirectory
+    from sqlalchemy import text
+
+    with engine.connect() as connection:
+        record = f"{TEST_DATABASE_META_SCHEMA}.schema_build"
+        if connection.scalar(text(f"SELECT to_regclass('{record}')")) is None:
+            return False
+        if connection.scalar(text(f"SELECT fingerprint FROM {record}")) != fingerprint:
+            return False
+        if (
+            connection.scalar(text("SELECT to_regclass('public.alembic_version')"))
+            is None
+        ):
+            return False
+        applied = set(
+            connection.scalars(text("SELECT version_num FROM alembic_version"))
+        )
+        heads = set(ScriptDirectory.from_config(_alembic_config(engine)).get_heads())
+        if applied != heads:
+            return False
+        tables = connection.scalars(
+            text(
+                "SELECT tablename FROM pg_tables WHERE schemaname = 'public' "
+                "AND tablename <> 'alembic_version'"
+            )
+        ).all()
+        # A run that was killed mid-test can leave rows behind.
+        return not any(
+            connection.scalar(text(f'SELECT EXISTS (SELECT 1 FROM public."{table}")'))
+            for table in tables
+        )
+
+
+def _rebuild_schema(engine, fingerprint: str) -> None:
+    from alembic import command
+    from sqlalchemy import text
+
+    record = f"{TEST_DATABASE_META_SCHEMA}.schema_build"
+    with engine.begin() as connection:
+        connection.execute(
+            text(f"CREATE SCHEMA IF NOT EXISTS {TEST_DATABASE_META_SCHEMA}")
+        )
+        connection.execute(text(f"DROP TABLE IF EXISTS {record}"))
+        connection.execute(text("DROP SCHEMA public CASCADE"))
+        connection.execute(text("CREATE SCHEMA public"))
+    command.upgrade(_alembic_config(engine), "head")
+    with engine.begin() as connection:
+        connection.execute(text(f"CREATE TABLE {record} (fingerprint text NOT NULL)"))
+        connection.execute(
+            text(f"INSERT INTO {record} (fingerprint) VALUES (:fingerprint)"),
+            {"fingerprint": fingerprint},
+        )
+
+
+@pytest.fixture(scope="session")
+def _test_database(request: pytest.FixtureRequest):
+    """Check the database, then reuse its schema or rebuild it from the migrations.
+
+    The schema is reused only when it was built from the current migration
+    files, is at the latest migration, and holds no rows. ``--rebuild-test-db``
+    always rebuilds. A lock keeps two runs from using the database at once.
+    """
     from sqlalchemy import create_engine, text
     from sqlalchemy.pool import NullPool
 
     engine = create_engine(os.environ["DATABASE_URL"], poolclass=NullPool)
+    lock_connection = engine.connect()
     try:
-        with engine.begin() as connection:
-            name = connection.scalar(text("SELECT current_database()"))
-            if name != TEST_DATABASE_NAME:
-                pytest.exit(
-                    f"Refusing to run tests against {name!r}; "
-                    f"expected {TEST_DATABASE_NAME!r}.",
-                    returncode=pytest.ExitCode.USAGE_ERROR,
-                )
-            connection.execute(text("DROP SCHEMA public CASCADE"))
-            connection.execute(text("CREATE SCHEMA public"))
-        alembic_config = Config()
-        alembic_config.set_main_option(
-            "script_location", str(REPO_ROOT / "backend" / "alembic")
+        name = lock_connection.scalar(text("SELECT current_database()"))
+        if name != TEST_DATABASE_NAME:
+            pytest.exit(
+                f"Refusing to run tests against {name!r}; "
+                f"expected {TEST_DATABASE_NAME!r}.",
+                returncode=pytest.ExitCode.USAGE_ERROR,
+            )
+        lock_connection.execute(
+            text("SELECT pg_advisory_lock(:key)"), {"key": TEST_DATABASE_LOCK_KEY}
         )
-        alembic_config.attributes["connection"] = engine
-        command.upgrade(alembic_config, "head")
+        lock_connection.commit()
+        fingerprint = _migration_fingerprint()
+        if request.config.getoption("--rebuild-test-db") or not _schema_is_reusable(
+            engine, fingerprint
+        ):
+            _rebuild_schema(engine, fingerprint)
+        yield
     finally:
+        lock_connection.close()
         engine.dispose()
 
 
@@ -324,15 +418,102 @@ def firebase(monkeypatch: pytest.MonkeyPatch) -> FakeFirebase:
 
 
 class FakeStripe:
-    """Answers the Stripe calls checkout makes, without the network."""
+    """Answers the Stripe calls checkout and card management make, without the network."""
 
     def __init__(self) -> None:
         self.intents: dict = {}
         self.cards: dict = {}
+        self.setup_intents: dict = {}
+        # The card each customer has as its Stripe default, if any.
+        self.customer_defaults: dict = {}
+        self.detached: set[str] = set()
+        # Names of Stripe calls that should fail, to simulate a provider error.
+        self.failing: set[str] = set()
         # What confirming a payment returns: "succeeded", "requires_action",
         # "requires_payment_method", or "processing".
         self.confirm_status = "succeeded"
         self.created: list[dict] = []
+
+    def _fail_if_set(self, name: str) -> None:
+        if name in self.failing:
+            raise RuntimeError(f"Stripe {name} failed.")
+
+    def create_customer(self, *, email, name, idempotency_key, metadata):
+        from backend.services.stripe_service import StripeCustomerResult
+
+        self._fail_if_set("create_customer")
+        return StripeCustomerResult(id=f"cus_test_{uuid.uuid4().hex[:12]}")
+
+    def create_setup_intent(self, *, customer_id, idempotency_key, metadata):
+        from backend.services.stripe_service import StripeSetupIntentResult
+
+        self._fail_if_set("create_setup_intent")
+        setup_id = f"seti_test_{uuid.uuid4().hex[:12]}"
+        setup_intent = StripeSetupIntentResult(
+            id=setup_id,
+            client_secret=f"{setup_id}_secret",
+            status="requires_payment_method",
+            customer_id=customer_id,
+            payment_method_id=None,
+        )
+        self.setup_intents[setup_id] = setup_intent
+        return setup_intent
+
+    def retrieve_setup_intent(self, setup_intent_id):
+        self._fail_if_set("retrieve_setup_intent")
+        return self.setup_intents[setup_intent_id]
+
+    def enter_card(
+        self,
+        setup_intent_id,
+        *,
+        fingerprint,
+        brand="visa",
+        last4="4242",
+        exp_month=12,
+        exp_year=2035,
+    ):
+        """The player enters a card in Stripe's form and Stripe accepts it."""
+        from backend.services.stripe_service import (
+            StripePaymentMethodCardResult,
+            StripeSetupIntentResult,
+        )
+
+        setup_intent = self.setup_intents[setup_intent_id]
+        card_id = f"pm_test_{uuid.uuid4().hex[:12]}"
+        self.cards[card_id] = StripePaymentMethodCardResult(
+            id=card_id,
+            customer_id=setup_intent.customer_id,
+            card_fingerprint=fingerprint,
+            card_brand=brand,
+            card_last4=last4,
+            exp_month=exp_month,
+            exp_year=exp_year,
+        )
+        self.setup_intents[setup_intent_id] = StripeSetupIntentResult(
+            id=setup_intent.id,
+            client_secret=setup_intent.client_secret,
+            status="succeeded",
+            customer_id=setup_intent.customer_id,
+            payment_method_id=card_id,
+        )
+        return card_id
+
+    def set_customer_default_payment_method(
+        self, *, customer_id, payment_method_id, idempotency_key=None
+    ):
+        self._fail_if_set("set_customer_default_payment_method")
+        self.customer_defaults[customer_id] = payment_method_id
+
+    def clear_customer_default_payment_method(
+        self, *, customer_id, idempotency_key=None
+    ):
+        self._fail_if_set("clear_customer_default_payment_method")
+        self.customer_defaults.pop(customer_id, None)
+
+    def detach_payment_method(self, payment_method_id, idempotency_key=None):
+        self._fail_if_set("detach_payment_method")
+        self.detached.add(payment_method_id)
 
     def create_payment_intent(
         self, *, amount_cents, currency, idempotency_key, metadata, customer_id=None
@@ -440,6 +621,17 @@ def stripe(monkeypatch: pytest.MonkeyPatch) -> FakeStripe:
         ):
             if hasattr(module, name):
                 monkeypatch.setattr(module, name, getattr(fake, name))
+    for name in (
+        "create_customer",
+        "create_setup_intent",
+        "retrieve_setup_intent",
+        "retrieve_payment_method",
+        "set_customer_default_payment_method",
+        "clear_customer_default_payment_method",
+        "detach_payment_method",
+    ):
+        monkeypatch.setattr(payment_method_service, name, getattr(fake, name))
+    monkeypatch.setattr(payment_method_service, "stripe_payments_enabled", lambda: True)
     monkeypatch.setattr(checkout_service, "stripe_payments_enabled", lambda: True)
     monkeypatch.setattr(checkout_service, "get_stripe_currency", lambda: "USD")
     monkeypatch.setattr(

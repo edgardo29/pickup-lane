@@ -57,7 +57,7 @@ Use:
 
 Plans, pass titles, requirement names, test filenames, directory names, and workflow reports may help locate relevant work, but they do not prove what the final implementation changed or validated.
 
-The one exception is a Feature Pass Plan's test tables (Sections 2.1 and 2.2). Their results record tests that actually ran, so a feature pass PR's Validation may point to them.
+The one exception is a Feature Pass Plan's test tables (Sections 2.1 and 2.2). They record each test and the failure check it completed, so a feature pass PR's Validation may point to them, together with the full test suite results.
 
 Do not make a claim unless the implementation or executed validation supports it.
 
@@ -453,7 +453,7 @@ The Validation section explains what important behavior was actually exercised a
 
 Use one bullet for each meaningful validation scenario. Include only the bullets needed to communicate the results clearly.
 
-For a feature pass PR, the first bullet points to the Feature Pass Plan's test tables (Sections 2.1 and 2.2) and states whether every test passed. Add another bullet only for a check that proves something this PR changed and that the plan does not record, such as a migration check when the PR changes the database. Do not list routine checks that CI already shows, such as lint or the build. Each behavior appears in only one bullet.
+For a feature pass PR, the first bullet points to the Feature Pass Plan's test tables (Sections 2.1 and 2.2) and the full test suite results, and states whether every test passed. Add another bullet only for a check that proves something this PR changed and that the plan does not record, such as a migration check when the PR changes the database. Do not list routine checks that CI already shows, such as lint or the build. Each behavior appears in only one bullet.
 
 Each bullet should lead with the scenario or property, followed by what was exercised and what happened.
 

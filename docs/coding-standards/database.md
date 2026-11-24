@@ -50,8 +50,8 @@ The current local databases are:
 * `pickup_lane_migration_test_db`: the migration checks, which walk every
   migration up and down
 
-Do not use the test databases for manual QA. Pytest rebuilds them on every
-run.
+Do not use the test databases for manual QA. Pytest can rebuild or empty them
+on any run.
 
 ## Pre-Production Migration Policy
 
@@ -428,8 +428,10 @@ createdb -h localhost -U postgres -O pickup-lane-user pickup_lane_migration_test
 ```
 
 After that, pytest manages them. Every run checks that it is connected to
-`pickup_lane_test_db`, then drops and rebuilds its schema from the migrations,
-so no manual rebuild is needed after a migration change. Each migration check
+`pickup_lane_test_db`, then reuses its schema only when it was built from the
+current migrations and holds no data, and otherwise drops and rebuilds it from
+the migrations, so no manual rebuild is needed after a migration change
+(`--rebuild-test-db` forces one). Each migration check
 empties `pickup_lane_migration_test_db` before it starts. How tests use them is
 in `backend-testing.md`.
 
