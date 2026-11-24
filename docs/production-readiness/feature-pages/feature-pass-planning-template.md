@@ -34,10 +34,13 @@ test suite count; the old tests in `backend/tests_archive/` and
 
 Fill in during Gate B:
 
-- **#:** the Section 5 scenario number, or the specification section for a
-  case from Sections 3–4.
-- **Expected result:** the one case the row's test verifies, taken from the
-  specification.
+- **Test #:** the row's number in its table, counting from 1 in each table.
+- **Scenario:** the Section 5 scenario as the tests tag it, the page ID and
+  scenario number (`F13-9`). When the case also comes from a rule in Sections
+  3–4, add that section after it (`F13-9, Section 4.1`).
+- **Expected result:** the one case the row's test verifies, in the
+  specification's own words for that part of the scenario or rule. Reword only
+  where the test needs more detail than the specification gives.
 - **Requirements:** each Section 1 requirement the case proves, for example
   "R1, R4". Every requirement in Section 1 must appear in at least one row. A
   requirement no row names has no test proving it and cannot be marked done.
@@ -47,24 +50,35 @@ verification" in `docs/production-readiness/feature-pages/feature-pass-workflow.
 
 - **Test:** the name of the one test that verifies the case. Blank means the
   test is not written yet.
-- **What was broken:** one short phrase describing the temporary change that
+- **Failure check:** one short phrase describing the temporary change that
   made the test fail, or "Failed before the change".
-- **Where:** the file changed, without line numbers, or "—" for "Failed before
-  the change".
+- **File broken:** the file changed, without line numbers, or "—" for "Failed
+  before the change".
 
-A row is complete only when Test, What was broken, and Where are filled in.]
+A row is complete only when Test, Failure check, and File broken are filled
+in.
+
+Put this key above the two tables in the plan:]
+
+One row per specified case from Sections 3–5 of the page specification.
+
+- **Test #**: the row's number in its table.
+- **Scenario**: the page's Section 5 scenario, written as the tests tag it (`F13-9` is scenario 9); "Section 4.1" names a spec rule the result also comes from.
+- **Expected result**: the spec's own words for the part this test proves.
+- **Requirements**: the Section 1 requirements the test proves.
+- **Failure check** and **File broken**: the temporary break that made the test fail, and the file it was made in.
 
 ### 2.1 Backend tests
 
-| # | Expected result | Requirements | Test | What was broken | Where |
-|---|---|---|---|---|---|
-| [9] | [A removed card cannot be chosen for a paid waitlist] | [R7] | [`test_a_removed_card_cannot_be_chosen_for_a_paid_waitlist`] | [Removed the "card must be active" check for waitlist joins] | [`game_waitlist_service.py`] |
+| Test # | Scenario | Expected result | Requirements | Test | Failure check | File broken |
+|---|---|---|---|---|---|---|
+| [1] | [F13-9, Section 4.1] | [A removed card is not usable for a paid waitlist] | [R7] | [`test_a_removed_card_cannot_be_chosen_for_a_paid_waitlist`] | [Removed the "card must be active" check for waitlist joins] | [`game_waitlist_service.py`] |
 
 ### 2.2 Frontend tests
 
-| # | Expected result | Requirements | Test | What was broken | Where |
-|---|---|---|---|---|---|
-| [1] | [Saved cards show one Default badge] | [R1, R9] | [`F13-1: %s shows the cards with one Default badge`] | [Every card showed the Default badge] | [`PaymentMethodsPage.jsx`] |
+| Test # | Scenario | Expected result | Requirements | Test | Failure check | File broken |
+|---|---|---|---|---|---|---|
+| [1] | [F13-1] | [The page shows one default marker] | [R1, R9] | [`F13-1: %s shows the cards with one Default badge`] | [Every card showed the Default badge] | [`PaymentMethodsPage.jsx`] |
 
 ## 3. Work to do
 

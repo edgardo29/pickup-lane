@@ -155,11 +155,11 @@ from memory of earlier passes.
    - Feature Pass Plan, Section 1 (Page requirements): set "In the code?" to **Yes** for each
      requirement fixed.
    - Feature Pass Plan, Section 2.1 (Backend tests) and Section 2.2 (Frontend
-     tests): fill in Test for each test written, and What was broken and
-     Where once its failure verification is done.
+     tests): fill in Test for each test written, and Failure check and File
+     broken once its failure verification is done.
 
    Always update before stopping or switching chats.
-3. Before filling in a row's Test, What was broken, and Where, confirm:
+3. Before filling in a row's Test, Failure check, and File broken, confirm:
    - the test exists and proves that row's expected result, not only that it
      carries the scenario's marker or name;
    - every faked API answer matches what the real server returns for that
@@ -185,8 +185,8 @@ from memory of earlier passes.
    plan, code, or tests.
 7. Before finishing, run the full backend and frontend test suites and the
    linters (Ruff and ESLint). Gate C is done when they pass, every "In the
-   code?" is **Yes**, every row in Section 2.1 and Section 2.2 has Test, What
-   was broken, and Where filled in, and every Section 1 requirement is named
+   code?" is **Yes**, every row in Section 2.1 and Section 2.2 has Test,
+   Failure check, and File broken filled in, and every Section 1 requirement is named
    by at least one test row whose test proves it.
 
 Use the reviewed Feature Pass Plan to identify the remaining work. Resolve technical
@@ -273,8 +273,8 @@ For each test:
    confirm the files match their contents from before the check, and confirm
    the tests pass with the intended implementation.
 7. **Record the check** in the test's row in Feature Pass Plan, Section 2.1
-   (backend) or Section 2.2 (frontend): What was broken and Where (file name),
-   or "Failed before the change" and "—".
+   (backend) or Section 2.2 (frontend): Failure check and File broken (file
+   name), or "Failed before the change" and "—".
 8. **Repeat when invalidated.** If a test's behavior-checking assertions
    change, or application code affecting the specific behavior verified by a
    recorded failure check changes afterward, repeat that test's failure
@@ -310,7 +310,7 @@ after corrections. Do not review only the diff or only the corrected items.
 - Check that every Section 1 requirement is named by at least one test row,
   and that the row's test actually proves each requirement it names.
 - Check that every row in Feature Pass Plan, Section 2.1 and Section 2.2 has
-  Test, What was broken, and Where filled in, and that each recorded change
+  Test, Failure check, and File broken filled in, and that each recorded change
   breaks the expected result in its row.
 
 Report findings as a short, plain list of the issues. Give further detail
@@ -372,7 +372,7 @@ If publication is authorized:
 
 3. **Run Gitleaks against the exact staged contents and manually inspect them for secrets and prohibited sensitive information.** Also inspect any publication artifacts outside the staged files. Confirm that every item matches what was approved in Gate D, that inspection coverage is complete, and that no unresolved sensitive-information findings remain.
 
-4. Confirm that every row in Feature Pass Plan, Section 2.1 (Backend tests) and Section 2.2 (Frontend tests) has Test, What was broken, and Where filled in, that the full test suites pass, and that both were reviewed in Gate D. Do not introduce additional tests or expand the verification scope during Gate E. If required verification is missing, failed, or invalidated by subsequent changes, stop and return to Gate C.
+4. Confirm that every row in Feature Pass Plan, Section 2.1 (Backend tests) and Section 2.2 (Frontend tests) has Test, Failure check, and File broken filled in, that the full test suites pass, and that both were reviewed in Gate D. Do not introduce additional tests or expand the verification scope during Gate E. If required verification is missing, failed, or invalidated by subsequent changes, stop and return to Gate C.
 
 5. Record the page's completion date in `docs/production-readiness/feature-pages/feature-pass-completion-log.md` as part of the pass PR, following the completion rules below. Merging the PR records the completion; do not change the log after the merge.
 
