@@ -1,4 +1,5 @@
 import { CreditCard } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { FormErrorMessage } from '../../components/FormErrorMessage.jsx'
 import {
   formatPaymentMethodExpiration,
@@ -11,6 +12,7 @@ export function GameCheckoutPaymentCard({
   canAddPaymentMethod = true,
   isPaidWaitlistCheckout = false,
   isStripeCheckout,
+  manageCardsPath = '',
   onAddPaymentMethod,
   onAutoChargeConsentChange,
   onChangePaymentMethod,
@@ -33,14 +35,23 @@ export function GameCheckoutPaymentCard({
       <section className="checkout-card">
         <div className="checkout-payment-heading">
           <h2>Payment</h2>
-          {hasSavedCards && !stripePaymentsDisabled && (
-            <button
-              className="checkout-payment-change"
-              onClick={onChangePaymentMethod}
-              type="button"
-            >
-              Change
-            </button>
+          {!stripePaymentsDisabled && (hasSavedCards || (manageCardsPath && !stripeUnavailable)) && (
+            <div className="checkout-payment-actions">
+              {hasSavedCards && (
+                <button
+                  className="checkout-payment-change"
+                  onClick={onChangePaymentMethod}
+                  type="button"
+                >
+                  Change
+                </button>
+              )}
+              {manageCardsPath && !stripeUnavailable && (
+                <Link className="checkout-payment-change" to={manageCardsPath}>
+                  Manage cards
+                </Link>
+              )}
+            </div>
           )}
         </div>
         {stripePaymentsDisabled && (

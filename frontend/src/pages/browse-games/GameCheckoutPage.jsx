@@ -50,8 +50,8 @@ function GameCheckoutPage() {
   const requestedGuestCount = Number.parseInt(searchParams.get('guest_count') || '', 10)
 
   const [guestCount, setGuestCount] = useState(() => (
-    isAddGuestsCheckout && Number.isFinite(requestedGuestCount)
-      ? Math.max(requestedGuestCount, 1)
+    Number.isFinite(requestedGuestCount)
+      ? Math.max(requestedGuestCount, isAddGuestsCheckout ? 1 : 0)
       : 0
   ))
   const [agreed, setAgreed] = useState(false)
@@ -325,6 +325,18 @@ function GameCheckoutPage() {
     isStripeCheckout &&
       (stripeCheckout?.client_secret || checkout.isPaymentResume),
   )
+  // Payment Methods brings the player back to this checkout with the same
+  // mode and party size. Hidden once a payment is under way.
+  const checkoutReturnParams = new URLSearchParams()
+  if (isAddGuestsCheckout) {
+    checkoutReturnParams.set('mode', 'add-guests')
+  }
+  checkoutReturnParams.set('guest_count', String(checkout.effectiveGuestCount))
+  const manageCardsPath = isGuestSelectionLocked
+    ? ''
+    : `/profile/payment-methods?returnTo=${encodeURIComponent(
+      `/games/${gameId}/checkout?${checkoutReturnParams}`,
+    )}`
   const confirmLabel = getConfirmLabel({
     isAddGuestsCheckout,
     isWaitlistCheckout: checkout.isWaitlistCheckout,
@@ -436,6 +448,7 @@ function GameCheckoutPage() {
       isStripeReady={isStripeReady}
       stripePaymentsDisabled={stripePaymentsDisabled}
       isWaitlistCheckout={checkout.isWaitlistCheckout}
+      manageCardsPath={manageCardsPath}
       maxGuests={checkout.maxGuests}
       maxSelectableGuests={checkout.maxSelectableGuests}
       minGuestCount={checkout.minGuestCount}

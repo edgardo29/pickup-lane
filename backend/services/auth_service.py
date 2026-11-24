@@ -407,6 +407,14 @@ def require_recent_active_user(
     return current_user
 
 
+def require_recent_active_or_suspended_user(
+    current_user: User = Depends(require_active_or_suspended_user),
+    _identity: VerifiedFirebaseIdentity = Depends(require_recent_authentication),
+) -> User:
+    """Recent sign-in, for a protected action a suspended player may still take."""
+    return current_user
+
+
 def require_verified_user(
     current_user: User = Depends(require_active_user),
     identity: VerifiedFirebaseIdentity = Depends(get_verified_firebase_identity),

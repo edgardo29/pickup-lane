@@ -392,6 +392,12 @@ def create_saved_payment_method_setup_intent(
     idempotency_key: uuid.UUID,
 ) -> str:
     require_stripe_payments_enabled()
+    # Refuse before the player types a card that could not be saved.
+    if count_active_payment_methods(db, current_user.id) >= MAX_ACTIVE_PAYMENT_METHODS:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"You can save up to {MAX_ACTIVE_PAYMENT_METHODS} active cards.",
+        )
     operation = begin_payment_method_operation(
         db,
         current_user,
@@ -698,7 +704,7 @@ def sync_saved_payment_method(
         detach_unpersisted_payment_method(stripe_payment_method.id)
         mark_payment_method_operation_failed(db, operation, "saved_card_limit")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail=f"You can save up to {MAX_ACTIVE_PAYMENT_METHODS} active cards.",
         )
 
@@ -954,6 +960,7 @@ def detach_saved_payment_method(
             payment_method,
             current_user,
             datetime.now(UTC),
+            allow_expired=True,
         )
         payment_method = get_owned_payment_method_or_404(
             db,
@@ -1215,6 +1222,8 @@ def verify_saved_payment_method_with_stripe(
     payment_method: UserPaymentMethod,
     current_user: User,
     now: datetime,
+    *,
+    allow_expired: bool = False,
 ) -> None:
     try:
         stripe_payment_method = retrieve_payment_method(
@@ -1240,6 +1249,7 @@ def verify_saved_payment_method_with_stripe(
             current_user,
             stripe_payment_method,
             now,
+            allow_expired=allow_expired,
         )
         db.commit()
     except HTTPException:
@@ -1253,6 +1263,8 @@ def apply_stripe_verified_saved_payment_method(
     current_user: User,
     stripe_payment_method,
     now: datetime,
+    *,
+    allow_expired: bool = False,
 ) -> None:
     if stripe_payment_method.id != payment_method.stripe_payment_method_id:
         raise HTTPException(
@@ -1287,7 +1299,8 @@ def apply_stripe_verified_saved_payment_method(
     payment_method.updated_at = now
     db.add(payment_method)
 
-    if is_saved_payment_method_expired(payment_method, now):
+    # Removal accepts an expired card: the player may always remove a card.
+    if not allow_expired and is_saved_payment_method_expired(payment_method, now):
         payment_method.method_status = "expired"
         payment_method.is_default = False
         payment_method.updated_at = now

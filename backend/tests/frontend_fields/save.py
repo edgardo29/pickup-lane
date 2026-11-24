@@ -64,6 +64,20 @@ PAGE_ENDPOINTS = {
         "PATCH /games/{game_id}/host-edit",
         "PUT /community-game-details/games/{game_id}/host-edit",
     ],
+    "payment_methods": [
+        "GET /user-payment-methods",
+        "POST /user-payment-methods/setup-intent",
+        "POST /user-payment-methods/sync",
+        "PATCH /user-payment-methods/{payment_method_id}/default",
+        "DELETE /user-payment-methods/{payment_method_id}",
+        # Game Checkout, which opens this page from Manage cards.
+        "GET /games/{game_id}",
+        "GET /games/{game_id}/participants",
+        "GET /game-images",
+        "GET /venue-images",
+        "GET /venues/{venue_id}",
+        "GET /checkout/games/{game_id}/quote",
+    ],
 }
 
 

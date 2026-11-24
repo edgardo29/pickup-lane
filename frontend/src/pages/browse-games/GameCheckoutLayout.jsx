@@ -31,6 +31,7 @@ function GameCheckoutLayout({
   isStripeCheckout,
   isStripeReady,
   isWaitlistCheckout,
+  manageCardsPath,
   maxGuests,
   maxSelectableGuests,
   minGuestCount,
@@ -134,6 +135,7 @@ function GameCheckoutLayout({
               canAddPaymentMethod={canAddPaymentMethod}
               isPaidWaitlistCheckout={isPaidWaitlistCheckout}
               isStripeCheckout={usesCardSelection}
+              manageCardsPath={manageCardsPath}
               onAddPaymentMethod={onAddPaymentMethod}
               onAutoChargeConsentChange={onAutoChargeConsentChange}
               onChangePaymentMethod={onChangePaymentMethod}

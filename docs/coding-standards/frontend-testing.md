@@ -87,6 +87,7 @@ Run from the `frontend/` folder.
 |---|---|
 | Run all frontend tests | `npm run test` |
 | Run one page's tests | `npm run test -- pages/browse_games` |
+| Run one test, e.g. for a failure check | `npm run test -- pages/payment_methods/managing_cards.test.jsx -t "F13-4: after removal, the card is no longer listed"` |
 | Re-run tests on every file change | `npm run test:watch` |
 | Lint frontend code and tests | `npm run lint` |
 | Run Playwright workflows | `npm run test:e2e` |
