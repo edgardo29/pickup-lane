@@ -84,7 +84,9 @@ export function CheckEmailPage() {
           <strong>{email ? 'Ready' : 'Go back'}</strong>
         </button>
 
-        {message && <p className="auth-success">{message}</p>}
+        <div role="status">
+          {message && <p className="auth-success">{message}</p>}
+        </div>
         <FormErrorMessage>{error}</FormErrorMessage>
 
         <Link className="auth-text-link" to="/forgot-password">
