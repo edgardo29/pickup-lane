@@ -18,6 +18,7 @@ Need a Sub lets anyone discover summary cards for substitute requests for soccer
 - A date strip offers 14 dates in two sets of seven. Selecting a date shows posts for that day; switching sets selects the first date in the new set.
 - Posts are grouped by start hour and ordered by start time. Cards show venue, city/state, time, player group, format, indoor/outdoor setting, exact types of subs needed, open counts, and confirmed spots.
 - Selecting a card opens [Need a Sub Post Detail](F22-need-a-sub-post-detail-spec.md) for an authenticated visitor; guests are directed to Sign In or Create Account with that post as the return destination. **Load More** appends later posts when available.
+- Dates, card times, and hour groups use the Pickup Lane market time zone, America/Chicago at launch, the same as [Browse Games](F15-browse-games-spec.md). The viewer's device time zone does not change them.
 
 ### 3.2. Start a Post
 
@@ -40,7 +41,7 @@ Card open counts are reduced by confirmed subs, not pending requests. A full nee
 
 ### 4.3. Keeping Results Current
 
-Changing tab or date starts a fresh first batch. The list refreshes when the browser regains focus or visibility. A loading skeleton, empty message, and error alert communicate the result state. If loading another batch fails, already shown posts remain and **Load More** can be tried again.
+Changing tab or date starts a fresh first batch. The list refreshes when the browser regains focus or visibility. When the page is shown again after the market date changes, the date strip starts at the new today, and a selected date that has passed moves to today. A loading skeleton, empty message, and error alert communicate the result state. If loading another batch fails, already shown posts remain and **Load More** can be tried again.
 
 ### 4.4. Separate From Pickup Lane Games
 
@@ -74,6 +75,8 @@ These scenarios are for future verification; none are marked complete.
 | 13 | ☐ | Return to a visible page after a post changes status or count. | The refreshed first batch reflects currently eligible posts and counts. |
 | 14 | ☐ | Open a summary card as a guest, then sign in or create an account. | The visitor is prompted for an account and returns to the selected post after authentication if that post remains available; full details are not shown to the guest. |
 | 15 | ☐ | Open a guest-selected post that becomes unavailable during authentication. | The unavailable post is not exposed; the account flow uses its established fallback destination. |
+| 16 | ☐ | Open Need a Sub on a device set to a different time zone than the market. | The date strip, card times, and hour groups follow the market time zone; the device's time zone does not change them. |
+| 17 | ☐ | Return to the page after midnight in the market time zone. | The date strip starts at the new today, and a selected date that has passed moves to today. |
 
 ## 6. Open Items to Resolve
 

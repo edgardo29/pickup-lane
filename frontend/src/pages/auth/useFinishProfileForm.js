@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth.js'
 import { getAuthErrorMessage } from '../../lib/authErrors.js'
 import {
+  getAuthReturnState,
   getBirthdayValidation,
   hasCompleteProfile,
   splitDisplayName,
@@ -135,7 +136,7 @@ export function useFinishProfileForm() {
       })
 
       updateAppUser(updatedUser)
-      navigate(returnPath || '/games')
+      navigate(returnPath || '/games', { state: getAuthReturnState(returnPath) })
     } catch (requestError) {
       setError(getAuthErrorMessage(requestError))
       setStatus('idle')

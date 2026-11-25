@@ -4,7 +4,7 @@ import { useAuth } from '../../hooks/useAuth.js'
 import { getAuthErrorMessage } from '../../lib/authErrors.js'
 import { useGoogleRedirectCompletion } from '../../features/auth/authHooks.js'
 import {
-  getPostAuthPath,
+  getPostAuthNavigation,
   getSafeAuthBackPath,
   isValidEmail,
 } from '../../features/auth/authHelpers.js'
@@ -63,7 +63,8 @@ export function useSignInForm() {
 
     try {
       const signedInUser = await signInWithEmail(trimmedEmail, password)
-      navigate(returnPath || getPostAuthPath(signedInUser), { replace: true })
+      const next = getPostAuthNavigation(signedInUser, returnPath)
+      navigate(next.to, { replace: true, state: next.state })
     } catch (requestError) {
       setError(getAuthErrorMessage(requestError))
       setStatus('idle')
@@ -77,7 +78,8 @@ export function useSignInForm() {
     try {
       const signedInUser = await signInWithGoogle()
       if (signedInUser) {
-        navigate(returnPath || getPostAuthPath(signedInUser), { replace: true })
+        const next = getPostAuthNavigation(signedInUser, returnPath)
+        navigate(next.to, { replace: true, state: next.state })
       } else {
         navigate('/finish-profile', { replace: true, state: { from: returnPath } })
       }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { ApiRequestError } from '../../lib/apiClient.js'
 import { listNeedASubPostCards } from './needASubApi.js'
 
 const NEED_SUB_PAGE_LIMIT = 40
@@ -8,20 +9,43 @@ function buildEmptyPage() {
     hasMore: false,
     isLoading: true,
     isLoadingMore: false,
+    loadFailed: false,
     nextCursor: '',
     posts: [],
   }
 }
 
+// The server's own message when it answered; otherwise (no connection) a
+// player message instead of the browser's error text.
+function describeLoadError(loadError, fallback) {
+  return loadError instanceof ApiRequestError ? loadError.message : fallback
+}
+
+function buildFirstPage(response) {
+  return {
+    hasMore: Boolean(response.has_more),
+    isLoading: false,
+    isLoadingMore: false,
+    loadFailed: false,
+    nextCursor: response.next_cursor || '',
+    posts: response.posts || [],
+  }
+}
+
+// currentUser is the signed-in user only when they have a Pickup Lane account;
+// otherwise null, and the visitor browses as a guest.
 export function useNeedASubPostsData({
   currentUser,
   isAuthLoading,
+  onReturn,
   postView,
   selectedDateKey,
 }) {
   const [page, setPage] = useState(() => buildEmptyPage())
   const [error, setError] = useState('')
+  const [reloadCount, setReloadCount] = useState(0)
   const requestVersionRef = useRef(0)
+  const wasAwayRef = useRef(false)
   const requestContextKey = [
     currentUser?.uid || 'guest',
     isAuthLoading ? 'loading' : 'ready',
@@ -81,20 +105,15 @@ export function useNeedASubPostsData({
         })
 
         if (!ignore && isCurrentRequest(request)) {
-          setPage({
-            hasMore: Boolean(response.has_more),
-            isLoading: false,
-            isLoadingMore: false,
-            nextCursor: response.next_cursor || '',
-            posts: response.posts || [],
-          })
+          setPage(buildFirstPage(response))
         }
       } catch (loadError) {
         if (!ignore && isCurrentRequest(request)) {
-          setError(loadError instanceof Error ? loadError.message : 'Unable to load Need a Sub.')
+          setError(describeLoadError(loadError, 'Could not load Need a Sub posts. Try again.'))
           setPage({
             ...buildEmptyPage(),
             isLoading: false,
+            loadFailed: true,
           })
         }
       }
@@ -105,25 +124,20 @@ export function useNeedASubPostsData({
     return () => {
       ignore = true
     }
-  }, [beginRequest, currentUser, isAuthLoading, isCurrentRequest, postView, selectedDateKey])
+  }, [beginRequest, currentUser, isAuthLoading, isCurrentRequest, postView, reloadCount, selectedDateKey])
 
-  const refreshNeedASub = useCallback(async ({ showLoading = false } = {}) => {
-    if (isAuthLoading || !selectedDateKey) {
+  // Try the first batch again after it failed.
+  const retryNeedASub = useCallback(() => {
+    setReloadCount((count) => count + 1)
+  }, [])
+
+  // A background refresh replaces the list with a fresh first batch. If it
+  // fails, the cards already shown stay and the failure is reported.
+  const refreshNeedASub = useCallback(async () => {
+    if (isAuthLoading || !selectedDateKey || (postView === 'mine' && !currentUser)) {
       return
     }
 
-    if (postView === 'mine' && !currentUser) {
-      setPage({
-        ...buildEmptyPage(),
-        isLoading: false,
-      })
-      setError('')
-      return
-    }
-
-    if (showLoading) {
-      setPage(buildEmptyPage())
-    }
     setError('')
     const request = beginRequest()
 
@@ -134,27 +148,21 @@ export function useNeedASubPostsData({
         view: postView,
       })
 
-      if (!isCurrentRequest(request)) {
-        return
+      if (isCurrentRequest(request)) {
+        setPage(buildFirstPage(response))
       }
-
-      setPage({
-        hasMore: Boolean(response.has_more),
-        isLoading: false,
-        isLoadingMore: false,
-        nextCursor: response.next_cursor || '',
-        posts: response.posts || [],
-      })
     } catch (loadError) {
       if (!isCurrentRequest(request)) {
         return
       }
 
-      setError(loadError instanceof Error ? loadError.message : 'Unable to load Need a Sub.')
-      setPage({
-        ...buildEmptyPage(),
+      setError(describeLoadError(loadError, 'Could not load Need a Sub posts. Try again.'))
+      setPage((currentPage) => ({
+        ...currentPage,
         isLoading: false,
-      })
+        isLoadingMore: false,
+        loadFailed: currentPage.posts.length === 0,
+      }))
     }
   }, [
     beginRequest,
@@ -204,6 +212,7 @@ export function useNeedASubPostsData({
         hasMore: Boolean(response.has_more),
         isLoading: false,
         isLoadingMore: false,
+        loadFailed: false,
         nextCursor: response.next_cursor || '',
         posts: [
           ...currentPage.posts,
@@ -215,7 +224,7 @@ export function useNeedASubPostsData({
         return
       }
 
-      setError(loadError instanceof Error ? loadError.message : 'Unable to load more Need a Sub posts.')
+      setError(describeLoadError(loadError, 'Could not load more posts. Try again.'))
       setPage((currentPage) => ({
         ...currentPage,
         isLoadingMore: false,
@@ -234,30 +243,51 @@ export function useNeedASubPostsData({
     selectedDateKey,
   ])
 
+  // Leaving the page and coming back (window focus or tab visibility) counts
+  // as one return and starts one refresh.
   useEffect(() => {
-    function refreshVisibleNeedASub() {
-      if (document.visibilityState === 'visible') {
-        refreshNeedASub()
+    function refreshOnReturn() {
+      if (!wasAwayRef.current || document.visibilityState === 'hidden') {
+        return
+      }
+
+      wasAwayRef.current = false
+      onReturn?.()
+      refreshNeedASub()
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'hidden') {
+        wasAwayRef.current = true
+      } else {
+        refreshOnReturn()
       }
     }
 
-    window.addEventListener('focus', refreshNeedASub)
-    document.addEventListener('visibilitychange', refreshVisibleNeedASub)
+    function handleBlur() {
+      wasAwayRef.current = true
+    }
+
+    window.addEventListener('blur', handleBlur)
+    window.addEventListener('focus', refreshOnReturn)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
-      window.removeEventListener('focus', refreshNeedASub)
-      document.removeEventListener('visibilitychange', refreshVisibleNeedASub)
+      window.removeEventListener('blur', handleBlur)
+      window.removeEventListener('focus', refreshOnReturn)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [refreshNeedASub])
+  }, [onReturn, refreshNeedASub])
 
   return {
     error,
+    hasLoadFailed: page.loadFailed,
     hasMorePosts: page.hasMore,
     isLoading: page.isLoading,
     isLoadingMore: page.isLoadingMore,
     loadMoreNeedASub,
     posts: page.posts,
-    refreshNeedASub,
+    retryNeedASub,
     setError,
   }
 }

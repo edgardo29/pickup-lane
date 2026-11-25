@@ -1,10 +1,7 @@
 """Need a Sub post, position, visibility, and moderation workflows."""
 
 import uuid
-from base64 import urlsafe_b64decode, urlsafe_b64encode
-from binascii import Error as BinasciiError
 from datetime import date, datetime, timedelta
-from json import JSONDecodeError, dumps, loads
 
 from fastapi import HTTPException, status
 from sqlalchemy import and_, exists, func, or_, select
@@ -939,11 +936,13 @@ def list_sub_post_cards(
         )
 
     effective_limit = min(limit, SUB_POST_CARD_MAX_LIMIT)
-    cursor_payload = decode_sub_post_card_cursor(cursor) if cursor else None
-    validate_sub_post_card_cursor_context(
-        cursor_payload,
+    cursor_context = sub_post_card_cursor_context(
         starts_on=starts_on,
         view=view,
+        current_user=current_user,
+    )
+    cursor_payload = (
+        decode_sub_post_card_cursor(cursor, context=cursor_context) if cursor else None
     )
 
     statement = select(SubPost).where(
@@ -973,8 +972,7 @@ def list_sub_post_cards(
     if has_more and page_posts:
         next_cursor = encode_sub_post_card_cursor(
             post=page_posts[-1],
-            starts_on=starts_on,
-            view=view,
+            context=cursor_context,
         )
 
     return SubPostListRead(
@@ -1282,69 +1280,44 @@ def build_my_need_a_sub_cursor_filter(
     )
 
 
-def encode_sub_post_card_cursor(
+def sub_post_card_cursor_context(
     *,
-    post: SubPost,
     starts_on: date,
     view: str,
-) -> str:
-    payload = {
+    current_user: User | None,
+) -> dict[str, str]:
+    """The query a card cursor belongs to; My Posts cursors also name the owner."""
+    return {
+        "endpoint": "need_a_sub.posts.cards",
+        "sort": "starts_at,created_at,id:asc",
         "view": view,
         "starts_on": starts_on.isoformat(),
-        "starts_at": post.starts_at.isoformat(),
-        "created_at": post.created_at.isoformat(),
-        "id": str(post.id),
+        "owner": str(current_user.id) if view == "mine" else "",
     }
-    serialized = dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
-    return urlsafe_b64encode(serialized).decode("ascii")
 
 
-def decode_sub_post_card_cursor(cursor: str | None) -> dict[str, object] | None:
-    if cursor is None:
-        return None
+def encode_sub_post_card_cursor(*, post: SubPost, context: dict[str, str]) -> str:
+    return encode_signed_cursor(
+        {
+            "starts_at": post.starts_at.isoformat(),
+            "created_at": post.created_at.isoformat(),
+            "id": str(post.id),
+        },
+        context=context,
+    )
 
-    try:
-        decoded = urlsafe_b64decode(cursor.encode("ascii"))
-        payload = loads(decoded.decode("utf-8"))
-    except (BinasciiError, JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="cursor is invalid.",
-        ) from exc
 
-    if not isinstance(payload, dict):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="cursor is invalid.",
-        )
-
-    required_keys = {"view", "starts_on", "starts_at", "created_at", "id"}
-    if not required_keys.issubset(payload.keys()):
+def decode_sub_post_card_cursor(
+    cursor: str, *, context: dict[str, str]
+) -> dict[str, object]:
+    payload = decode_signed_cursor(cursor, context=context)
+    if not {"starts_at", "created_at", "id"}.issubset(payload.keys()):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="cursor is invalid.",
         )
 
     return payload
-
-
-def validate_sub_post_card_cursor_context(
-    cursor_payload: dict[str, object] | None,
-    *,
-    starts_on: date,
-    view: str,
-) -> None:
-    if cursor_payload is None:
-        return
-
-    if (
-        cursor_payload["starts_on"] != starts_on.isoformat()
-        or cursor_payload["view"] != view
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="cursor does not match the current query.",
-        )
 
 
 def build_sub_post_card_cursor_filter(cursor_payload: dict[str, object]):

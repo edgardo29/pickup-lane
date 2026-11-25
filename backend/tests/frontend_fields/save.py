@@ -83,6 +83,14 @@ PAGE_ENDPOINTS = {
         "GET /my-games",
         "GET /my-games/need-a-sub",
     ],
+    "need_a_sub": [
+        "GET /need-a-sub/posts/cards",
+        "GET /need-a-sub/posts/{sub_post_id}",
+        "GET /need-a-sub/my-requests",
+        "POST /need-a-sub/posts/{sub_post_id}/requests",
+        "GET /auth/email-availability",
+        "PATCH /users/me",
+    ],
 }
 
 

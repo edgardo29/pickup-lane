@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { AppPageShell } from '../../components/app/index.js'
 import { useAuth } from '../../hooks/useAuth.js'
 import {
@@ -152,6 +152,14 @@ function NeedASubDetailPage() {
     return () => window.clearTimeout(timerId)
   }, [location.pathname, location.state, navigate])
 
+  // The sign-in arrival mark applies only to the first load. Once the post has
+  // shown, a later unavailable result shows the unavailable message.
+  useEffect(() => {
+    if (post && location.state?.authReturn) {
+      navigate(location.pathname, { replace: true })
+    }
+  }, [location.pathname, location.state, navigate, post])
+
   async function runAction(action, successMessage) {
     setIsActing(true)
     setNotice('')
@@ -186,6 +194,12 @@ function NeedASubDetailPage() {
     } finally {
       setIsCancellingPost(false)
     }
+  }
+
+  // Arriving straight from sign-in at a post that is no longer available
+  // follows the game-discovery fallback instead of the unavailable message.
+  if (isUnavailable && location.state?.authReturn) {
+    return <Navigate to="/games" replace />
   }
 
   return (

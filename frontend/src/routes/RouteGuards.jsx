@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom'
-import { getSafeAuthBackPath } from '../features/auth/authHelpers.js'
+import { getPostAuthNavigation, getSafeAuthBackPath } from '../features/auth/authHelpers.js'
 import { useAuth } from '../hooks/useAuth.js'
 import {
   hasAdminWorkspaceAccess,
@@ -121,7 +121,8 @@ export function RedirectSignedIn({ children }) {
 
   if (appUser) {
     const returnPath = typeof location.state?.from === 'string' ? location.state.from : ''
-    return <Navigate to={returnPath || '/games'} replace />
+    const next = getPostAuthNavigation(appUser, returnPath)
+    return <Navigate to={next.to} replace state={next.state} />
   }
 
   return children

@@ -40,6 +40,10 @@ export const needASubFieldLimits = {
   notes: 500,
 }
 
+// Need a Sub posts are created in, and filed under the dates of, the Chicago
+// market's time zone.
+export const NEED_A_SUB_TIME_ZONE = 'America/Chicago'
+
 export const POST_TABS = [
   { key: 'all', label: 'All Posts' },
   { key: 'mine', label: 'My Posts' },
