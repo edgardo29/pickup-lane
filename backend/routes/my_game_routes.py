@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import User
 from backend.schemas import MyGamesListRead, MyNeedASubListRead
-from backend.services.auth_service import require_active_user
+from backend.services.auth_service import require_active_or_suspended_user
 from backend.services.game_service import list_my_game_cards
 from backend.services.need_a_sub_post_service import list_my_need_a_sub_cards
 
@@ -22,7 +22,8 @@ def list_my_games(
     limit: int = Query(default=40, ge=1),
     cursor: str | None = Query(default=None, max_length=2000),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    # A suspended player still finds the games they already host or joined.
+    current_user: User = Depends(require_active_or_suspended_user),
 ) -> MyGamesListRead:
     _mark_private_no_store(response)
     return list_my_game_cards(
@@ -45,7 +46,8 @@ def list_my_need_a_sub(
     limit: int = Query(default=40, ge=1),
     cursor: str | None = Query(default=None, max_length=2000),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    # A suspended player still finds the posts they own or were confirmed for.
+    current_user: User = Depends(require_active_or_suspended_user),
 ) -> MyNeedASubListRead:
     _mark_private_no_store(response)
     return list_my_need_a_sub_cards(

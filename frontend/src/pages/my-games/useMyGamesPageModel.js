@@ -193,24 +193,13 @@ export function useMyGamesPageModel() {
     loadPage(activeDomain, activeTab, { append: true })
   }
 
-  function resetPane(domain, view) {
-    requestVersionRef.current += 1
-    latestRequestByKeyRef.current = new Map()
-    setPages((currentPages) => ({
-      ...currentPages,
-      [domain]: {
-        ...(currentPages[domain] || createInitialDomainPages()),
-        [view]: createInitialPageState(),
-      },
-    }))
-  }
-
+  // Each view keeps the cards it loaded and its Load More position, so
+  // switching back shows them again. A view loads only the first time it opens.
   function changeActiveDomain(nextDomain) {
     if (nextDomain === activeDomain) {
       return
     }
 
-    resetPane(nextDomain, activeTab)
     setActiveDomain(nextDomain)
   }
 
@@ -219,7 +208,6 @@ export function useMyGamesPageModel() {
       return
     }
 
-    resetPane(activeDomain, nextTab)
     setActiveTab(nextTab)
   }
 

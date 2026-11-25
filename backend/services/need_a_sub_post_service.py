@@ -72,6 +72,10 @@ from backend.services.need_a_sub_rules import (
     require_before_post_start,
     sub_post_is_publicly_visible,
 )
+from backend.services.pagination_cursor import (
+    decode_signed_cursor,
+    encode_signed_cursor,
+)
 from backend.services.query_pagination import (
     DEFAULT_COLLECTION_LIMIT,
     MAX_COLLECTION_LIMIT,
@@ -92,7 +96,6 @@ SUB_POST_CARD_MAX_LIMIT = 100
 SUB_POST_CARD_VALID_VIEWS = {"all", "mine"}
 MY_NEED_A_SUB_CARD_DEFAULT_LIMIT = 40
 MY_NEED_A_SUB_CARD_MAX_LIMIT = 100
-MY_NEED_A_SUB_CURSOR_DOMAIN = "need-a-sub"
 MY_NEED_A_SUB_DETAIL_ACCESS_HOURS = 24
 MY_NEED_A_SUB_VALID_VIEWS = {"upcoming", "history"}
 MY_NEED_A_SUB_HISTORY_WINDOW_DAYS = 60
@@ -1001,11 +1004,11 @@ def list_my_need_a_sub_cards(
 
     sort_direction = "asc" if normalized_view == "upcoming" else "desc"
     effective_limit = min(limit, MY_NEED_A_SUB_CARD_MAX_LIMIT)
-    cursor_payload = decode_my_need_a_sub_cursor(cursor) if cursor else None
-    validate_my_need_a_sub_cursor_context(
-        cursor_payload,
-        view=normalized_view,
-        sort_direction=sort_direction,
+    cursor_context = my_need_a_sub_cursor_context(
+        view=normalized_view, sort_direction=sort_direction, user_id=current_user.id
+    )
+    cursor_payload = (
+        decode_my_need_a_sub_cursor(cursor, context=cursor_context) if cursor else None
     )
 
     current_time = now_utc()
@@ -1037,7 +1040,10 @@ def list_my_need_a_sub_cards(
             (SubPostRequestStatusHistory.sub_post_request_id == SubPostRequest.id),
             SubPostRequestStatusHistory.old_status == "confirmed",
             SubPostRequestStatusHistory.new_status == "canceled_by_owner",
-            SubPostRequestStatusHistory.change_source == "owner",
+            # The owner cancels the post, or the system does when the owner's
+            # account is deleted; both record the request's change from
+            # confirmed at the post's cancellation time.
+            SubPostRequestStatusHistory.change_source.in_(("owner", "system")),
             SubPostRequestStatusHistory.created_at == SubPost.canceled_at,
             SubPostRequestStatusHistory.id == latest_request_status_history_id,
         ),
@@ -1116,9 +1122,7 @@ def list_my_need_a_sub_cards(
     next_cursor = None
     if has_more and page_posts:
         next_cursor = encode_my_need_a_sub_cursor(
-            post=page_posts[-1],
-            view=normalized_view,
-            sort_direction=sort_direction,
+            post=page_posts[-1], context=cursor_context
         )
 
     return MyNeedASubListRead(
@@ -1201,87 +1205,50 @@ def get_my_need_a_sub_status(
     if post.post_status == "cancelled":
         return "Cancelled", "cancelled"
 
-    if bucket == "history":
-        return "Ended", "ended"
-
+    # An owner keeps the owner status in both views, as a host keeps Hosted.
     if is_owner:
         return "Your Post", "owner"
+
+    if bucket == "history":
+        return "Ended", "ended"
 
     return "Confirmed", "confirmed"
 
 
-def encode_my_need_a_sub_cursor(
-    *,
-    post: SubPost,
-    view: str,
-    sort_direction: str,
-) -> str:
-    payload = {
-        "domain": MY_NEED_A_SUB_CURSOR_DOMAIN,
+def my_need_a_sub_cursor_context(
+    *, view: str, sort_direction: str, user_id: uuid.UUID
+) -> dict[str, str]:
+    """A cursor works only for the same list, view, order, and account."""
+    return {
+        "endpoint": "my-games.need-a-sub",
         "view": view,
-        "sort_direction": sort_direction,
-        "starts_at": post.starts_at.isoformat(),
-        "created_at": post.created_at.isoformat(),
-        "id": str(post.id),
+        "sort": f"starts_at,created_at,id:{sort_direction}",
+        "user_id": str(user_id),
     }
-    serialized = dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
-    return urlsafe_b64encode(serialized).decode("ascii")
 
 
-def decode_my_need_a_sub_cursor(cursor: str | None) -> dict[str, object] | None:
-    if cursor is None:
-        return None
+def encode_my_need_a_sub_cursor(*, post: SubPost, context: dict[str, str]) -> str:
+    return encode_signed_cursor(
+        {
+            "starts_at": post.starts_at.isoformat(),
+            "created_at": post.created_at.isoformat(),
+            "id": str(post.id),
+        },
+        context=context,
+    )
 
-    try:
-        decoded = urlsafe_b64decode(cursor.encode("ascii"))
-        payload = loads(decoded.decode("utf-8"))
-    except (BinasciiError, JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="cursor is invalid.",
-        ) from exc
 
-    if not isinstance(payload, dict):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="cursor is invalid.",
-        )
-
-    required_keys = {
-        "domain",
-        "view",
-        "sort_direction",
-        "starts_at",
-        "created_at",
-        "id",
-    }
-    if not required_keys.issubset(payload.keys()):
+def decode_my_need_a_sub_cursor(
+    cursor: str, *, context: dict[str, str]
+) -> dict[str, object]:
+    payload = decode_signed_cursor(cursor, context=context)
+    if not {"starts_at", "created_at", "id"}.issubset(payload.keys()):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="cursor is invalid.",
         )
 
     return payload
-
-
-def validate_my_need_a_sub_cursor_context(
-    cursor_payload: dict[str, object] | None,
-    *,
-    view: str,
-    sort_direction: str,
-) -> None:
-    if cursor_payload is None:
-        return
-
-    if (
-        cursor_payload["view"] != view
-        or cursor_payload["domain"] != MY_NEED_A_SUB_CURSOR_DOMAIN
-        or cursor_payload["sort_direction"] != sort_direction
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="cursor does not match the current query.",
-        )
 
 
 def build_my_need_a_sub_cursor_filter(

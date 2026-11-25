@@ -70,7 +70,7 @@ function MyGameCard({ item }) {
 
         <p className="game-card__meta">
           <GameTimeIcon />
-          {formatTimeRange(game.starts_at, game.ends_at)}
+          {formatTimeRange(game.starts_at, game.ends_at, game.timezone)}
         </p>
 
         <p className="game-card__meta">

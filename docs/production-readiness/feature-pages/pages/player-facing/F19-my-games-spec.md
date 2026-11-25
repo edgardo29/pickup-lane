@@ -14,6 +14,7 @@ My Games lets a signed-in player find games they host or joined and outside-game
 
 - Choose **Games** or **Need a Sub**, then **Upcoming** or **History** within that area. Games/Upcoming opens first.
 - Each view groups cards by scheduled date. Upcoming runs earliest first; History runs newest first. Each view loads in batches with **Load More**.
+- Card dates, times, and date groups use each game's or post's own local time zone, America/Chicago at launch, the same as [Browse Games](F15-browse-games-spec.md) and [Need a Sub](F20-need-a-sub-spec.md). The viewer's device time zone does not change them.
 
 ### 3.2. Open Connected Items
 
@@ -28,7 +29,7 @@ Only owned/hosted items and confirmed participation qualify. Pending, waitlisted
 
 ### 4.2. Upcoming and History
 
-An active item stays Upcoming until its scheduled end, including while its game is in progress. A qualifying cancelled item moves to History immediately. History covers the last 60 days based on scheduled end, including a cancelled item's scheduled end rather than cancellation time. Cancelled-player history requires proof that the player was confirmed when the game or post was cancelled. The backend decides eligibility; the page preserves separate loading and pagination state for each view.
+An active item stays Upcoming until its scheduled end, including while its game is in progress. A qualifying cancelled item moves to History immediately. History covers the last 60 days based on scheduled end, including a cancelled item's scheduled end rather than cancellation time. Cancelled-player history requires proof that the player was confirmed when the game or post was cancelled. The backend decides eligibility. The page keeps separate loading and pagination state for each view: returning to a view shows the cards it already loaded, and its Load More continues from where it left off.
 
 ### 4.3. Loading and Access
 
@@ -60,6 +61,8 @@ These scenarios are for future verification; none are marked complete.
 | 11 | ☐ | Fail Load More, then retry. | Existing cards stay visible and retry adds the next batch without duplicates. |
 | 12 | ☐ | Open the page signed out or with another account after switching users. | Sign-in is required; the previous account's private cards are not shown to the next user. |
 | 13 | ☐ | Open My Games after suspension with existing hosted and confirmed activity. | The same qualifying commitments remain accessible for permitted follow-up or withdrawal; no item moves to History solely because of suspension. |
+| 14 | ☐ | Open My Games on a device set to a different time zone than the game or post. | Card dates, times, and date groups follow the game's or post's local time zone, matching Browse Games and Need a Sub; the device's time zone does not change them. |
+| 15 | ☐ | Load More in one view, switch to another area or view, then return. | The first view still shows the cards it loaded, and Load More continues from where it left off. |
 
 ## 6. Open Items to Resolve
 

@@ -1,10 +1,7 @@
 """Shared game database helpers and workflow support used by routes and services."""
 
 import uuid
-from base64 import urlsafe_b64decode, urlsafe_b64encode
-from binascii import Error as BinasciiError
 from datetime import UTC, date, datetime, timedelta
-from json import JSONDecodeError, dumps, loads
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
@@ -94,11 +91,14 @@ BROWSE_DATE_WINDOW_DAYS = 14
 BROWSE_TIMEZONE = "America/Chicago"
 MY_GAMES_CARD_DEFAULT_LIMIT = 40
 MY_GAMES_CARD_MAX_LIMIT = 100
-MY_GAMES_CURSOR_DOMAIN = "games"
 MY_GAMES_VALID_VIEWS = {"upcoming", "history"}
 MY_GAMES_HISTORY_WINDOW_DAYS = 60
 MY_GAMES_CONFIRMED_STATUSES = {"confirmed"}
 MY_GAMES_CANCELLED_TYPES = {"host_cancelled", "admin_cancelled"}
+# Who may cancel a whole game: its host, staff, or the system when the host's
+# account is deleted. Each records the player's change from confirmed to
+# cancelled at the game's cancellation time, which proves they were confirmed.
+MY_GAMES_GAME_CANCELLATION_SOURCES = ("host", "admin", "system")
 COMMUNITY_CONTENT_REVIEW_AUTO_CLOSE_STATUSES = {"completed", "expired"}
 COMMUNITY_CONTENT_REVIEW_AUTO_CLOSE_REASONS = {
     "completed": "Community Game was completed before moderation review was completed.",
@@ -1019,11 +1019,11 @@ def list_my_game_cards(
     normalized_view = normalize_my_games_view(view)
     effective_limit = min(limit, MY_GAMES_CARD_MAX_LIMIT)
     sort_direction = "asc" if normalized_view == "upcoming" else "desc"
-    cursor_payload = decode_my_games_cursor(cursor) if cursor else None
-    validate_my_games_cursor_context(
-        cursor_payload,
-        view=normalized_view,
-        sort_direction=sort_direction,
+    cursor_context = my_games_cursor_context(
+        view=normalized_view, sort_direction=sort_direction, user_id=current_user.id
+    )
+    cursor_payload = (
+        decode_my_games_cursor(cursor, context=cursor_context) if cursor else None
     )
     now = datetime.now(UTC)
     history_cutoff = now - timedelta(days=MY_GAMES_HISTORY_WINDOW_DAYS)
@@ -1055,7 +1055,9 @@ def list_my_game_cards(
             ParticipantStatusHistory.participant_id == GameParticipant.id,
             ParticipantStatusHistory.old_participant_status == "confirmed",
             ParticipantStatusHistory.new_participant_status == "cancelled",
-            ParticipantStatusHistory.change_source.in_(("host", "admin")),
+            ParticipantStatusHistory.change_source.in_(
+                MY_GAMES_GAME_CANCELLATION_SOURCES
+            ),
             ParticipantStatusHistory.created_at == Game.cancelled_at,
             ParticipantStatusHistory.id == latest_participant_status_history_id,
         ),
@@ -1140,9 +1142,7 @@ def list_my_game_cards(
     next_cursor = None
     if has_more and page_games:
         next_cursor = encode_my_games_cursor(
-            game=page_games[-1],
-            view=normalized_view,
-            sort_direction=sort_direction,
+            game=page_games[-1], context=cursor_context
         )
 
     return MyGamesListRead(
@@ -1255,78 +1255,40 @@ def normalize_my_games_view(view: str) -> str:
     return normalized_view
 
 
-def encode_my_games_cursor(
-    *,
-    game: Game,
-    view: str,
-    sort_direction: str,
-) -> str:
-    payload = {
-        "domain": MY_GAMES_CURSOR_DOMAIN,
+def my_games_cursor_context(
+    *, view: str, sort_direction: str, user_id: uuid.UUID
+) -> dict[str, str]:
+    """A My Games cursor works only for the same list, view, order, and account."""
+    return {
+        "endpoint": "my-games.games",
         "view": view,
-        "sort_direction": sort_direction,
-        "starts_at": game.starts_at.isoformat(),
-        "created_at": game.created_at.isoformat(),
-        "id": str(game.id),
+        "sort": f"starts_at,created_at,id:{sort_direction}",
+        "user_id": str(user_id),
     }
-    serialized = dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
-    return urlsafe_b64encode(serialized).decode("ascii")
 
 
-def decode_my_games_cursor(cursor: str | None) -> dict[str, object] | None:
-    if cursor is None:
-        return None
+def encode_my_games_cursor(*, game: Game, context: dict[str, str]) -> str:
+    return encode_signed_cursor(
+        {
+            "starts_at": game.starts_at.isoformat(),
+            "created_at": game.created_at.isoformat(),
+            "id": str(game.id),
+        },
+        context=context,
+    )
 
-    try:
-        decoded = urlsafe_b64decode(cursor.encode("ascii"))
-        payload = loads(decoded.decode("utf-8"))
-    except (BinasciiError, JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="cursor is invalid.",
-        ) from exc
 
-    if not isinstance(payload, dict):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="cursor is invalid.",
-        )
-
-    required_keys = {
-        "domain",
-        "view",
-        "sort_direction",
-        "starts_at",
-        "created_at",
-        "id",
-    }
-    if not required_keys.issubset(payload.keys()):
+def decode_my_games_cursor(
+    cursor: str, *, context: dict[str, str]
+) -> dict[str, object]:
+    payload = decode_signed_cursor(cursor, context=context)
+    if not {"starts_at", "created_at", "id"}.issubset(payload.keys()):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="cursor is invalid.",
         )
 
     return payload
-
-
-def validate_my_games_cursor_context(
-    cursor_payload: dict[str, object] | None,
-    *,
-    view: str,
-    sort_direction: str,
-) -> None:
-    if cursor_payload is None:
-        return
-
-    if (
-        cursor_payload["view"] != view
-        or cursor_payload["domain"] != MY_GAMES_CURSOR_DOMAIN
-        or cursor_payload["sort_direction"] != sort_direction
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="cursor does not match the current query.",
-        )
 
 
 def build_my_games_cursor_filter(

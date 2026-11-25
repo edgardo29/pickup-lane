@@ -79,6 +79,10 @@ PAGE_ENDPOINTS = {
         "GET /venues/{venue_id}",
         "GET /checkout/games/{game_id}/quote",
     ],
+    "my_games": [
+        "GET /my-games",
+        "GET /my-games/need-a-sub",
+    ],
 }
 
 
