@@ -14,11 +14,23 @@ from backend.models import (
     GameParticipant,
     Payment,
     PaymentCompensation,
+    Refund,
 )
 from backend.services import checkout_service
 from backend.tests.conftest import database_now
-from backend.tests.factories import make_game_credit, make_saved_card
-from backend.tests.pages.game_checkout.conftest import paying_player, upcoming_game
+from backend.tests.factories import (
+    make_booking,
+    make_game_credit,
+    make_participant,
+    make_saved_card,
+)
+from backend.tests.pages.game_checkout.conftest import (
+    financial_and_attendance_state,
+    paying_player,
+    register_card,
+    submit_checkout,
+    upcoming_game,
+)
 
 
 def booking_for(db, game, user):
@@ -39,279 +51,383 @@ def roster_statuses(db, booking):
     )
 
 
-@pytest.mark.page("F17", 3)
-def test_balance_after_credit_is_charged_and_confirms_only_after_payment(
-    db, client, firebase, stripe
+def start_checkout(
+    db,
+    client,
+    firebase,
+    stripe,
+    *,
+    amount=1000,
+    credit_amount=300,
+    status="succeeded",
+    with_card=True,
+    guests=0,
 ):
-    game = upcoming_game(db, price_per_player_cents=1000)
+    game = upcoming_game(db, price_per_player_cents=amount)
     user, card = paying_player(db, stripe)
-    make_game_credit(db, user=user, amount_cents=300)
-    headers = firebase.sign_in(user)
-
-    quote = client.get(f"/checkout/games/{game.id}/quote", headers=headers)
-    response = client.post(
-        f"/checkout/games/{game.id}/payment-intent",
-        headers=headers,
-        json={"guest_count": 0, "payment_method_id": str(card.id)},
+    credit = (
+        make_game_credit(db, user=user, amount_cents=credit_amount)
+        if credit_amount
+        else None
     )
-
-    assert quote.status_code == 200, quote.text
-    assert quote.json() == {
-        "subtotal_cents": 1000,
-        "platform_fee_cents": 0,
-        "checkout_total_cents": 1000,
-        "available_credit_cents": 300,
-        "credit_applied_cents": 300,
-        "minimum_charge_adjustment_cents": 0,
-        "final_amount_due_cents": 700,
-        "payment_required": True,
-    }
+    if not with_card:
+        db.delete(card)
+        db.commit()
+    stripe.confirm_status = status
+    response = submit_checkout(
+        client, firebase, game, user, card if with_card else None, guests=guests
+    )
     assert response.status_code == 201, response.text
-    assert response.json()["credit_applied_cents"] == 300
-    assert response.json()["final_amount_due_cents"] == 700
     booking = booking_for(db, game, user)
-    payment = db.scalars(select(Payment).where(Payment.booking_id == booking.id)).one()
-    assert payment.amount_cents == 700
-    assert payment.payment_status == "succeeded"
-    assert booking.booking_status == "confirmed"
-    assert roster_statuses(db, booking) == ["confirmed"]
-    usage = db.scalars(
-        select(GameCreditUsage).where(GameCreditUsage.booking_id == booking.id)
-    ).one()
-    assert (usage.amount_cents, usage.usage_status) == (300, "redeemed")
+    return game, user, card, credit, booking, response
 
 
-@pytest.mark.page("F17", 26)
-def test_low_price_without_credit_is_covered_without_a_card(
-    db, client, firebase, stripe
-):
-    game = upcoming_game(db, price_per_player_cents=30)
+@pytest.mark.page("F17", 3)
+def test_quote_returns_party_price(db, client, firebase, stripe):
+    game = upcoming_game(db)
     user, _card = paying_player(db, stripe)
-
-    response = client.post(
-        f"/checkout/games/{game.id}/payment-intent",
-        headers=firebase.sign_in(user),
-        json={"guest_count": 0},
+    make_game_credit(db, user=user, amount_cents=400)
+    before = financial_and_attendance_state(db)
+    response = client.get(
+        f"/checkout/games/{game.id}/quote?guest_count=2", headers=firebase.sign_in(user)
     )
+    assert response.status_code == 200, response.text
+    assert response.json()["checkout_total_cents"] == 3000
+    assert financial_and_attendance_state(db) == before
 
-    assert response.status_code == 201, response.text
-    body = response.json()
-    assert body["payment_required"] is False
-    assert body["credit_applied_cents"] == 0
-    assert body["minimum_charge_adjustment_cents"] == 30
-    assert body["final_amount_due_cents"] == 0
-    booking = booking_for(db, game, user)
+
+@pytest.mark.page("F17", 3)
+def test_quote_returns_available_credit(db, client, firebase, stripe):
+    game = upcoming_game(db)
+    user, _card = paying_player(db, stripe)
+    make_game_credit(db, user=user, amount_cents=400)
+    before = financial_and_attendance_state(db)
+    response = client.get(
+        f"/checkout/games/{game.id}/quote?guest_count=2", headers=firebase.sign_in(user)
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["available_credit_cents"] == 400
+    assert financial_and_attendance_state(db) == before
+
+
+@pytest.mark.page("F17", 3)
+def test_quote_returns_applied_credit(db, client, firebase, stripe):
+    game = upcoming_game(db)
+    user, _card = paying_player(db, stripe)
+    make_game_credit(db, user=user, amount_cents=400)
+    before = financial_and_attendance_state(db)
+    response = client.get(
+        f"/checkout/games/{game.id}/quote?guest_count=2", headers=firebase.sign_in(user)
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["credit_applied_cents"] == 400
+    assert financial_and_attendance_state(db) == before
+
+
+@pytest.mark.page("F17", 3)
+def test_quote_returns_amount_due(db, client, firebase, stripe):
+    game = upcoming_game(db)
+    user, _card = paying_player(db, stripe)
+    make_game_credit(db, user=user, amount_cents=400)
+    before = financial_and_attendance_state(db)
+    response = client.get(
+        f"/checkout/games/{game.id}/quote?guest_count=2", headers=firebase.sign_in(user)
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["final_amount_due_cents"] == 2600
+    assert financial_and_attendance_state(db) == before
+
+
+@pytest.mark.page("F17", 3)
+def test_stripe_charges_only_the_balance_after_credit(db, client, firebase, stripe):
+    _game, _user, _card, _credit, booking, response = start_checkout(
+        db, client, firebase, stripe, credit_amount=300, guests=1
+    )
+    assert only_payment(db, booking).amount_cents == 1700
+    assert stripe.created[0]["amount_cents"] == 1700
+    assert response.json()["credit_applied_cents"] == 300
     assert booking.booking_status == "confirmed"
-    assert (booking.discount_cents, booking.total_cents) == (30, 0)
-    assert (
-        db.scalars(select(Payment).where(Payment.booking_id == booking.id)).all() == []
-    )
-    assert (
-        db.scalars(
-            select(GameCreditUsage).where(GameCreditUsage.booking_id == booking.id)
-        ).all()
-        == []
-    )
-    assert stripe.created == []
-    assert db.scalars(select(GameCredit)).all() == []
-
-
-def only_payment(db, booking):
-    return db.scalars(select(Payment).where(Payment.booking_id == booking.id)).one()
-
-
-def credit_usages(db, booking):
-    return db.scalars(
-        select(GameCreditUsage).where(GameCreditUsage.booking_id == booking.id)
-    ).all()
 
 
 @pytest.mark.page("F17", 4)
-def test_the_selected_saved_card_pays_and_other_cards_are_rejected(
-    db, client, firebase, stripe
+def test_checkout_uses_the_selected_saved_card(
+    db, client, firebase, stripe, monkeypatch
 ):
     game = upcoming_game(db)
-    user, _first_card = paying_player(db, stripe)
-    second_card = make_saved_card(db, user=user, is_default=False)
-    _other_user, other_card = paying_player(db, stripe)
-    detached_card = make_saved_card(
-        db, user=user, is_default=False, method_status="detached"
-    )
-    headers = firebase.sign_in(user)
+    user, _first = paying_player(db, stripe)
+    selected = make_saved_card(db, user=user, is_default=False)
+    register_card(stripe, selected)
+    calls = []
+    confirm = stripe.confirm_payment_intent
 
-    rejected = [
-        client.post(
-            f"/checkout/games/{game.id}/payment-intent",
-            headers=headers,
-            json={"guest_count": 0, "payment_method_id": str(card.id)},
-        )
-        for card in (other_card, detached_card)
-    ]
-    accepted = client.post(
-        f"/checkout/games/{game.id}/payment-intent",
-        headers=headers,
-        json={"guest_count": 0, "payment_method_id": str(second_card.id)},
-    )
+    def record_selected(intent_id, **kwargs):
+        calls.append(kwargs["payment_method_id"])
+        return confirm(intent_id, **kwargs)
 
-    assert [response.status_code for response in rejected] == [404, 400]
-    assert accepted.status_code == 201, accepted.text
-    assert len(stripe.created) == 1
+    monkeypatch.setattr(checkout_service, "confirm_payment_intent", record_selected)
+    response = submit_checkout(client, firebase, game, user, selected)
+    assert response.status_code == 201, response.text
+    assert calls == [selected.stripe_payment_method_id]
     assert booking_for(db, game, user).booking_status == "confirmed"
 
 
-@pytest.mark.page("F17", 12)
-def test_card_authentication_leaves_the_spot_unconfirmed(db, client, firebase, stripe):
+@pytest.mark.page("F17", 4)
+def test_checkout_rejects_another_players_saved_card(db, client, firebase, stripe):
+    game = upcoming_game(db)
+    user, _card = paying_player(db, stripe)
+    _other, card = paying_player(db, stripe)
+    before = financial_and_attendance_state(db)
+    response = submit_checkout(client, firebase, game, user, card)
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Payment method not found."
+    assert financial_and_attendance_state(db) == before
+    assert stripe.created == []
+
+
+@pytest.mark.page("F17", 4)
+@pytest.mark.parametrize("status", ["detached", "expired"])
+def test_checkout_rejects_inactive_saved_cards(db, client, firebase, stripe, status):
     game = upcoming_game(db)
     user, card = paying_player(db, stripe)
-    stripe.confirm_status = "requires_action"
-
-    response = client.post(
-        f"/checkout/games/{game.id}/payment-intent",
-        headers=firebase.sign_in(user),
-        json={"guest_count": 0, "payment_method_id": str(card.id)},
+    card.method_status = status
+    card.is_default = False
+    db.commit()
+    before = financial_and_attendance_state(db)
+    response = submit_checkout(client, firebase, game, user, card)
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]
+        == "Only active payment methods can be used for checkout."
     )
+    assert financial_and_attendance_state(db) == before
+    assert stripe.created == []
 
-    assert response.status_code == 201, response.text
-    assert response.json()["stripe_status"] == "requires_action"
-    assert response.json()["client_secret"]
-    booking = booking_for(db, game, user)
+
+@pytest.mark.page("F17", 12)
+def test_expired_card_creates_no_hold_or_charge(db, client, firebase, stripe):
+    game = upcoming_game(db)
+    user, card = paying_player(db, stripe)
+    card.exp_year = 2020
+    db.commit()
+    before = financial_and_attendance_state(db)
+    response = submit_checkout(client, firebase, game, user, card)
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"] == "This saved card is expired. Choose another card."
+    )
+    assert financial_and_attendance_state(db) == before
+    assert stripe.created == []
+
+
+@pytest.mark.page("F17", 4)
+def test_stripe_detached_card_cannot_pay_despite_local_active_state(
+    db, client, firebase, stripe
+):
+    game = upcoming_game(db)
+    user, card = paying_player(db, stripe)
+    from dataclasses import replace
+
+    stripe.cards[card.stripe_payment_method_id] = replace(
+        stripe.cards[card.stripe_payment_method_id], customer_id="cus_other"
+    )
+    before = financial_and_attendance_state(db)
+    response = submit_checkout(client, firebase, game, user, card)
+    assert response.status_code == 409
+    assert (
+        response.json()["detail"]
+        == "This saved card is no longer linked to your Stripe customer."
+    )
+    assert financial_and_attendance_state(db) == before
+    assert stripe.created == []
+    db.refresh(card)
+    assert card.method_status == "detached"
+
+
+@pytest.mark.page("F17", 13)
+def test_paid_checkout_holds_spots_for_exactly_two_minutes(
+    db, client, firebase, stripe
+):
+    now = database_now(db)
+    _game, _user, _card, _credit, booking, _response = start_checkout(
+        db, client, firebase, stripe, status="requires_action"
+    )
+    assert booking.expires_at == now + timedelta(minutes=2)
+    assert booking.reservation_status == "held"
+    assert roster_statuses(db, booking) == ["pending_payment"]
+
+
+@pytest.mark.page("F17", 3)
+def test_processing_payment_does_not_confirm_a_spot(db, client, firebase, stripe):
+    _game, _user, _card, _credit, booking, response = start_checkout(
+        db, client, firebase, stripe, status="processing"
+    )
+    assert response.json()["stripe_status"] == "processing"
     assert booking.booking_status == "pending_payment"
     assert roster_statuses(db, booking) == ["pending_payment"]
 
 
 @pytest.mark.page("F17", 12)
-def test_an_expired_saved_card_is_rejected_before_any_hold(
+def test_card_authentication_leaves_the_spot_unconfirmed(db, client, firebase, stripe):
+    _game, _user, _card, _credit, booking, response = start_checkout(
+        db, client, firebase, stripe, status="requires_action"
+    )
+    assert response.json()["stripe_status"] == "requires_action"
+    assert response.json()["client_secret"]
+    assert booking.booking_status == "pending_payment"
+    assert roster_statuses(db, booking) == ["pending_payment"]
+
+
+@pytest.mark.page("F17", 20)
+def test_failed_required_payment_does_not_finalize_a_booking(
     db, client, firebase, stripe
 ):
-    game = upcoming_game(db)
-    user, _card = paying_player(db, stripe)
-    expired = make_saved_card(db, user=user, is_default=False, exp_year=2020)
-
-    response = client.post(
-        f"/checkout/games/{game.id}/payment-intent",
-        headers=firebase.sign_in(user),
-        json={"guest_count": 0, "payment_method_id": str(expired.id)},
+    _game, _user, _card, _credit, booking, _response = start_checkout(
+        db, client, firebase, stripe, status="requires_action"
     )
-
-    assert response.status_code == 400
-    assert (
-        response.json()["detail"] == "This saved card is expired. Choose another card."
-    )
-    assert booking_for(db, game, user) is None
-    assert stripe.created == []
+    stripe.report(db, only_payment(db, booking), "canceled")
+    db.refresh(booking)
+    assert booking.booking_status == "failed"
+    assert roster_statuses(db, booking) == ["cancelled"]
 
 
 @pytest.mark.page("F17", 13)
-def test_expired_hold_then_late_payment_is_refunded_not_confirmed(
+def test_expired_hold_releases_capacity_without_confirmation(
     db, client, firebase, stripe
 ):
-    game = upcoming_game(db)
-    user, card = paying_player(db, stripe)
-    stripe.confirm_status = "requires_action"
-    headers = firebase.sign_in(user)
-    client.post(
-        f"/checkout/games/{game.id}/payment-intent",
-        headers=headers,
-        json={"guest_count": 0, "payment_method_id": str(card.id)},
+    game, user, _card, _credit, booking, _response = start_checkout(
+        db, client, firebase, stripe, status="requires_action"
     )
-    booking = booking_for(db, game, user)
-    booking.expires_at = database_now(db) - timedelta(seconds=1)
+    booking.expires_at = database_now(db)
     db.commit()
+    response = client.get(
+        f"/checkout/bookings/{booking.id}/status", headers=firebase.sign_in(user)
+    )
+    assert response.status_code == 200
+    assert response.json()["booking_status"] == "expired"
+    db.refresh(booking)
+    assert booking.reservation_status == "released"
+    assert roster_statuses(db, booking) == ["cancelled"]
+    from backend.services.game_service import count_roster_players
 
-    status = client.get(f"/checkout/bookings/{booking.id}/status", headers=headers)
+    assert count_roster_players(db, game.id, now=database_now(db)) == 0
+
+
+@pytest.mark.page("F17", 13)
+def test_late_payment_creates_a_refund_instead_of_reviving_an_expired_hold(
+    db, client, firebase, stripe
+):
+    _game, _user, _card, _credit, booking, _response = start_checkout(
+        db, client, firebase, stripe, status="requires_action"
+    )
+    booking.expires_at = database_now(db)
+    db.commit()
     stripe.report(db, only_payment(db, booking), "succeeded")
-
-    assert status.status_code == 200, status.text
-    assert status.json()["booking_status"] == "expired"
     db.refresh(booking)
     assert booking.booking_status == "expired"
     assert roster_statuses(db, booking) == ["cancelled"]
-    compensation = db.scalars(
+    compensation = db.scalar(
         select(PaymentCompensation).where(PaymentCompensation.booking_id == booking.id)
-    ).one()
+    )
+    assert compensation is not None
     assert (compensation.reason, compensation.action) == (
         "reservation_expired",
         "refund",
     )
+    assert compensation.refund_id is not None
+    assert db.get(Refund, compensation.refund_id).amount_cents == 700
 
 
-@pytest.mark.page("F17", 14)
-def test_submitting_twice_while_pending_keeps_one_booking(db, client, firebase, stripe):
-    game = upcoming_game(db)
-    user, card = paying_player(db, stripe)
-    stripe.confirm_status = "requires_action"
-    headers = firebase.sign_in(user)
-    body = {"guest_count": 0, "payment_method_id": str(card.id)}
-
-    first = client.post(
-        f"/checkout/games/{game.id}/payment-intent", headers=headers, json=body
+@pytest.mark.page("F17", 13)
+def test_capacity_conflict_after_payment_creates_a_refund(db, client, firebase, stripe):
+    game, _user, _card, _credit, booking, _response = start_checkout(
+        db, client, firebase, stripe, status="requires_action"
     )
-    second = client.post(
-        f"/checkout/games/{game.id}/payment-intent", headers=headers, json=body
+    game.total_spots = 1
+    make_participant(db, game=game, booking=make_booking(db, game=game))
+    db.commit()
+    stripe.report(db, only_payment(db, booking), "succeeded")
+    db.refresh(booking)
+    assert booking.booking_status == "capacity_conflict"
+    assert roster_statuses(db, booking) == ["cancelled"]
+    compensation = db.scalar(
+        select(PaymentCompensation).where(PaymentCompensation.booking_id == booking.id)
     )
-
-    assert first.status_code == 201, first.text
-    assert second.status_code == 201, second.text
-    assert first.json()["booking_id"] == second.json()["booking_id"]
-    bookings = db.scalars(select(Booking).where(Booking.game_id == game.id)).all()
-    assert len(bookings) == 1
-    assert len(stripe.created) == 1
+    assert compensation is not None
+    assert (compensation.reason, compensation.action) == ("capacity_conflict", "refund")
+    assert compensation.refund_id is not None
+    assert db.get(Refund, compensation.refund_id).amount_cents == 700
 
 
 @pytest.mark.page("F17", 19)
-def test_full_credit_confirms_without_a_card_and_deducts_once(
+def test_full_credit_confirms_without_a_saved_card_or_charge(
     db, client, firebase, stripe
 ):
-    game = upcoming_game(db, price_per_player_cents=1000)
-    user, _card = paying_player(db, stripe)
-    credit = make_game_credit(db, user=user, amount_cents=1500)
-
-    response = client.post(
-        f"/checkout/games/{game.id}/payment-intent",
-        headers=firebase.sign_in(user),
-        json={"guest_count": 0},
+    _game, _user, _card, _credit, booking, response = start_checkout(
+        db, client, firebase, stripe, credit_amount=1500, with_card=False
     )
-
-    assert response.status_code == 201, response.text
-    assert response.json()["final_amount_due_cents"] == 0
-    booking = booking_for(db, game, user)
+    assert response.json()["payment_required"] is False
     assert booking.booking_status == "confirmed"
+    assert roster_statuses(db, booking) == ["confirmed"]
     assert (
         db.scalars(select(Payment).where(Payment.booking_id == booking.id)).all() == []
     )
-    assert [(u.amount_cents, u.usage_status) for u in credit_usages(db, booking)] == [
-        (1000, "redeemed")
-    ]
-    db.refresh(credit)
-    assert credit.available_cents == 500
     assert stripe.created == []
 
 
-@pytest.mark.page("F17", 20)
-def test_partial_credit_is_released_when_the_payment_fails(
+@pytest.mark.page("F17", 19)
+def test_reserved_credit_is_redeemed_only_when_checkout_completes(
     db, client, firebase, stripe
 ):
-    game = upcoming_game(db, price_per_player_cents=1000)
-    user, card = paying_player(db, stripe)
-    credit = make_game_credit(db, user=user, amount_cents=300)
-    stripe.confirm_status = "requires_payment_method"
-    client.post(
-        f"/checkout/games/{game.id}/payment-intent",
-        headers=firebase.sign_in(user),
-        json={"guest_count": 0, "payment_method_id": str(card.id)},
+    _game, _user, _card, credit, booking, _response = start_checkout(
+        db, client, firebase, stripe, status="requires_action"
     )
-    booking = booking_for(db, game, user)
-    payment = only_payment(db, booking)
-
-    stripe.report(db, payment, "canceled")
-
-    assert payment.amount_cents == 700
+    assert booking.booking_status == "pending_payment"
+    assert [u.usage_status for u in credit_usages(db, booking)] == ["reserved"]
+    stripe.report(db, only_payment(db, booking), "succeeded")
     db.refresh(booking)
     db.refresh(credit)
-    assert booking.booking_status == "failed"
-    assert roster_statuses(db, booking) == ["cancelled"]
-    assert [u.usage_status for u in credit_usages(db, booking)] == ["released"]
+    assert booking.booking_status == "confirmed"
+    assert [(u.amount_cents, u.usage_status) for u in credit_usages(db, booking)] == [
+        (300, "redeemed")
+    ]
+    assert credit.available_cents == 0
+
+
+@pytest.mark.page("F17", 20)
+def test_reserved_credit_is_released_when_payment_fails(db, client, firebase, stripe):
+    _game, _user, _card, credit, booking, _response = start_checkout(
+        db, client, firebase, stripe, status="requires_action"
+    )
+    db.refresh(credit)
+    assert credit.available_cents == 0
+    stripe.report(db, only_payment(db, booking), "canceled")
+    db.refresh(credit)
+    db.refresh(booking)
     assert credit.available_cents == 300
+    assert [u.usage_status for u in credit_usages(db, booking)] == ["released"]
+    assert booking.booking_status != "confirmed"
+
+
+@pytest.mark.page("F17", 20)
+def test_reserved_credit_is_released_when_payment_expires(db, client, firebase, stripe):
+    _game, user, _card, credit, booking, _response = start_checkout(
+        db, client, firebase, stripe, status="requires_action"
+    )
+    db.refresh(credit)
+    assert credit.available_cents == 0
+    booking.expires_at = database_now(db)
+    db.commit()
+    assert (
+        client.get(
+            f"/checkout/bookings/{booking.id}/status", headers=firebase.sign_in(user)
+        ).status_code
+        == 200
+    )
+    db.refresh(credit)
+    db.refresh(booking)
+    assert credit.available_cents == 300
+    assert [u.usage_status for u in credit_usages(db, booking)] == ["released"]
+    assert booking.booking_status != "confirmed"
 
 
 @pytest.mark.page("F17", 21)
@@ -369,46 +485,139 @@ def test_overlapping_checkouts_cannot_spend_the_same_credit_twice(
     assert len(bookings) == 1
 
 
-@pytest.mark.page("F17", 24)
-def test_small_remainder_after_credit_is_covered_and_recorded_apart(
+@pytest.mark.page("F17", 21)
+def test_repeated_checkout_does_not_spend_the_same_credit_twice(
     db, client, firebase, stripe
 ):
-    game = upcoming_game(db, price_per_player_cents=1000)
-    user, _card = paying_player(db, stripe)
-    make_game_credit(db, user=user, amount_cents=970)
-
-    response = client.post(
-        f"/checkout/games/{game.id}/payment-intent",
-        headers=firebase.sign_in(user),
-        json={"guest_count": 0},
+    game, user, card, credit, booking, _response = start_checkout(
+        db, client, firebase, stripe, status="requires_action"
     )
-
+    response = submit_checkout(client, firebase, game, user, card)
     assert response.status_code == 201, response.text
+    assert response.json()["booking_id"] == str(booking.id)
+    assert [(u.amount_cents, u.usage_status) for u in credit_usages(db, booking)] == [
+        (300, "reserved")
+    ]
+    stripe.report(db, only_payment(db, booking), "succeeded")
+    stripe.report(db, only_payment(db, booking), "succeeded")
+    db.refresh(credit)
+    assert credit.available_cents == 0
+    assert [(u.amount_cents, u.usage_status) for u in credit_usages(db, booking)] == [
+        (300, "redeemed")
+    ]
+    assert len(stripe.created) == 1
+
+
+@pytest.mark.page("F17", 24)
+def test_small_remainder_is_covered_without_a_card_charge(db, client, firebase, stripe):
+    _game, _user, _card, _credit, booking, response = start_checkout(
+        db, client, firebase, stripe, credit_amount=970, with_card=False
+    )
     assert response.json()["credit_applied_cents"] == 970
-    assert response.json()["minimum_charge_adjustment_cents"] == 30
     assert response.json()["final_amount_due_cents"] == 0
-    booking = booking_for(db, game, user)
+    assert response.json()["minimum_charge_adjustment_cents"] == 30
     assert booking.booking_status == "confirmed"
-    assert (booking.discount_cents, booking.total_cents) == (1000, 0)
-    assert sum(u.amount_cents for u in credit_usages(db, booking)) == 970
     assert stripe.created == []
 
 
-@pytest.mark.page("F17", 25)
-def test_remainder_exactly_at_the_minimum_is_charged_normally(
+@pytest.mark.page("F17", 24)
+def test_credit_and_small_balance_coverage_are_recorded_separately(
     db, client, firebase, stripe
 ):
-    game = upcoming_game(db, price_per_player_cents=1000)
-    user, card = paying_player(db, stripe)
-    make_game_credit(db, user=user, amount_cents=950)
-
-    response = client.post(
-        f"/checkout/games/{game.id}/payment-intent",
-        headers=firebase.sign_in(user),
-        json={"guest_count": 0, "payment_method_id": str(card.id)},
+    _game, _user, _card, _credit, booking, response = start_checkout(
+        db, client, firebase, stripe, credit_amount=970, with_card=False
     )
+    assert [(u.amount_cents, u.usage_status) for u in credit_usages(db, booking)] == [
+        (970, "redeemed")
+    ]
+    assert (booking.discount_cents, booking.total_cents) == (1000, 0)
+    assert response.json()["minimum_charge_adjustment_cents"] == 30
 
-    assert response.status_code == 201, response.text
+
+@pytest.mark.page("F17", 25)
+def test_balance_exactly_at_stripes_minimum_is_charged(db, client, firebase, stripe):
+    _game, _user, _card, _credit, booking, response = start_checkout(
+        db, client, firebase, stripe, credit_amount=950
+    )
     assert response.json()["credit_applied_cents"] == 950
     assert response.json()["minimum_charge_adjustment_cents"] == 0
-    assert only_payment(db, booking_for(db, game, user)).amount_cents == 50
+    assert only_payment(db, booking).amount_cents == 50
+    assert booking.booking_status == "confirmed"
+
+
+@pytest.mark.page("F17", 26)
+def test_low_price_without_credit_confirms_without_a_card(db, client, firebase, stripe):
+    _game, _user, _card, _credit, booking, response = start_checkout(
+        db, client, firebase, stripe, amount=30, credit_amount=0, with_card=False
+    )
+    assert booking.booking_status == "confirmed"
+    assert response.json()["minimum_charge_adjustment_cents"] == 30
+    assert response.json()["final_amount_due_cents"] == 0
+    assert (
+        db.scalars(select(Payment).where(Payment.booking_id == booking.id)).all() == []
+    )
+    assert stripe.created == []
+
+
+@pytest.mark.page("F17", 26)
+def test_covered_low_price_does_not_invent_game_credit(db, client, firebase, stripe):
+    _game, _user, _card, _credit, booking, response = start_checkout(
+        db, client, firebase, stripe, amount=30, credit_amount=0, with_card=False
+    )
+    assert response.json()["credit_applied_cents"] == 0
+    assert db.scalars(select(GameCredit)).all() == []
+    assert credit_usages(db, booking) == []
+
+
+@pytest.mark.page("F17", 14)
+def test_submitting_twice_while_pending_keeps_one_booking(db, client, firebase, stripe):
+    game = upcoming_game(db)
+    user, card = paying_player(db, stripe)
+    stripe.confirm_status = "requires_action"
+    headers = firebase.sign_in(user)
+    body = {"guest_count": 0, "payment_method_id": str(card.id)}
+
+    first = client.post(
+        f"/checkout/games/{game.id}/payment-intent", headers=headers, json=body
+    )
+    second = client.post(
+        f"/checkout/games/{game.id}/payment-intent", headers=headers, json=body
+    )
+
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+    assert first.json()["booking_id"] == second.json()["booking_id"]
+    bookings = db.scalars(select(Booking).where(Booking.game_id == game.id)).all()
+    assert len(bookings) == 1
+    assert len(stripe.created) == 1
+
+
+def only_payment(db, booking):
+    return db.scalars(select(Payment).where(Payment.booking_id == booking.id)).one()
+
+
+def credit_usages(db, booking):
+    return db.scalars(
+        select(GameCreditUsage).where(GameCreditUsage.booking_id == booking.id)
+    ).all()
+
+
+@pytest.mark.page("F17", 3)
+@pytest.mark.parametrize("new_credit", [0, 200])
+def test_reopened_checkout_quote_keeps_its_reserved_credit(
+    db, client, firebase, stripe, new_credit
+):
+    game, user, _card, _credit, _booking, _response = start_checkout(
+        db, client, firebase, stripe, credit_amount=300, status="processing"
+    )
+    if new_credit:
+        make_game_credit(db, user=user, amount_cents=new_credit)
+    before = financial_and_attendance_state(db)
+    response = client.get(
+        f"/checkout/games/{game.id}/quote?guest_count=0", headers=firebase.sign_in(user)
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["credit_applied_cents"] == 300
+    assert response.json()["available_credit_cents"] == 300 + new_credit
+    assert response.json()["final_amount_due_cents"] == 700
+    assert financial_and_attendance_state(db) == before

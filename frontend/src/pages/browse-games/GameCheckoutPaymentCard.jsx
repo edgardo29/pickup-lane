@@ -29,6 +29,7 @@ export function GameCheckoutPaymentCard({
 }) {
   if (isStripeCheckout) {
     const hasSavedCards = paymentMethods.length > 0
+    const needsSavedCard = isPaidWaitlistCheckout || paymentRequired
     const selectedCardIsExpired = isPaymentMethodExpired(paymentMethod)
 
     return (
@@ -61,7 +62,7 @@ export function GameCheckoutPaymentCard({
         )}
         {stripeUnavailable && (
           <FormErrorMessage className="checkout-payment-error">
-            Secure payment is not configured.
+            Adding cards isn't available right now.
           </FormErrorMessage>
         )}
         {paymentMethodsError && (
@@ -87,11 +88,11 @@ export function GameCheckoutPaymentCard({
             </span>
           </div>
         )}
-        {!stripePaymentsDisabled && !stripeUnavailable && !hasSavedCards && !paymentRequired && (
+        {!stripePaymentsDisabled && !stripeUnavailable && !hasSavedCards && !needsSavedCard && (
           <p className="checkout-payment-note">Nothing is due, so no card is needed.</p>
         )}
         {!stripePaymentsDisabled && !stripeUnavailable && !paymentMethodsError &&
-          !hasSavedCards && paymentRequired && (
+          !hasSavedCards && needsSavedCard && (
           <div className="checkout-payment-empty">
             <div>
               <strong>No payment method</strong>

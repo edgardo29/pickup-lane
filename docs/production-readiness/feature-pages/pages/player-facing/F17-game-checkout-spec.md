@@ -24,6 +24,7 @@ Game Checkout lets a signed-in player review a game, their party, payment implic
 - Paid official games automatically apply available game credit before payment, including paid additional guests. A fully credit-covered booking or one with only a positive balance below Stripe's minimum after available credit is applied needs no card charge; Pickup Lane covers that small balance. A remaining balance at or above the minimum uses normal Stripe payment, with a usable saved card or card setup.
 - If the whole party cannot fit, an enabled waitlist offers a waitlist confirmation. A paid official-game waitlist requires a saved card and explicit consent for a possible later automatic charge; joining the waitlist does not charge immediately. A player may leave before a spot is offered without a charge.
 - Successful confirmation returns to Game Details. Payment processing can require card authentication or remain pending while the outcome is checked.
+- Official checkout offers **Manage cards**, which opens [Payment Methods](F13-payment-methods-spec.md). Returning keeps the same game, checkout mode, and guest count, including add-guest mode. The link is hidden while a payment is under way or card payments are unavailable.
 
 ## 4. Important Behavior & Decisions
 
@@ -83,6 +84,10 @@ These scenarios are for future verification; none are marked complete.
 | 25 | ☐ | Apply credit that leaves an official-checkout balance exactly at Stripe's minimum. | The full available credit is applied, the remaining balance uses the normal Stripe payment flow, and no small-balance coverage is recorded. |
 | 26 | ☐ | Check out a valid low-priced official game with no available credit and a positive total below Stripe's minimum. | Pickup Lane covers the small balance, the booking can confirm without a card charge, and no game credit is falsely recorded as applied. |
 | 27 | ☐ | Review community checkout before confirming, with and without organizer terms. | Before confirmation, the page states that payment happens with the organizer outside Pickup Lane and that disputes and refunds remain between the player and the original organizer; Pickup Lane does not process or guarantee them. |
+| 28 | ☐ | Open Manage cards from ordinary official checkout, then return. | Payment Methods opens; returning restores checkout for the same game and guest count. |
+| 29 | ☐ | Open Manage cards from add-guest checkout, then return. | Returning restores add-guest mode for the same game and proposed additional guest count. |
+| 30 | ☐ | Start a payment or reopen checkout with payment already pending. | Manage cards is hidden while the payment is under way. |
+| 31 | ☐ | Open official checkout when card payments are disabled or Stripe card setup is unavailable. | Manage cards is hidden. |
 
 ## 6. Open Items to Resolve
 

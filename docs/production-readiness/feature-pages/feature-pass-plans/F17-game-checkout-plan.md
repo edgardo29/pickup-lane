@@ -1,99 +1,252 @@
 # F17 — Game Checkout Feature Pass Plan
 
 **Page specification:** `docs/production-readiness/feature-pages/pages/player-facing/F17-game-checkout-spec.md`  
-**Endpoints:** `GET /games/{game_id}`, `GET /venues/{venue_id}`, `GET /game-images`, `GET /venue-images`, `GET /games/{game_id}/participants`, `GET /user-payment-methods`, `POST /user-payment-methods/setup-intent`, `POST /user-payment-methods/sync`, `POST /games/{game_id}/join`, `POST /games/{game_id}/booking-guests/add`, `POST /checkout/games/{game_id}/payment-intent`, `GET /checkout/bookings/{booking_id}/status`
+**Endpoints:** `GET /games/{game_id}`, `GET /venues/{venue_id}`, `GET /game-images`, `GET /venue-images`, `GET /games/{game_id}/participants`, `GET /user-payment-methods`, `POST /user-payment-methods/setup-intent`, `POST /user-payment-methods/sync`, `GET /checkout/games/{game_id}/quote`, `POST /games/{game_id}/join`, `POST /games/{game_id}/booking-guests/add`, `POST /checkout/games/{game_id}/payment-intent`, `POST /checkout/games/{game_id}/guest-payment-intent`, `GET /checkout/bookings/{booking_id}/status`
 
 ## 1. Page requirements
 
 | # | Spec section | Requirement | In the code? | What's missing |
 |---|---|---|---|---|
-| R1 | 3.1 | Game summary, player, guest count and limit, booking price | Yes | — |
-| R2 | 3.1 | Available and applied credit, covered small balance, and amount due | Yes | — |
-| R3 | 3.1 | Cancellation information with Terms and Cancellation Policy links | Yes | — |
-| R4 | 3.1 | Adjust guests within the limit; add-guest mode shows the proposed and resulting guest count | Yes | — |
-| R5 | 3.1 | Terms must be accepted before confirming; Back returns to Game Details | Yes | — |
-| R6 | 3.2 | Community games confirm or waitlist the whole party without an in-app charge; paid community games say payment happens outside Pickup Lane | Yes | — |
-| R7 | 3.2 | Paid official games apply credit first; fully covered or below-minimum balances need no card | Yes | — |
-| R8 | 3.2 | A remaining balance at or above the minimum uses Stripe with a saved card or card setup | Yes | — |
-| R9 | 3.2 | Whole-party waitlist; paid official waitlist needs a saved card and explicit future-charge consent, with no immediate charge | Yes | — |
-| R10 | 3.2 | Success returns to Game Details; authentication or a pending result is shown | Yes | — |
-| R11 | 4.1 | Signed-in account with a complete profile; verified email for booking changes | Yes | — |
-| R12 | 4.1 | Suspension blocks new booking, waitlisting, and added guests | Yes | — |
-| R13 | 4.1 | Five-minute cutoff; whole party fits, waitlists, or is blocked; no second booking; add-guest needs a confirmed booking and capacity | Yes | — |
-| R14 | 4.2 | Only official in-app checkout charges a card; credit reserved during checkout, deducted on completion, released on failure or expiry | Yes | — |
-| R15 | 4.2 | Balance below Stripe's minimum covered by Pickup Lane; records keep applied credit and covered balance separate | Yes | — |
-| R16 | 4.2 | Repeated or overlapping attempts cannot spend the same credit twice | Yes | — |
-| R17 | 4.2 | Two-minute hold; authentication, failure, expiry, conflict, and unresolved results shown without claiming success; refund-required outcome | Yes | — |
-| R18 | 4.3 | Paid waitlist charges only when a spot opens for the whole party; failure does not register the player; leaving before an offer is free | Yes | — |
-| R19 | 4.3 | Added guests in a paid official game follow the credit, minimum-balance, and payment rules before confirmation | Yes | — |
-| R20 | 4.3 | A failed required charge adds no guests; community guests create no in-app payment | Yes | — |
-| R21 | 4.4 | Official checkout shows Pickup Lane's policy, including the change-related removal request | Yes | — |
-| R22 | 4.4 | Community checkout shows the organizer's terms, or promises no refund and says to confirm arrangements with the organizer | Yes | — |
-| R23 | 4.4 | Community checkout states that payment disputes and refunds remain between the player and the organizer | Yes | — |
+| R1 | 3.1 | Game summary | Yes | — |
+| R2 | 3.1 | Player, party size, and guest limit | Yes | — |
+| R3 | 3.1 | Booking price, available and applied credit, covered balance, and amount due | Yes | — |
+| R4 | 3.1 | Cancellation information and legal policy links | Yes | — |
+| R5 | 3.1 | Guest adjustment and add-guest booking summary | Yes | — |
+| R6 | 3.1 | Agreement required before confirmation | Yes | — |
+| R7 | 3.1, 3.2 | Back and confirmed success return to Game Details | Yes | — |
+| R8 | 3.2 | Community registration and guests without an in-app charge | Yes | — |
+| R9 | 3.2, 4.2, 4.3 | Automatic credit before official booking and guest payment | Yes | — |
+| R10 | 3.2, 4.2 | Fully covered bookings need no card or charge | Yes | — |
+| R11 | 3.2, 4.2 | Pickup Lane covers positive balances below Stripe's minimum | Yes | — |
+| R12 | 3.2, 4.2 | Usable saved card or shared card setup for a required Stripe charge | Yes | — |
+| R13 | 3.2, 4.1 | Whole party fits, waits, or is blocked without splitting | Yes | — |
+| R14 | 3.2, 4.3 | Paid waitlist card and explicit future-charge consent; no immediate charge | Yes | — |
+| R15 | 3.2, 4.3 | Leave a waitlist before an offer without a charge | Yes | — |
+| R16 | 4.1 | Sign-in, complete profile, and verified email for booking changes | Yes | — |
+| R17 | 4.1 | Suspension blocks new participation and preserves existing commitments | Yes | — |
+| R18 | 4.1 | Five-minute cutoff and current game eligibility and capacity | Yes | — |
+| R19 | 4.1 | No second booking; added guests require a confirmed booking and capacity | Yes | — |
+| R20 | 4.2 | Reserve credit during checkout, redeem on completion, release on failure or expiry | Yes | — |
+| R21 | 4.2 | Applied credit and covered small balance recorded separately | Yes | — |
+| R22 | 4.2 | Concurrent and repeated attempts cannot spend credit twice | Yes | — |
+| R23 | 4.2 | Two-minute paid-checkout hold | Yes | — |
+| R24 | 3.2, 4.2 | Authentication, payment failure, expiry, conflict, and unresolved feedback without false success | Yes | — |
+| R25 | 4.2 | Refund handling for a late successful payment that cannot confirm attendance | Yes | — |
+| R26 | 4.3 | Full-party waitlist promotion confirms after required payment; failed payment can pass the spot onward | Yes | — |
+| R27 | 4.3 | Paid additional guests follow checkout rules; failed charges add no guests or reserved spots | Yes | — |
+| R28 | 4.4 | Official cancellation policy and change-related removal request | Yes | — |
+| R29 | 4.4 | Community organizer terms or no-refund-promise fallback | Yes | — |
+| R30 | 3.2, 4.4 | Community payment, disputes, and refunds remain with the original organizer | Yes | — |
+| R31 | 3.2 | Manage cards opens Payment Methods and returns with the same game, mode, and guest count | Yes | — |
+| R32 | 3.2 | Hide Manage cards while payment is under way or card payments are unavailable | Yes | — |
 
 ## 2. Test scenarios
 
+One row per specified case from Sections 3–5 of the page specification.
+
+- **Test #**: the row's number in its table.
+- **Scenario**: the page's Section 5 scenario, written as the tests tag it (`F17-9` is scenario 9); "Section 4.1" names a spec rule the result also comes from.
+- **Expected result**: the spec's own words for the part this test proves.
+- **Requirements**: the Section 1 requirements the test proves.
+- **Failure check** and **File broken**: the temporary break that made the test fail, and the file it was made in.
+
 ### 2.1 Backend tests
 
-| # | Scenario | Requirements | Test exists? | Result |
-|---|---|---|---|---|
-| 2 | Free or host-paid community game confirms without an in-app charge | R6, R14 | Yes | Pass |
-| 3 | Paid official balance at or above the minimum after credit is charged through Stripe | R7, R8, R14 | Yes | Pass |
-| 4 | Selected saved card is used; another user's or unusable card is rejected | R8 | Yes | Pass |
-| 5 | Whole party waitlisted with no immediate charge | R9 | Yes | Pass |
-| 6 | Add-guest checkout for a confirmed booking | R13, R19 | Yes | Pass |
-| 7 | Incomplete profile or unverified email rejected | R11 | Yes | Pass |
-| 8 | Party over the guest limit or capacity | R4, R13 | Yes | Pass |
-| 9 | Second booking or add-guest without a confirmed booking blocked | R13 | Yes | Pass |
-| 10 | Cutoff or status or capacity change before confirmation | R13, R17 | Yes | Pass |
-| 11 | Paid official waitlist without a saved card or consent | R9 | Yes | Pass |
-| 12 | Card authentication required or card unusable | R17 | Yes | Pass |
-| 13 | Hold expiry or payment and capacity conflict | R17 | Yes | Pass |
-| 14 | Duplicate submission does not create another booking | R13 | Yes | Pass |
-| 15 | Suspended player blocked from booking, waitlist, and guests | R12 | Yes | Pass |
-| 16 | Paid waitlist spot opens; automatic payment succeeds or fails | R18 | Yes | Pass |
-| 17 | Leaving a paid official waitlist before an offer | R18 | Yes | Pass |
-| 18 | Paid official add-guest charge fails | R19, R20 | Yes | Pass |
-| 19 | Official booking fully covered by credit without a card | R7, R14 | Yes | Pass |
-| 20 | Partial credit, then failed payment or expired hold | R14, R17 | Yes | Pass |
-| 21 | Overlapping checkouts using the same credit | R16 | Yes | Pass |
-| 24 | Credit leaves a positive balance below the minimum | R7, R15 | Yes | Pass |
-| 25 | Credit leaves a balance exactly at the minimum | R8, R15 | Yes | Pass |
-| 26 | No credit and a positive total below the minimum | R7, R15 | Yes | Pass |
+| Test # | Scenario | Expected result | Requirements | Test | Failure check | File broken |
+|---|---|---|---|---|---|---|
+| 1 | F17-2, Section 3.2 | The whole eligible party joins a free community game. | R8, R13 | `test_free_community_whole_party_joins` | Dropped guests when registering or waitlisting a party. | `game_rules.py` |
+| 2 | F17-2, Section 3.2 | The whole eligible party joins a host-paid community game. | R8, R13 | `test_host_paid_community_whole_party_joins` | Dropped guests when registering or waitlisting a party. | `game_rules.py` |
+| 3 | F17-2, Section 3.2 | Confirming a free community game makes no in-app player charge. | R8 | `test_free_community_has_no_app_charge` | Created and charged an in-app payment for a community join, community guests, or waitlist entry. | `game_roster_service.py` |
+| 4 | F17-2, Section 3.2 | Confirming a host-paid community game makes no in-app player charge. | R8 | `test_host_paid_community_has_no_app_charge` | Created and charged an in-app payment for a community join, community guests, or waitlist entry. | `game_roster_service.py` |
+| 5 | F17-3, Section 3.1 | The quote shows the booking price for the player and guests. | R3, R9 | `test_quote_returns_party_price` | Returned incorrect party price, available credit, applied credit, and amount due in the quote. | `checkout_service.py` |
+| 6 | F17-3, Section 3.1 | The quote shows available game credit. | R3 | `test_quote_returns_available_credit` | Returned incorrect party price, available credit, applied credit, and amount due in the quote. | `checkout_service.py` |
+| 7 | F17-3, Section 3.1 | The quote shows the credit automatically applied to the booking. | R3, R9 | `test_quote_returns_applied_credit` | Returned incorrect party price, available credit, applied credit, and amount due in the quote. | `checkout_service.py` |
+| 8 | F17-3, Section 3.1 | The quote shows the amount due after automatic credit. | R3, R9 | `test_quote_returns_amount_due` | Returned incorrect party price, available credit, applied credit, and amount due in the quote. | `checkout_service.py` |
+| 9 | F17-3, Section 4.2 | Only the remaining balance is charged through Stripe. | R9, R12 | `test_stripe_charges_only_the_balance_after_credit` | Ignored available game credit and charged or required a card for the full price. | `game_credit_service.py` |
+| 10 | F17-4, Section 4.2 | The selected usable card is used for that checkout. | R12 | `test_checkout_uses_the_selected_saved_card` | Used a different saved card instead of the selected card. | `payment_method_service.py` |
+| 11 | F17-4, Section 4.2 | Another user's card cannot be used for checkout; no booking or payment is created. | R12 | `test_checkout_rejects_another_players_saved_card` | Allowed foreign, inactive, expired, and Stripe-detached cards without checking them. | `payment_method_service.py` |
+| 12 | F17-4, Section 4.2 | An inactive saved card cannot be used for checkout; no booking or payment is created. | R12 | `test_checkout_rejects_inactive_saved_cards` | Allowed foreign, inactive, expired, and Stripe-detached cards without checking them. | `payment_method_service.py` |
+| 13 | F17-12, Section 4.2 | An expired card is rejected before a checkout hold or charge is created. | R12, R24 | `test_expired_card_creates_no_hold_or_charge` | Allowed foreign, inactive, expired, and Stripe-detached cards without checking them. | `payment_method_service.py` |
+| 14 | F17-4, Section 4.2 | A card no longer linked to the player's Stripe customer cannot pay for checkout. | R12 | `test_stripe_detached_card_cannot_pay_despite_local_active_state` | Allowed foreign, inactive, expired, and Stripe-detached cards without checking them. | `payment_method_service.py` |
+| 15 | F17-8, Section 4.1 | A party over the game's guest limit is rejected without changing attendance. | R5, R13 | `test_party_over_the_guest_limit_is_rejected` | Accepted a party above the configured guest limit. | `game_rules.py` |
+| 16 | F17-5, Section 4.1 | When the whole party cannot fit and a waitlist is enabled, the entire party becomes waitlisted. | R13, R14 | `test_whole_party_is_waitlisted_together` | Dropped guests when registering or waitlisting a party. | `game_rules.py` |
+| 17 | F17-5, Section 3.2 | Joining the waitlist makes no immediate player charge. | R8, R14 | `test_waitlist_join_makes_no_immediate_charge` | Created and charged an in-app payment for a community join, community guests, or waitlist entry. | `game_roster_service.py` |
+| 18 | F17-11, Section 3.2 | A paid official waitlist cannot be joined without a saved card. | R14 | `test_paid_waitlist_requires_a_saved_card` | Accepted a missing or unusable waitlist card, choosing one implicitly when absent. | `game_waitlist_service.py` |
+| 19 | F17-11, Section 3.2 | A paid official waitlist cannot be joined with an unusable saved card. | R12, R14 | `test_paid_waitlist_refuses_unusable_cards` | Accepted a missing or unusable waitlist card, choosing one implicitly when absent. | `game_waitlist_service.py` |
+| 20 | F17-11, Section 3.2 | A paid official waitlist cannot be joined without explicit future-charge consent. | R14 | `test_paid_waitlist_requires_explicit_future_charge_consent` | Joined the paid waitlist without consent to a later charge. | `game_waitlist_service.py` |
+| 21 | F17-5, Section 4.3 | Paid official entry records the saved card and explicit consent for a possible later automatic charge. | R14 | `test_paid_waitlist_records_the_authorized_card_and_consent` | Recorded the wrong waitlist consent version. | `game_waitlist_service.py` |
+| 22 | F17-8, Section 4.1 | A party that cannot fit without an enabled waitlist cannot confirm and is never split. | R13 | `test_party_that_cannot_fit_without_a_waitlist_is_not_split` | Waitlisted a party even though the game disables waitlisting. | `game_roster_service.py` |
+| 23 | F17-9, Section 4.1 | Add-guest mode without an existing confirmed booking is blocked without changing attendance. | R19 | `test_add_guests_requires_a_confirmed_booking` | Implicitly created or reactivated a booking before allowing an otherwise ineligible guest addition. | `checkout_service.py` |
+| 24 | F17-6, Section 4.3 | Available credit applies first to the price of only the additional guests. | R9, R27 | `test_guest_payment_prices_only_new_guests_after_credit` | Ignored available game credit and charged or required a card for the full price. | `game_credit_service.py` |
+| 25 | F17-6, Section 4.3 | Permitted paid official guests are not confirmed while required payment is pending. | R24, R27 | `test_pending_guest_payment_does_not_confirm_added_guests` | Treated processing guest payment as successful, confirming guests before payment completed. | `stripe_webhook_service.py` |
+| 26 | F17-6, Section 4.3 | Permitted paid official guests are added only after required Stripe payment succeeds. | R19, R27 | `test_added_guests_confirm_only_after_their_payment_succeeds` | Treated processing guest payment as successful, confirming guests before payment completed. | `stripe_webhook_service.py` |
+| 27 | F17-6, Section 4.3 | Fully credit-covered additional guests confirm without a saved card or Stripe charge. | R9, R10, R27 | `test_full_credit_guest_addition_needs_no_saved_card_or_charge` | Ignored available game credit and charged or required a card for the full price. | `game_credit_service.py` |
+| 28 | F17-6, Section 4.3 | Additional guests whose positive balance falls below Stripe's minimum confirm without a card charge. | R11, R21, R27 | `test_small_guest_balance_is_covered_without_a_card_charge` | Did not cover a positive balance below Stripe's minimum. | `game_credit_service.py` |
+| 29 | F17-18, Section 4.3 | A failed required guest charge adds no guests and reserves no spots. | R27 | `test_failed_guest_charge_adds_no_guests_or_held_spots` | Kept guest attendance held after a failed charge. | `checkout_service.py` |
+| 30 | F17-18, Section 4.3 | Credit reserved for a failed required guest charge becomes available again. | R20, R27 | `test_failed_guest_charge_releases_reserved_credit` | Restored one cent less than the reserved credit after failure or expiry. | `game_credit_service.py` |
+| 31 | F17-13, Section 4.2 | Expired guest holds release their spots and reserved credit without changing existing confirmed attendance. | R20, R23, R24, R27 | `test_guest_hold_expiry_releases_spots_and_credit` | Restored one cent less than the reserved credit after guest hold expiry. | `game_credit_service.py` |
+| 32 | F17-12, Section 4.3 | A declined guest payment can be retried with another usable card without charging or redeeming credit twice. | R12, R22, R27 | `test_a_declined_guest_payment_can_be_retried_with_another_card` | Added an extra guest on retry after a declined guest charge. | `checkout_service.py` |
+| 33 | F17-14, Section 4.3 | A second guest submission while payment is pending does not add another set of guests or payment. | R19, R27 | `test_a_second_guest_payment_waits_for_the_first` | Started another guest payment while the first was still pending. | `checkout_service.py` |
+| 34 | F17-7, Section 4.1 | Protected booking submission requires sign-in and makes no changes when sign-in is missing. | R16 | `test_signed_out_booking_changes_are_rejected` | Accepted an unauthenticated checkout request as an existing player. | `auth_service.py` |
+| 35 | F17-7, Section 4.1 | An incomplete profile cannot submit a booking or change attendance. | R16 | `test_incomplete_profile_cannot_submit_booking_changes` | Allowed booking changes before the player completed their profile. | `game_rules.py` |
+| 36 | F17-7, Section 4.1 | Protected booking submission is rejected until email verification. | R16 | `test_unverified_email_cannot_submit_booking_changes` | Allowed booking changes without a verified Firebase email. | `auth_service.py` |
+| 37 | F17-15, Section 4.1 | A suspended player cannot confirm a new booking; existing participation remains intact. | R17 | `test_suspension_blocks_booking_without_changing_existing_attendance` | Allowed suspended players to book, waitlist, and add guests through checkout. | `auth_service.py` |
+| 38 | F17-15, Section 4.1 | A suspended player cannot create a waitlist entry; existing participation remains intact. | R17 | `test_suspension_blocks_waitlist_without_changing_existing_attendance` | Allowed suspended players to book, waitlist, and add guests through checkout. | `auth_service.py` |
+| 39 | F17-15, Section 4.1 | A suspended player cannot add guests through checkout; existing participation remains intact. | R17, R27 | `test_suspension_blocks_guest_addition_without_changing_existing_attendance` | Allowed suspended players to book, waitlist, and add guests through checkout. | `auth_service.py` |
+| 40 | F17-9, Section 4.1 | A confirmed player cannot create a second booking through ordinary checkout. | R19 | `test_a_confirmed_player_cannot_book_a_second_time` | Cancelled an existing booking automatically and created a second ordinary booking. | `checkout_service.py` |
+| 41 | F17-10, Section 4.1 | New booking, waitlist, and guest submissions close exactly five minutes after game start. | R18 | `test_new_checkout_actions_close_exactly_at_five_minutes` | Reversed the roster cutoff so requests before it closed and requests at or after it proceeded. | `game_rules.py` |
+| 42 | F17-10, Section 4.1 | A stale request cannot confirm after game status or joining eligibility changes. | R18 | `test_changed_game_eligibility_rejects_stale_checkout` | Skipped current game eligibility checks before starting checkout. | `checkout_service.py` |
+| 43 | F17-10, Section 4.1 | A stale request cannot confirm a party that no longer fits current capacity. | R13, R18 | `test_current_capacity_blocks_a_stale_party` | Started checkout for a party larger than current capacity. | `checkout_service.py` |
+| 44 | F17-13, Section 4.2 | A temporary paid-checkout hold lasts two minutes. | R23 | `test_paid_checkout_holds_spots_for_exactly_two_minutes` | Held checkout attendance for three minutes instead of two. | `checkout_service.py` |
+| 45 | F17-3, Section 4.2 | Payment processing alone is not a confirmed spot. | R24 | `test_processing_payment_does_not_confirm_a_spot` | Treated unresolved or cancelled Stripe observations as successful payments. | `stripe_webhook_service.py` |
+| 46 | F17-12, Section 4.2 | Card authentication leaves the spot unconfirmed until payment succeeds. | R24 | `test_card_authentication_leaves_the_spot_unconfirmed` | Treated unresolved or cancelled Stripe observations as successful payments. | `stripe_webhook_service.py` |
+| 47 | F17-20, Section 4.2 | Failed required payment does not finalize the booking. | R20, R24 | `test_failed_required_payment_does_not_finalize_a_booking` | Treated unresolved or cancelled Stripe observations as successful payments. | `stripe_webhook_service.py` |
+| 48 | F17-13, Section 4.2 | An expired paid-checkout hold no longer reserves or confirms the spot. | R23, R24 | `test_expired_hold_releases_capacity_without_confirmation` | Left stale pending bookings unexpired. | `checkout_service.py` |
+| 49 | F17-13, Section 4.2 | A later successful payment after hold expiry requires refund handling without confirming the spot. | R25 | `test_late_payment_creates_a_refund_instead_of_reviving_an_expired_hold` | Did not create required refund compensation records. | `stripe_webhook_service.py` |
+| 50 | F17-13, Section 4.2 | A successful payment that cannot fit current capacity requires refund handling without confirming the spot. | R13, R25 | `test_capacity_conflict_after_payment_creates_a_refund` | Did not create required refund compensation records. | `stripe_webhook_service.py` |
+| 51 | F17-19, Section 4.2 | A fully credit-covered booking confirms without a card or Stripe charge. | R10 | `test_full_credit_confirms_without_a_saved_card_or_charge` | Ignored available game credit and charged or required a card for the full price. | `game_credit_service.py` |
+| 52 | F17-19, Section 4.2 | Credit is deducted only after the booking completes. | R20 | `test_reserved_credit_is_redeemed_only_when_checkout_completes` | Left credit reserved after successful checkout instead of redeeming it. | `game_credit_service.py` |
+| 53 | F17-20, Section 4.2 | Reserved partial credit becomes available again when payment fails. | R20 | `test_reserved_credit_is_released_when_payment_fails` | Restored one cent less than the reserved credit after failure or expiry. | `game_credit_service.py` |
+| 54 | F17-20, Section 4.2 | Reserved partial credit becomes available again when the hold expires. | R20, R23 | `test_reserved_credit_is_released_when_payment_expires` | Restored one cent less than the reserved credit after failure or expiry. | `game_credit_service.py` |
+| 55 | F17-21, Section 4.2 | Overlapping checkouts cannot apply or deduct the same credit twice. | R22 | `test_overlapping_checkouts_cannot_spend_the_same_credit_twice` | Reissued spent credit when a concurrent reservation found the balance insufficient. | `game_credit_service.py` |
+| 56 | F17-21, Section 4.2 | Repeated checkout attempts cannot apply or deduct the same credit twice. | R22 | `test_repeated_checkout_does_not_spend_the_same_credit_twice` | Added a second redeemed credit ledger entry when successful payment was reported again. | `stripe_webhook_service.py` |
+| 57 | F17-24, Section 4.2 | All available credit is applied normally and Pickup Lane covers the small remainder without a card charge. | R9, R11 | `test_small_remainder_is_covered_without_a_card_charge` | Did not cover a positive balance below Stripe's minimum. | `game_credit_service.py` |
+| 58 | F17-24, Section 4.2 | Records distinguish credit used from the covered remainder. | R21 | `test_credit_and_small_balance_coverage_are_recorded_separately` | Recorded more game credit as used than was actually applied. | `game_credit_service.py` |
+| 59 | F17-25, Section 4.2 | A balance exactly at Stripe's minimum uses normal Stripe payment with no small-balance coverage. | R9, R12, R21 | `test_balance_exactly_at_stripes_minimum_is_charged` | Covered a balance equal to Stripe's minimum instead of charging it normally. | `game_credit_service.py` |
+| 60 | F17-26, Section 4.2 | A positive total below Stripe's minimum with no credit confirms without a card charge. | R11 | `test_low_price_without_credit_confirms_without_a_card` | Did not cover a positive balance below Stripe's minimum. | `game_credit_service.py` |
+| 61 | F17-26, Section 4.2 | No game credit is falsely recorded as applied when Pickup Lane covers a low price without credit. | R21 | `test_covered_low_price_does_not_invent_game_credit` | Created an artificial game-credit grant for a covered low-price booking. | `checkout_service.py` |
+| 62 | F17-16, Section 4.3 | An automatic paid-waitlist charge is made only if a spot opens for the full party. | R13, R26 | `test_waitlist_charge_waits_until_the_whole_party_can_fit` | Attempted paid waitlist promotion before the whole party could fit. | `game_waitlist_service.py` |
+| 63 | F17-16, Section 4.3 | Successful automatic payment confirms the booking only after payment. | R26 | `test_waitlist_booking_confirms_only_after_automatic_payment` | Treated unresolved or cancelled Stripe observations as successful payments. | `stripe_webhook_service.py` |
+| 64 | F17-16, Section 4.3 | Failed automatic payment does not register the player. | R26 | `test_failed_automatic_charge_does_not_register_the_player` | Registered a waitlisted player despite a failed automatic charge. | `game_waitlist_service.py` |
+| 65 | F17-16, Section 4.3 | After failed automatic payment the spot can move to the next eligible person. | R26 | `test_failed_automatic_payment_offers_the_spot_to_the_next_player` | Stopped promotion after a failed automatic charge rather than trying the next eligible player. | `game_waitlist_service.py` |
+| 66 | F17-16, Section 4.3 | Waitlist promotion applies credit available when the spot opens and charges only the remaining balance. | R9, R26 | `test_waitlist_promotion_applies_credit_available_when_the_spot_opens` | Ignored available game credit and charged or required a card for the full price. | `game_credit_service.py` |
+| 67 | F17-16, Section 4.3 | A fully credit-covered waitlist offer confirms without a Stripe charge. | R10, R26 | `test_credit_covered_waitlist_offer_confirms_without_a_stripe_charge` | Ignored available game credit and charged or required a card for the full price. | `game_credit_service.py` |
+| 68 | F17-16, Section 4.3 | Pickup Lane covers a positive waitlist-offer balance below Stripe's minimum without a Stripe charge. | R11, R21, R26 | `test_waitlist_promotion_covers_a_balance_below_stripes_minimum` | Did not cover a positive balance below Stripe's minimum. | `game_credit_service.py` |
+| 69 | F17-16, Section 4.3 | A failed waitlist charge releases reserved credit. | R20, R26 | `test_failed_waitlist_charge_restores_reserved_credit` | Restored one cent less than the reserved credit after failure or expiry. | `game_credit_service.py` |
+| 70 | F17-17, Section 4.3 | Leaving a paid official waitlist before receiving a spot ends the entry without a player charge. | R15 | `test_leaving_a_paid_waitlist_before_an_offer_costs_nothing` | Kept a withdrawn waitlist entry active. | `game_roster_service.py` |
+| 71 | F17-14, Section 4.2 | Duplicate submission while confirmation is pending does not create another booking or charge. | R19 | `test_submitting_twice_while_pending_keeps_one_booking` | Created another Stripe payment attempt when a pending checkout was submitted again. | `checkout_service.py` |
+| 72 | F17-6, Section 4.3 | Community additional guests do not create an in-app player payment. | R8, R27 | `test_community_guests_do_not_create_an_app_payment` | Created and charged an in-app payment for a community join, community guests, or waitlist entry. | `game_roster_service.py` |
+| 73 | F17-13, Section 4.2 | A guest payment that succeeds after its hold expires requires refund handling rather than added guests. | R25, R27 | `test_guest_payment_after_the_hold_ends_is_refunded` | Did not create required refund compensation records. | `stripe_webhook_service.py` |
+| 74 | F17-6, Section 4.3 | Credit-covered additional guests need no usable card, including when credit changes after the quote. | R9, R10, R11, R27 | `test_covered_guests_ignore_an_unneeded_card_after_credit_changes` | Failed before the change | — |
+| 75 | F17-12, Section 4.3 | A required guest charge refuses an unusable saved card without adding guests or payment. | R12, R24, R27 | `test_required_guest_charge_rejects_an_unusable_card` | Allowed expired, detached, and Stripe-detached saved cards for a required charge. | `payment_method_service.py` |
+| 76 | F17-3, Section 4.2 | Reopened ordinary checkout keeps its reserved credit and original remaining payment even when additional credit becomes available. | R3, R9, R20 | `test_reopened_checkout_quote_keeps_its_reserved_credit` | Failed before the change | — |
+| 77 | F17-6, Sections 4.2, 4.3 | Reopened guest checkout keeps only its own reserved credit and remaining guest payment. | R3, R9, R27 | `test_reopened_guest_quote_keeps_only_its_reserved_credit` | Failed before the change | — |
+| 78 | F17-12, Section 4.2 | Reopened guest checkout can authenticate its existing payment without creating another charge. | R12, R24, R27 | `test_reopened_guest_payment_returns_its_authentication_secret` | Failed before the change | — |
+| 79 | F17-13, Section 4.2 | An expired guest hold releases its spots and credit and cannot restart authentication. | R20, R23, R24, R27 | `test_expired_guest_payment_returns_no_authentication_secret` | Returned authentication details after the guest hold expired. | `checkout_service.py` |
+| 80 | F17-12, Section 4.2 | Only the booking owner receives its payment authentication details. | R12 | `test_guest_authentication_secret_is_only_for_the_booking_owner` | Bypassed booking ownership checks and exposed authentication details to another player and staff. | `checkout_service.py` |
+| 81 | F17-12, Section 4.2 | A failed Stripe authentication lookup reports failure without confirming guests or creating another charge. | R24, R27 | `test_guest_authentication_retrieval_failure_keeps_attendance_unconfirmed` | Failed before the change | — |
 
 ### 2.2 Frontend tests
 
-| # | Scenario | Requirements | Test exists? | Result |
-|---|---|---|---|---|
-| 1 | Checkout shows game, player, party, price, policy, and terms; confirm waits for agreement | R1, R3, R5 | Yes | Pass |
-| 2 | Community confirmation returns to Game Details | R6, R10 | Yes | Pass |
-| 3 | Official summary shows price, credit, and amount due; returns only after confirmation | R2, R10 | Yes | Pass |
-| 4 | Add a card or choose another saved card | R8 | Yes | Pass |
-| 5 | Waitlist checkout shows no immediate charge; paid official asks for a card and consent | R9 | Yes | Pass |
-| 6 | Add-guest checkout shows the booking and projected guest count | R4 | Yes | Pass |
-| 7 | Signed out, incomplete profile, or unverified email | R11 | Yes | Pass |
-| 8 | Guest count stays within the limit; party that cannot fit | R4, R13 | Yes | Pass |
-| 9 | Existing booking or ineligible add-guest blocked | R13 | Yes | Pass |
-| 10 | Cutoff or stale request reports failure | R13, R17 | Yes | Pass |
-| 11 | Paid official waitlist blocked without card or consent | R9 | Yes | Pass |
-| 12 | Card authentication or card failure feedback | R10, R17 | Yes | Pass |
-| 13 | Hold expiry or conflict shown without claiming a spot | R17 | Yes | Pass |
-| 14 | Load failure route back; duplicate submission | R5, R13 | Yes | Pass |
-| 15 | Suspended player cannot confirm | R12 | Yes | Pass |
-| 18 | Failed add-guest charge shown without claiming confirmation | R20 | Yes | Pass |
-| 19 | Credit-covered booking shows zero due and confirms without a card | R2, R7 | Yes | Pass |
-| 22 | Official and community-with-terms cancellation information | R3, R21, R22 | Yes | Pass |
-| 23 | Community without organizer terms promises no refund | R22 | Yes | Pass |
-| 24 | Small remaining balance covered; zero due without a card | R2, R7, R15 | Yes | Pass |
-| 26 | Low-priced game with no credit confirms without a card | R7 | Yes | Pass |
-| 27 | Community payment responsibility before confirming | R6, R23 | Yes | Pass |
+| Test # | Scenario | Expected result | Requirements | Test | Failure check | File broken |
+|---|---|---|---|---|---|---|
+| 1 | F17-1, Section 3.1 | The game summary appears. | R1 | `F17-1: the game summary appears` | Removed the game summary. | `GameCheckoutGameCard.jsx` |
+| 2 | F17-1, Section 3.1 | The signed-in player appears. | R2 | `F17-1: the signed-in player appears` | Displayed the wrong signed-in player name. | `GameCheckoutPlayerCard.jsx` |
+| 3 | F17-1, Section 3.1 | The party's guest count and limit appear. | R2 | `F17-1: the party guest count and limit appear` | Displayed the wrong selected and resulting guest counts. | `GameCheckoutPlayerCard.jsx` |
+| 4 | F17-1, Section 3.1 | The booking price appears. | R3 | `F17-1: the booking price appears` | Removed the order summary and its price and credit information. | `GameCheckoutSummaryCard.jsx` |
+| 5 | F17-1, Section 3.1 | Cancellation information appears. | R4 | `F17-1: cancellation information appears` | Removed cancellation and community payment responsibility information. | `GameCheckoutPolicyCard.jsx` |
+| 6 | F17-1, Section 3.1 | The Terms link opens the Terms of Service. | R4 | `F17-1: Terms of Service opens its policy` | Made both legal-policy buttons do nothing. | `GameCheckoutAgreementCard.jsx` |
+| 7 | F17-1, Section 3.1 | The Cancellation Policy link opens the Cancellation Policy. | R4 | `F17-1: Cancellation Policy opens its policy` | Made both legal-policy buttons do nothing. | `GameCheckoutAgreementCard.jsx` |
+| 8 | F17-1, Section 3.1 | Confirming remains unavailable until the agreement is accepted. | R6 | `F17-1: confirmation waits for agreement` | Enabled confirmation without accepting the terms. | `GameCheckoutLayout.jsx` |
+| 9 | F17-1, Section 3.1 | Back returns to Game Details. | R7 | `F17-1: Back returns to Game Details` | Made Back stay on checkout. | `GameCheckoutPage.jsx` |
+| 10 | F17-2, Section 3.2 | The whole eligible community party is submitted together. | R8, R13 | `F17-2: community confirmation submits the whole selected party` | Dropped selected guests from the community join request. | `gameCheckoutApi.js` |
+| 11 | F17-2, Section 3.2 | Successful community confirmation returns to Game Details without starting in-app payment. | R7, R8 | `F17-2: confirmed community checkout returns without app payment` | Stayed on checkout after successful community confirmation. | `useGameCheckoutActions.js` |
+| 12 | F17-27, Section 3.2 | Paid community games show that host payment is handled outside Pickup Lane. | R30 | `F17-27: paid community checkout explains outside payment` | Displayed an incorrect payment destination for community games. | `GameCheckoutPaymentCard.jsx` |
+| 13 | F17-3, Section 3.1 | The official summary shows booking price for the selected party. | R3 | `F17-3: the official summary shows party price` | Removed the order summary and its price and credit information. | `GameCheckoutSummaryCard.jsx` |
+| 14 | F17-3, Section 3.1 | The official summary shows available game credit. | R3 | `F17-3: the official summary shows available credit` | Removed the order summary and its price and credit information. | `GameCheckoutSummaryCard.jsx` |
+| 15 | F17-3, Section 3.1 | The official summary shows applied game credit. | R3, R9 | `F17-3: the official summary shows applied credit` | Removed the order summary and its price and credit information. | `GameCheckoutSummaryCard.jsx` |
+| 16 | F17-3, Section 3.1 | The official summary shows the amount due after credit. | R3, R9 | `F17-3: the official summary shows the balance after credit` | Removed the order summary and its price and credit information. | `GameCheckoutSummaryCard.jsx` |
+| 17 | F17-3, Section 3.2 | The page returns to Game Details only after confirmation. | R7, R24 | `F17-3: official checkout waits for payment confirmation before returning` | Treated unresolved payment status as confirmed and returned immediately. | `useGameCheckoutActions.js` |
+| 18 | F17-4, Section 3.2 | The selected usable card is used for that checkout. | R12 | `F17-4: choosing another saved card pays with that card` | Sent the default card instead of the newly selected card. | `gameCheckoutApi.js` |
+| 19 | F17-4, Section 4.2 | Card setup follows the shared saved-card flow and a saved card can be selected for checkout. | R12 | `F17-4: a card saved through the shared form is used for checkout` | Skipped the saved-card callback after Stripe setup and sync. | `PaymentMethodSetupDialog.jsx` |
+| 20 | F17-12, Section 4.2 | Failed card setup shows recoverable feedback without claiming a saved card or confirmed spot. | R12, R24 | `F17-12: failed card setup shows recoverable feedback without false success` | Hid the error returned by Stripe card setup. | `PaymentMethodSetupDialog.jsx` |
+| 21 | F17-12, Section 4.2 | Unavailable card setup is explained and cannot start. | R12, R24 | `F17-12: unavailable Stripe setup is explained to the player` | Failed before the change | — |
+| 22 | F17-12, Section 4.2 | An expired saved card is unavailable for payment and another usable card can be chosen. | R12, R24 | `F17-12: an expired card cannot be selected and a usable card can be chosen` | Allowed selection of an expired card. | `GameCheckoutPaymentSelector.jsx` |
+| 23 | F17-5, Section 3.2 | A party that cannot fit is offered whole-party waitlist confirmation. | R13 | `F17-5: a party that cannot fit is offered whole-party waitlist confirmation` | Did not offer whole-party waitlisting when the party cannot fit. | `gameCheckoutViewModel.js` |
+| 24 | F17-5, Section 3.2 | Waitlist checkout shows that there is no immediate player charge. | R14 | `F17-5: waitlist checkout explains there is no charge now` | Removed the order summary and its price and credit information. | `GameCheckoutSummaryCard.jsx` |
+| 25 | F17-5, Section 4.3 | Paid official waitlist confirmation sends the selected saved card and explicit future-charge consent. | R14 | `F17-5: a paid official waitlist sends the saved card and consent to a later charge` | Sent no consent for the later waitlist charge. | `gameCheckoutApi.js` |
+| 26 | F17-5, Section 4.3 | The estimated later charge explains that available credit is applied when a spot opens. | R3, R9, R14 | `F17-5: the later-charge estimate explains when credit is applied` | Removed the order summary and its price and credit information. | `GameCheckoutSummaryCard.jsx` |
+| 27 | F17-5, Section 4.3 | Paid-waitlist consent explains that leaving before an offer costs nothing. | R15 | `F17-5: paid waitlist consent explains leaving before an offer is free` | Removed the explanation that leaving before an offer is free. | `GameCheckoutPaymentCard.jsx` |
+| 28 | F17-6, Section 3.1 | Add-guest checkout shows the existing booking. | R5 | `F17-6: add-guest checkout shows the existing booking` | Omitted the existing-booking label in guest checkout. | `GameCheckoutPlayerCard.jsx` |
+| 29 | F17-6, Section 3.1 | Add-guest checkout shows proposed additional guests and the resulting guest count. | R5 | `F17-6: add-guest checkout shows proposed and resulting guest counts` | Displayed the wrong selected and resulting guest counts. | `GameCheckoutPlayerCard.jsx` |
+| 30 | F17-6, Section 3.2 | The add-guest summary applies available credit before showing the amount due for only new guests. | R3, R9, R27 | `F17-6: add-guest summary applies credit to only the added guests` | Removed the order summary and its price and credit information. | `GameCheckoutSummaryCard.jsx` |
+| 31 | F17-6, Section 4.3 | Paid guest confirmation returns to Game Details only after the required payment succeeds. | R7, R27 | `F17-6: paid guests return only after their payment succeeds (%s)` | Treated a confirmed or partially cancelled parent booking as guest-payment success while the guest charge was still processing. | `useGameCheckoutActions.js` |
+| 32 | F17-6, Section 4.3 | Paid guest confirmation on an eligible partially cancelled booking returns to Game Details after success. | R7, R19, R27 | `F17-6: paid guests on a partially cancelled booking return to Game Details` | Did not recognize a successfully paid partially cancelled booking. | `useGameCheckoutActions.js` |
+| 33 | F17-6, Section 4.3 | Credit-covered or below-minimum guest additions can confirm without a card charge. | R10, R11, R27 | `F17-6: covered guest additions confirm without a saved card (%i cents credit)` | Required a saved card for full-credit and below-minimum guest checkout with nothing due. | `GameCheckoutLayout.jsx` |
+| 34 | F17-7, Section 4.1 | A signed-out visitor is sent to sign in. | R16 | `F17-7: a signed-out visitor is sent to sign in` | Sent a signed-out visitor to Finish Profile instead of Sign In. | `useGameCheckoutData.js` |
+| 35 | F17-7, Section 4.1 | An incomplete profile is sent to profile completion. | R16 | `F17-7: an incomplete profile is sent to Finish Profile` | Allowed checkout with an incomplete profile. | `useGameCheckoutData.js` |
+| 36 | F17-7, Section 4.1 | An unverified email sees the protected-submission rejection without a false success. | R16, R24 | `F17-7: an unverified email sees the rejection and stays on checkout` | Hid submission and payment failure feedback. | `GameCheckoutErrors.jsx` |
+| 37 | F17-8, Section 3.1 | The proposed party stays within the game's guest limit. | R5, R13 | `F17-8: the guest count stops at the game limit` | Allowed the guest control to exceed the game limit. | `GameCheckoutPlayerCard.jsx` |
+| 38 | F17-8, Section 4.1 | A party that cannot fit without a waitlist cannot confirm. | R13 | `F17-8: a party that cannot fit without a waitlist cannot confirm` | Enabled confirmation when the party cannot fit and no waitlist exists. | `GameCheckoutLayout.jsx` |
+| 39 | F17-9, Section 4.1 | An active booking blocks ordinary checkout for a second booking. | R19 | `F17-9: a player who already joined cannot book again` | Enabled an ordinary second booking. | `GameCheckoutLayout.jsx` |
+| 40 | F17-9, Section 4.1 | Add-guest checkout without a confirmed booking is blocked. | R19 | `F17-9: add-guest checkout needs a confirmed booking` | Enabled guest confirmation without a confirmed booking. | `GameCheckoutLayout.jsx` |
+| 41 | F17-10, Section 4.1 | New confirmation closes exactly five minutes after game start. | R18 | `F17-10: new confirmation closes at the exact five-minute cutoff` | Kept joining open at the exact five-minute cutoff. | `gameCheckoutViewModel.js` |
+| 42 | F17-10, Section 4.1 | A stale submission rejected for changed game eligibility or capacity reports failure without a false success. | R18, R24 | `F17-10: a stale confirmation reports the failure without success` | Hid submission and payment failure feedback. | `GameCheckoutErrors.jsx` |
+| 43 | F17-11, Section 3.2 | A paid official waitlist cannot be joined without a usable saved card. | R12, R14 | `F17-11: a paid official waitlist cannot be joined without a saved card` | Enabled paid waitlist confirmation with consent but no saved card. | `GameCheckoutLayout.jsx` |
+| 44 | F17-11, Section 3.2 | A paid official waitlist cannot be joined without explicit future-charge consent. | R14 | `F17-11: a paid official waitlist cannot be joined without consent` | Enabled paid waitlist confirmation without consent. | `GameCheckoutLayout.jsx` |
+| 45 | F17-12, Section 4.2 | Required card authentication is performed without calling the spot confirmed before payment succeeds. | R24 | `F17-12: card authentication runs before any confirmed return` | Skipped required Stripe card authentication. | `useGameCheckoutActions.js` |
+| 46 | F17-12, Section 4.2 | Failed card authentication shows recoverable feedback without claiming a spot. | R24 | `F17-12: failed card authentication is shown without claiming a spot` | Hid submission and payment failure feedback. | `GameCheckoutErrors.jsx` |
+| 47 | F17-12, Section 4.2 | A saved card that cannot be charged asks for another card without claiming confirmation. | R12, R24 | `F17-12: a card that cannot be charged asks for another card` | Hid submission and payment failure feedback. | `GameCheckoutErrors.jsx` |
+| 48 | F17-13, Section 4.2 | An unresolved payment is shown without claiming a confirmed spot. | R24 | `F17-13: an unresolved payment is shown without a confirmed spot` | Treated unresolved payment status as confirmed and returned immediately. | `useGameCheckoutActions.js` |
+| 49 | F17-13, Section 4.2 | An expired hold is shown without claiming a confirmed spot. | R23, R24 | `F17-13: an expired hold is shown without claiming confirmation` | Displayed an incorrect expired-hold outcome. | `useGameCheckoutActions.js` |
+| 50 | F17-13, Section 4.2 | A successful payment after hold expiry reports a refund-required outcome rather than a spot. | R24, R25 | `F17-13: a payment completed after the hold expired reports a refund, not a spot` | Displayed an incorrect outcome for payment after expiry. | `useGameCheckoutActions.js` |
+| 51 | F17-13, Section 4.2 | A payment/capacity conflict reports a refund-required outcome rather than a confirmed spot. | R24, R25 | `F17-13: a payment capacity conflict reports a refund rather than a spot` | Displayed an incorrect outcome for payment without capacity. | `useGameCheckoutActions.js` |
+| 52 | F17-13, Section 4.2 | A guest payment that arrives too late reports a refund-required outcome rather than added guests. | R24, R25, R27 | `F17-13: a guest payment that arrives too late reports a refund, not added guests` | Ignored refund compensation and the released guest hold, claiming the guests were confirmed. | `useGameCheckoutActions.js` |
+| 53 | F17-14 | Load failure shows an unavailable state. | R24 | `F17-14: a failed load offers a way back to the game` | Omitted the checkout-unavailable heading. | `GameCheckoutPage.jsx` |
+| 54 | F17-14 | Load failure offers a route back to Game Details. | R7, R24 | `F17-14: load failure returns to the same game` | Made the load-error link return to checkout rather than the game. | `GameCheckoutPage.jsx` |
+| 55 | F17-14 | A second click while confirmation is pending sends only one booking request. | R19 | `F17-14: a second click while confirming sends only one request` | Allowed a second confirmation request while the first was pending. | `GameCheckoutLayout.jsx`, `useGameCheckoutActions.js` |
+| 56 | F17-14, Section 4.2 | A saved-card load error is shown and can be retried without claiming an empty saved-card list. | R12, R24 | `F17-14: a saved-card load error is shown and can be retried` | Hid the saved-card loading error and retry control. | `GameCheckoutPaymentCard.jsx` |
+| 57 | F17-15, Section 4.1 | A suspended player's new booking rejection is shown without claiming confirmation. | R17, R24 | `F17-15: a suspended player cannot confirm a new booking` | Hid submission and payment failure feedback. | `GameCheckoutErrors.jsx` |
+| 58 | F17-15, Section 4.1 | A suspended player's waitlist rejection is shown without claiming confirmation. | R17, R24 | `F17-15: suspended waitlist entry reports rejection without confirmation` | Hid the protected waitlist submission rejection. | `GameCheckoutErrors.jsx` |
+| 59 | F17-15, Section 4.1 | A suspended player's guest-addition rejection is shown without claiming confirmation. | R17, R24, R27 | `F17-15: suspended guest addition reports rejection without confirmation` | Hid the rejected price quote for a suspended player. | `GameCheckoutLayout.jsx` |
+| 60 | F17-18, Section 4.3 | A failed required guest charge is shown without claiming added guests. | R24, R27 | `F17-18: a failed guest charge is shown without confirming the guests` | Hid submission and payment failure feedback. | `GameCheckoutErrors.jsx` |
+| 61 | F17-19, Section 3.2 | A fully credit-covered booking shows a zero remaining balance. | R3, R10 | `F17-19: full credit shows zero amount due` | Removed the order summary and its price and credit information. | `GameCheckoutSummaryCard.jsx` |
+| 62 | F17-19, Section 3.2 | A fully credit-covered booking can confirm without a saved card. | R7, R10 | `F17-19: full credit confirms without a card` | Required a saved card even when nothing is due. | `GameCheckoutLayout.jsx` |
+| 63 | F17-19, Section 3.2 | A saved-card load failure does not block a fully covered booking. | R10 | `F17-19: card-list failure does not block a fully covered booking` | Blocked fully covered checkout on a card-list failure. | `GameCheckoutLayout.jsx` |
+| 64 | F17-22, Section 4.4 | The official cancellation policy explains the change-related removal request. | R4, R28 | `F17-22: official cancellation explains the change-related removal request` | Removed cancellation and community payment responsibility information. | `GameCheckoutPolicyCard.jsx` |
+| 65 | F17-22, Section 4.4 | Community checkout shows the organizer's supplied terms rather than the official refund promise. | R4, R29 | `F17-22: community checkout shows organizer terms instead of the official promise` | Removed cancellation and community payment responsibility information. | `GameCheckoutPolicyCard.jsx` |
+| 66 | F17-23, Section 4.4 | Without organizer terms the page promises no refund and directs the player to confirm arrangements with the organizer. | R29 | `F17-23: community checkout without terms promises no refund` | Removed cancellation and community payment responsibility information. | `GameCheckoutPolicyCard.jsx` |
+| 67 | F17-24, Section 3.1 | All available credit is shown as applied when it leaves a positive balance below Stripe's minimum. | R3, R9 | `F17-24: small-balance checkout applies all available credit` | Removed the order summary and its price and credit information. | `GameCheckoutSummaryCard.jsx` |
+| 68 | F17-24, Section 3.1 | Pickup Lane's coverage of the small remainder is shown separately. | R3, R11, R21 | `F17-24: small-balance coverage is shown separately` | Removed the order summary and its price and credit information. | `GameCheckoutSummaryCard.jsx` |
+| 69 | F17-24, Section 3.2 | The amount due becomes zero and the booking can confirm without a card charge. | R10, R11 | `F17-24: small-balance coverage allows confirmation without a card` | Required a saved card even when nothing is due. | `GameCheckoutLayout.jsx` |
+| 70 | F17-25, Section 4.2 | A balance exactly at Stripe's minimum uses normal Stripe payment without small-balance coverage. | R12, R21 | `F17-25: a balance exactly at the minimum uses normal Stripe payment` | Omitted the saved card from the minimum-balance payment request. | `gameCheckoutApi.js` |
+| 71 | F17-26, Section 3.1 | A low price with no available credit shows Pickup Lane's coverage without falsely showing applied credit. | R3, R11, R21 | `F17-26: a covered low price does not display invented game credit` | Displayed invented game credit on a covered low-price booking. | `GameCheckoutSummaryCard.jsx` |
+| 72 | F17-26, Section 3.2 | A low-priced booking covered by Pickup Lane can confirm without a card charge. | R7, R11 | `F17-26: a covered low price confirms without a card` | Required a saved card even when nothing is due. | `GameCheckoutLayout.jsx` |
+| 73 | F17-27, Section 4.4 | With organizer terms, payment disputes and refunds remain between the player and the original organizer before confirmation. | R30 | `F17-27: with organizer terms community refunds stay with the original organizer` | Removed cancellation and community payment responsibility information. | `GameCheckoutPolicyCard.jsx` |
+| 74 | F17-27, Section 4.4 | Without organizer terms, payment disputes and refunds remain between the player and the original organizer before confirmation. | R30 | `F17-27: without organizer terms community refunds stay with the original organizer` | Removed cancellation and community payment responsibility information. | `GameCheckoutPolicyCard.jsx` |
+| 75 | F17-28, Section 3.2 | Manage cards opens Payment Methods. | R31 | `F17-28: Manage cards opens Payment Methods` | Sent Manage cards to Profile instead of Payment Methods. | `GameCheckoutPage.jsx` |
+| 76 | F17-28, Section 3.2 | Returning restores ordinary checkout for the same game and guest count. | R31 | `F17-28: Back restores checkout for the same game and guests` | Lost the guest count on return from Payment Methods. | `GameCheckoutPage.jsx` |
+| 77 | F17-29, Section 3.2 | Returning restores add-guest mode for the same game and proposed additional guest count. | R31 | `F17-29: from adding guests, Back returns to adding the same number of guests` | Lost add-guests mode on return from Payment Methods. | `GameCheckoutPage.jsx` |
+| 78 | F17-30, Section 3.2 | Manage cards is hidden when checkout reopens with payment already pending. | R32 | `F17-30: checkout does not offer Manage cards while a payment is under way` | Ignored the pending payment when checkout reopened. | `GameCheckoutPage.jsx` |
+| 79 | F17-30, Section 3.2 | Manage cards stays hidden through card selection while payment is processing or its status cannot be checked. | R32 | `F17-30: Manage cards stays hidden while a new payment is submitted and checked (%s)` | Failed before the change | — |
+| 80 | F17-31, Section 3.2 | Manage cards is hidden when card payments are disabled. | R32 | `F17-31: Manage cards is hidden when card payments are disabled (%s)` | Offered Manage cards despite disabled card payments in ordinary checkout and paid waitlisting. | `GameCheckoutPage.jsx`, `GameCheckoutPaymentCard.jsx` |
+| 81 | F17-31, Section 3.2 | Manage cards is hidden when Stripe card setup is unavailable. | R32 | `F17-31: Manage cards is hidden when Stripe card setup is unavailable (%s)` | Offered Manage cards despite unavailable Stripe setup in ordinary checkout and paid waitlisting. | `GameCheckoutPage.jsx`, `GameCheckoutPaymentCard.jsx` |
+| 82 | F17-11, Section 3.2 | A paid waitlist still requires and offers card setup when estimated credit covers the price. | R12, R14 | `F17-11: covered paid waitlist still offers required card setup (%i cents credit)` | Failed before the change | — |
+| 83 | F17-12, Section 3.2 | Manage cards becomes available after a known payment failure in new and reopened checkout. | R24, R31, R32 | `F17-12: Manage cards returns after a known payment failure (%s, %s)` | Kept card management blocked after payment failed or required another card. | `GameCheckoutPage.jsx` |
+| 84 | F17-12, Section 4.2 | After a card is declined, the party stays fixed while its spots remain held. | R2, R23, R24 | `F17-12: a card retry keeps the held party fixed (%s)` | Enabled guest changes while the payment still held the party's spots. | `GameCheckoutPage.jsx` |
+| 85 | F17-12, Sections 3.1, 4.2 | Once a failed payment releases its hold, reopened checkout allows adjusting the party and trying again. | R2, R5, R24 | `F17-12: a released reopened checkout allows a different party on retry` | Kept the released booking's pending participants in the loaded roster. | `useGameCheckoutData.js` |
+| 86 | F17-5, Section 4.1 | A full roster beyond the first participant page offers whole-party waitlist confirmation. | R13 | `F17-5: a full roster beyond the first page offers the waitlist` | Disabled whole-party waitlisting when the roster was full. | `gameCheckoutViewModel.js` |
+| 87 | F17-9, Section 4.1 | An existing confirmed booking beyond the first participant page remains eligible for add-guest checkout. | R5, R19 | `F17-9: an existing booking beyond the first page can add guests` | Failed before the change | — |
+| 88 | F17-30, Section 3.2 | Manage cards stays hidden when add-guest checkout reopens with payment pending. | R32 | `F17-30: reopened pending guest checkout keeps Manage cards hidden` | Failed before the change | — |
+| 89 | F17-6, Sections 3.1, 4.3 | Reopened guest checkout checks its existing payment and returns only after success, without starting another charge. | R5, R7, R19, R27 | `F17-6: reopened guest checkout checks the existing payment without another charge` | Returned to Game Details while the existing guest payment was still processing. | `useGameCheckoutActions.js` |
+| 90 | F17-12, Section 4.3 | A known failed guest payment restores card management and working guest controls for retry. | R5, R24, R32 | `F17-12: reopened guest checkout releases failed guest controls (%s)` | Kept the failed payment's pending guests in the loaded roster. | `useGameCheckoutData.js` |
+| 91 | F17-3, Sections 3.1, 4.2 | After payment failure releases credit, the retry summary refreshes available and applied credit and the amount due. | R3, R9, R24 | `F17-3: a failed payment refreshes the released credit before retry` | Failed before the change | — |
+| 92 | F17-8, Section 4.1 | Expired holds do not force waitlisting or block an available spot. | R13, R18 | `F17-8: expired holds do not block available checkout capacity (waitlist %s)` | Failed before the change | — |
+| 93 | F17-8, Section 4.1 | Expired holds do not block available additional-guest capacity. | R5, R13, R18 | `F17-8: expired holds do not block additional guest capacity` | Failed before the change | — |
+| 94 | F17-13, Sections 4.2, 4.3 | An ended guest hold is explained without claiming success; card management and guest controls recover. | R5, R23, R24, R32 | `F17-13: an expired guest hold is shown and releases checkout controls (%s)` | Ignored the released guest hold when presenting unresolved payment. | `useGameCheckoutActions.js` |
+| 95 | F17-13, Section 4.2 | A new payment holding the last spots keeps ordinary checkout available without switching to waitlisting. | R13, R23, R24 | `F17-13: a new held payment keeps ordinary checkout instead of waitlisting (waitlist %s)` | Ignored the submitted party when accounting for its held spots. | `gameCheckoutViewModel.js` |
+| 96 | F17-13, Sections 3.1, 4.2, 4.3 | A new held guest payment keeps its guest count and checks the existing payment without another charge. | R5, R19, R23, R24, R27, R32 | `F17-13: a new held guest payment preserves its guests and can be checked without another charge` | Ignored the submitted party when accounting for its held spots. | `gameCheckoutViewModel.js` |
+| 97 | F17-19, F17-24, Sections 3.2, 4.2, 4.3 | Covered ordinary and guest checkout confirms without a card charge when Stripe card setup is unavailable. | R7, R10, R11, R27 | `F17-19, F17-24: covered checkout needs no Stripe setup (guests %s, credit %i)` | Failed before the change | — |
+| 98 | F17-14, Sections 3.2, 4.2 | A result from an obsolete checkout does not replace the current page or redirect it. | R7, R24 | `F17-14: obsolete checkout results leave the current page intact (%s, %s)` | Failed before the change | — |
+| 99 | F17-12, Section 4.2 | Reopened guest checkout authenticates its existing payment and returns only after payment confirmation. | R7, R12, R24, R27 | `F17-12: reopened guest payment authenticates before checking confirmation` | Failed before the change | — |
+| 100 | F17-12, Section 4.2 | Failed authentication on reopened guest checkout shows recoverable feedback without claiming success. | R24, R27 | `F17-12: declined authentication on reopened guest checkout is recoverable` | Failed before the change | — |
+| 101 | F17-14, Section 4.2 | Completing authentication after leaving checkout does not update or redirect the current page. | R7, R24 | `F17-14: leaving during reopened guest authentication ignores its result` | Allowed an obsolete checkout to continue after its authentication completed. | `useGameCheckoutActions.js` |
+| 102 | F17-13, Sections 3.2, 4.2 | An existing guest payment can be checked despite a failed card list or quote, absent or expired cards, closed joining, disabled new payments, or unavailable Stripe setup, without creating another charge. | R7, R24, R27 | `F17-13: existing guest payment remains checkable when %s` | Failed before the change | — |
 
 ## 3. Work to do
 
-Items 1–5 were found in the 2026-11-18 review and are done.
+None. All work is done.
 
-1. Apply available game credit when a paid official waitlist offer is promoted. Record the credit and any covered small balance, charge only the remaining amount, and confirm without a Stripe charge when none is due. Re-check waitlist failure and notification behavior.
-2. Release pending guest spots and their reserved credit when Stripe confirms the guest charge failed; retain holds only for unresolved payments. Re-check guest retry and late-payment compensation.
-3. Recognize a completed paid guest addition on an eligible partially cancelled booking in checkout, and return to Game Details.
-4. Report a saved-card list load failure as a checkout load error instead of an empty list.
-5. Add focused F17 regression coverage for these paths and a genuinely overlapping credit-checkout test. Re-run affected backend and frontend verification, then review the corrected pass.
+## Blocked
+
+- **Carried F15 time-divider polish:** the follow-up calls for final UI polish and rejects the previous thin, flat divider. No replacement appearance is decided. Keep this separate from F17 checkout requirements and obtain the visual choice before changing it.

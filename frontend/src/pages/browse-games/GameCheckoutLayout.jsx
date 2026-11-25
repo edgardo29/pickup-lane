@@ -25,6 +25,7 @@ function GameCheckoutLayout({
   isBlockedByCapacity,
   isExistingParticipantBlocked,
   isGuestSelectionLocked,
+  isCheckingGuestPayment,
   isJoinWindowClosed,
   isPaidWaitlistCheckout,
   isSubmitting,
@@ -71,19 +72,23 @@ function GameCheckoutLayout({
   const needsLoadedCards = isPaidWaitlistCheckout || (isStripeCheckout && quote?.payment_required)
   const confirmDisabled =
     !agreed ||
-    stripePaymentsDisabled ||
-    isPriceUnavailable ||
-    needsPaymentMethod ||
-    (needsLoadedCards && Boolean(paymentMethodsError)) ||
-    needsAutoChargeConsent ||
     isSubmitting ||
-    isBlockedByCapacity ||
-    isJoinWindowClosed ||
-    isAddGuestsBlockedByParticipant ||
-    isExistingParticipantBlocked
+    (!isCheckingGuestPayment && (
+      stripePaymentsDisabled ||
+      isPriceUnavailable ||
+      needsPaymentMethod ||
+      (needsLoadedCards && Boolean(paymentMethodsError)) ||
+      needsAutoChargeConsent ||
+      isBlockedByCapacity ||
+      isJoinWindowClosed ||
+      isAddGuestsBlockedByParticipant ||
+      isExistingParticipantBlocked
+    ))
 
   const actionMessage = !agreed
     ? 'Accept the terms to continue.'
+    : isCheckingGuestPayment
+      ? checkoutActionMessage
     : stripePaymentsDisabled
       ? 'Official game payments are disabled for this demo.'
       : isPriceUnavailable

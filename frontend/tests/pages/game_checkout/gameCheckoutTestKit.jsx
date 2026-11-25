@@ -188,8 +188,17 @@ export function paymentIntent(overrides = {}) {
   }
 }
 
-export function checkoutStatus(overrides = {}) {
+// Guest payments preserve the existing confirmed booking and its reservation.
+export function guestPaymentIntent(overrides = {}) {
+  return paymentIntent({ booking_status: 'confirmed', booking_payment_status: 'paid', reservation_status: 'confirmed', ...overrides })
+}
+
+export function checkoutStatus({ partySize = 1, totalSpots = 14, ...overrides } = {}) {
+  const reservation = overrides.reservation_status || 'confirmed'
+  const occupied = ['held', 'confirmed'].includes(reservation) ? partySize : 0
   return {
+    guest_reservation_status: null,
+    roster_counts: { occupied_spots: occupied, spots_remaining: Math.max(totalSpots - occupied, 0), waitlist_count: 0 },
     booking_id: BOOKING_ID,
     booking_status: 'confirmed',
     booking_payment_status: 'paid',
@@ -213,6 +222,26 @@ export function checkoutStatus(overrides = {}) {
   }
 }
 
+// Status reads retain the parent's financial totals. Only successful added
+// guests increase those totals; their separate holds determine roster capacity.
+export function guestCheckoutStatus({ guestCount = 1, totalSpots = 14, ...overrides } = {}) {
+  const paymentStatus = overrides.payment_status || 'processing'
+  const released = Boolean(overrides.compensation_status) ||
+    ['requires_payment_method', 'failed', 'canceled'].includes(paymentStatus)
+  const guestReservation = overrides.guest_reservation_status ||
+    (released ? 'released' : paymentStatus === 'succeeded' ? 'confirmed' : 'held')
+  const occupied = 1 + (guestReservation === 'released' ? 0 : guestCount)
+  const total = 1000 * (1 + (guestReservation === 'confirmed' ? guestCount : 0))
+  return checkoutStatus({
+    guest_reservation_status: guestReservation,
+    roster_counts: { occupied_spots: occupied, spots_remaining: Math.max(totalSpots - occupied, 0), waitlist_count: 0 },
+    payment_status: paymentStatus, provider_status: paymentStatus,
+    amount_cents: total, subtotal_cents: total, checkout_total_cents: total,
+    final_amount_due_cents: total, stripe_amount_cents: total,
+    ...overrides,
+  })
+}
+
 export function joinAnswer(overrides = {}) {
   return {
     status: 'joined',
@@ -224,24 +253,47 @@ export function joinAnswer(overrides = {}) {
   }
 }
 
-export function fakePageApi(gameAnswer, extraAnswers = {}) {
+export function fakePageApi(gameAnswer, extraAnswers = {}, { rosterCounts } = {}) {
   const answers = {
     'GET /games/{game_id}': gameAnswer,
     'GET /game-images': [],
     'GET /venue-images': [],
-    'GET /games/{game_id}/participants': [],
+    'GET /games/{game_id}/participants': gameAnswer?.game_type === 'community' ? [participant({ user_id: HOST_ID, booking_id: null, display_name_snapshot: 'Game Host' })] : [],
     'GET /venues/{venue_id}': new Error('Venue details unavailable'),
     'GET /user-payment-methods': [savedCard()],
-    'GET /checkout/games/{game_id}/quote': quote(),
+    'GET /checkout/games/{game_id}/quote': (path) => {
+      const params = new URL(path, 'http://test.local').searchParams
+      const guests = Number(params.get('guest_count') || 0)
+      const total = gameAnswer.price_per_player_cents * (params.get('add_guests') === 'true' ? guests : guests + 1)
+      return quote({ subtotal_cents: total, checkout_total_cents: total, final_amount_due_cents: total })
+    },
     ...extraAnswers,
+  }
+  // Build one consistent server snapshot before giving it to the page.
+  if (!(gameAnswer instanceof Error)) {
+    const participants = answers['GET /games/{game_id}/participants']
+    const occupied = participants.filter((place) => ['confirmed', 'pending_payment'].includes(place.participant_status)).length
+    answers['GET /games/{game_id}'] = {
+      ...gameAnswer,
+      roster_counts: rosterCounts || {
+        occupied_spots: occupied,
+        spots_remaining: Math.max(gameAnswer.total_spots - occupied, 0),
+        waitlist_count: participants.filter((place) => place.participant_status === 'waitlisted').length,
+      },
+    }
   }
   vi.mocked(apiRequest).mockImplementation((path, options) => {
     const endpoint = endpointFor(path, options?.method || 'GET')
     const answer = answers[endpoint]
-    if (answer instanceof Error) return Promise.reject(answer)
-    if (typeof answer === 'function') return Promise.resolve(answer(path, options))
     if (answer === undefined) throw new Error(`No fake answer for ${endpoint}`)
-    return Promise.resolve(answer)
+    let value = typeof answer === 'function' ? answer(path, options) : answer
+    if (endpoint === 'GET /games/{game_id}/participants' && Array.isArray(value)) {
+      const params = new URL(path, 'http://test.local').searchParams
+      const offset = Number(params.get('offset') || 0)
+      const limit = Number(params.get('limit') || 50)
+      value = value.slice(offset, offset + limit)
+    }
+    return value instanceof Error ? Promise.reject(value) : Promise.resolve(value)
   })
 }
 

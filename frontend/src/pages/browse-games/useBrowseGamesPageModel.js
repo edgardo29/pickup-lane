@@ -28,7 +28,6 @@ export function useBrowseGamesPageModel() {
   const [nextCursor, setNextCursor] = useState(null)
   const [hasMoreGames, setHasMoreGames] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const activeDateKeyRef = useRef('')
   const loadedDateKeyRef = useRef('')
   const listGenerationRef = useRef(0)
@@ -103,8 +102,6 @@ export function useBrowseGamesPageModel() {
         setNextCursor(null)
         setHasMoreGames(false)
         setIsLoadingMore(false)
-      } else {
-        setIsRefreshing(true)
       }
 
       try {
@@ -138,10 +135,6 @@ export function useBrowseGamesPageModel() {
         if (!silent) {
           setError(requestError instanceof Error ? requestError.message : 'Unable to load games.')
           setStatus('error')
-        }
-      } finally {
-        if (requestVersion === requestVersionRef.current) {
-          setIsRefreshing(false)
         }
       }
     },
@@ -280,7 +273,6 @@ export function useBrowseGamesPageModel() {
     setNextCursor(null)
     setHasMoreGames(false)
     setIsLoadingMore(false)
-    setIsRefreshing(false)
     replaceUrlDate(nextDateKey)
   }
 
@@ -352,7 +344,6 @@ export function useBrowseGamesPageModel() {
     error,
     hasMoreGames,
     isLoadingMore,
-    isRefreshing,
     loadMoreError,
     loadMoreGames,
     retryFirstPage,

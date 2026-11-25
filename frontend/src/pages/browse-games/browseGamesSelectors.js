@@ -88,16 +88,6 @@ export function buildBrowseMetaFromPageData(pageData) {
   }
 }
 
-export function buildSelectedDateResetMeta(currentMeta, nextDateKey) {
-  return currentMeta
-    ? {
-        ...currentMeta,
-        browse_date: nextDateKey,
-        time_groups: [],
-      }
-    : currentMeta
-}
-
 export function getNextBrowseListGeneration(
   currentGeneration,
   { append = false } = {},
