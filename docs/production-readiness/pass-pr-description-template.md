@@ -1,6 +1,6 @@
 # PR Description Template
 
-Use this template to write the final pull-request description from the PR base, the completed branch, the final diff, and the validation that actually ran.
+Use this template to write the final pull-request description from the PR base, the completed branch, and the final diff.
 
 Write for a competent software engineer who has never worked in this repository.
 
@@ -23,7 +23,7 @@ Do not use other forms such as `<pass ID> - ...`, `Implement <pass ID> ...`, or 
 
 Non-pass repository-maintenance work may use an appropriate descriptive convention such as `Docs:` or `Program:`.
 
-When producing the PR-body artifact, include only the three required sections defined below. This restriction applies only to the PR body. It does not replace any surrounding Gate D or workflow report requested by the user, such as the commit SHA, PR URL, publication result, blockers, or next action.
+When producing the PR-body artifact, include only the two required sections defined below. This restriction applies only to the PR body. It does not replace any surrounding Gate D or workflow report requested by the user, such as the commit SHA, PR URL, publication result, blockers, or next action.
 
 ## 2. Required PR Body
 
@@ -37,10 +37,6 @@ Use exactly these sections:
 ## Changes
 
 - ...
-
-## Validation
-
-- ...
 ```
 
 Do not add another PR-body section unless explicitly requested for that PR.
@@ -52,17 +48,13 @@ Use only as much text as the change requires. Do not add bullets to meet a quota
 Use:
 
 - the PR base to establish the previous behavior;
-- the final diff and completed branch behavior to establish what changed and the final result;
-- the actual tests, checks, testing record, and recorded execution results to establish what was validated.
+- the final diff and completed branch behavior to establish what changed and the final result.
 
-Plans, pass titles, requirement names, test filenames, directory names, and workflow reports may help locate relevant work, but they do not prove what the final implementation changed or validated.
+Plans, pass titles, requirement names, test filenames, directory names, and workflow reports may help locate relevant work, but they do not prove what the final implementation changed.
 
-The one exception is a Feature Pass Plan's test tables (Sections 2.1 and 2.2). They record each test and the failure check it completed, so a feature pass PR's Validation may point to them, together with the full test suite results.
+Do not make a claim unless the implementation supports it.
 
-Do not make a claim unless the implementation or executed validation supports it.
-
-When the final implementation or validation results do not support a claim,
-omit the claim.
+When the final implementation does not support a claim, omit the claim.
 
 ## 4. Drafting Process
 
@@ -104,8 +96,6 @@ What does the completed branch now do differently?
 SUPPORTING CHANGES
 Which material changes in the final diff produce that result?
 
-VALIDATION
-Which scenarios were actually exercised, and what observable result occurred?
 ```
 
 A practical consequence is not mandatory when none materially exists.
@@ -130,9 +120,9 @@ candidate phrase
 
 Do not output the translation list.
 
-### 4. Draft The Three Sections
+### 4. Draft The Two Sections
 
-Draft `Summary`, `Changes`, and `Validation` from the primary change or unifying purpose and the concrete facts.
+Draft `Summary` and `Changes` from the primary change or unifying purpose and the concrete facts.
 
 ### 5. Review The Final Output
 
@@ -429,7 +419,7 @@ Do not create Changes bullets for:
 
 unless the PR itself materially changes that workflow mechanism.
 
-Tests do not belong in Changes merely because tests were added. Describe what they proved in `Validation`.
+Tests do not belong in Changes merely because tests were added.
 
 Testing, CI, build, or deployment infrastructure belongs in Changes only when changing that infrastructure is itself a material part of the PR.
 
@@ -447,121 +437,7 @@ A scope clarification must explain the present engineering boundary.
 
 It must not become roadmap bookkeeping, pass ownership, deferred-work tracking, or a general list of things not changed.
 
-## 8. Validation
-
-The Validation section explains what important behavior was actually exercised and what observable result occurred.
-
-Use one bullet for each meaningful validation scenario. Include only the bullets needed to communicate the results clearly.
-
-For a feature pass PR, the first bullet points to the Feature Pass Plan's test tables (Sections 2.1 and 2.2) and the full test suite results, and states whether every test passed. Add another bullet only for a check that proves something this PR changed and that the plan does not record, such as a migration check when the PR changes the database. Do not list routine checks that CI already shows, such as lint or the build. Each behavior appears in only one bullet.
-
-Each bullet should lead with the scenario or property, followed by what was exercised and what happened.
-
-Use this form:
-
-```text
-[Scenario or property]: [what was exercised and what result was observed].
-```
-
-Examples:
-
-```text
-- Competing workers: two independent PostgreSQL sessions tried to claim the same job, and only one session obtained it.
-```
-
-```text
-- Failed-job recovery: a worker stopped before recording completion, the lease expired, and another worker recovered the job without allowing the stale worker to update it.
-```
-
-```text
-- Authorization failure: a non-admin user attempted the protected operation, and the API rejected it without changing the target record.
-```
-
-```text
-- Form recovery: a failed submission displayed the server error while preserving the user's entered values.
-```
-
-Validation should cover the most important applicable areas, such as:
-
-- the primary changed behavior;
-- meaningful failure cases;
-- retry or recovery;
-- concurrency or ordering;
-- invalid-state rejection;
-- authorization failures;
-- compatibility that could realistically regress;
-- database, API, browser, external-service, build, or integration behavior affected by the PR.
-
-Do not infer validation from:
-
-- the implementation;
-- the plan, except a Feature Pass Plan's test tables, as described above;
-- a requirement;
-- a test filename;
-- a related suite;
-- intended behavior.
-
-Only describe validation that actually ran and passed.
-
-### Keep Changes And Validation Distinct
-
-`Changes` explains what was implemented.
-
-`Validation` explains which scenario was exercised and what happened.
-
-Weak Validation:
-
-```text
-- Added lease renewal for active jobs.
-```
-
-Clear Validation:
-
-```text
-- Long-running work: a handler ran longer than its original lease while the worker renewed ownership, and another worker could not claim the job.
-```
-
-### Test Counts
-
-Do not include test counts or commands.
-
-### Documentation, Configuration, And Mechanical Changes
-
-Do not invent runtime validation for a PR that does not change runtime behavior.
-
-For documentation-only work, describe the checks that actually ran, such as:
-
-- links and referenced paths were verified;
-- commands and examples were checked against current repository behavior;
-- formatting or documentation-build checks passed.
-
-A truthful validation bullet may state:
-
-```text
-- Documentation verification: referenced commands, paths, and examples were checked against the current repository; no runtime tests were applicable because runtime code did not change.
-```
-
-For configuration-only or mechanical work, describe the relevant checks that actually ran, such as:
-
-- configuration parsing;
-- startup rejection of missing or unsafe values;
-- build output;
-- generated-file consistency;
-- repository-defined static checks.
-
-### Exclude Process-Only Results
-
-Do not use Validation bullets for:
-
-- `git diff --check`;
-- Git status or staged state;
-- Gate approval;
-- artifact hashes;
-- PR creation or finalization;
-
-unless the PR materially changes the mechanism being checked.
-
-## 9. Final Review
+## 8. Final Review
 
 Do not return the PR body until every applicable answer is yes.
 
@@ -574,20 +450,15 @@ Do not return the PR body until every applicable answer is yes.
 7. Does every Changes bullet describe material behavior rather than a file, test, or process artifact?
 8. Is the PR body free of endpoint paths, table names, and column names, and is any other exact name explained when its purpose is not obvious?
 9. Is any scope clarification necessary, concise, and limited to the current PR boundary?
-10. Does every Validation bullet describe a scenario that actually ran and an observable result?
-11. Does Validation lead with proven behavior rather than counts or commands?
-12. Are Changes and Validation clearly different rather than repeated?
-13. Are planning, Gate, requirement, evidence, Git, and acceptance bookkeeping excluded?
-14. Are vague, duplicated, unsupported, exaggerated, or unnecessarily technical claims removed?
-15. Is the amount of text appropriate for the actual change, without padding or excessive compression?
-16. Does the PR body contain no sensitive information or local workstation details?
-17. Does the Summary describe the whole PR without singling out one change?
-18. Does each behavior appear in only one Validation bullet?
-19. Is Validation free of test counts, commands, and routine CI checks?
+10. Are planning, Gate, requirement, evidence, Git, and acceptance bookkeeping excluded?
+11. Are vague, duplicated, unsupported, exaggerated, or unnecessarily technical claims removed?
+12. Is the amount of text appropriate for the actual change, without padding or excessive compression?
+13. Does the PR body contain no sensitive information or local workstation details?
+14. Does the Summary describe the whole PR without singling out one change?
 
 If any applicable answer is no, rewrite the PR body before returning it.
 
-## 10. Copyable Body
+## 9. Copyable Body
 
 ```markdown
 ## Summary
@@ -597,8 +468,4 @@ If any applicable answer is no, rewrite the PR body before returning it.
 ## Changes
 
 - [Add one bullet for each distinct material change.]
-
-## Validation
-
-- [Add one bullet for each meaningful scenario or property that was actually checked.]
 ```

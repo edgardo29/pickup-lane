@@ -58,7 +58,7 @@ function MyNeedASubCard({ item }) {
       <div className="my-need-sub-card__facts">
         <Fact icon={<BuildingIcon />} text={post.location_name || 'Pickup Lane'} />
         <Fact icon={<MapPinIcon />} text={locationLabel || 'Location not set'} />
-        <Fact icon={<GameTimeIcon />} text={formatTimeRange(post.starts_at, post.ends_at)} />
+        <Fact icon={<GameTimeIcon />} text={formatTimeRange(post.starts_at, post.ends_at, post.timezone)} />
         <Fact icon={<GameTraitIcon />} text={postSpec} />
       </div>
 

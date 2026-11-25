@@ -19,6 +19,9 @@ from backend.models import (
     Game,
     GameCredit,
     GameParticipant,
+    SubPost,
+    SubPostPosition,
+    SubPostRequest,
     User,
     UserPaymentMethod,
     Venue,
@@ -272,6 +275,87 @@ PRODUCTION_DATABASE_URL = (
     "postgresql+psycopg://db.example.invalid:5432/pickup_lane_prod"
 )
 PRODUCTION_CURSOR_SIGNING_SECRET = "synthetic-cursor-signing-secret-for-settings"
+
+
+def make_sub_post(
+    db: Session, *, owner: User, starts_at: datetime, **overrides
+) -> SubPost:
+    """Create an active, visible Need a Sub post needing two field players.
+
+    It gets one open field-player position, as posts created in the app do.
+    ``starts_on_local`` is derived from ``starts_at`` in Chicago time.
+    """
+    values = {
+        "id": uuid.uuid4(),
+        "owner_user_id": owner.id,
+        "post_status": "active",
+        "public_visibility_status": "visible",
+        "sport_type": "soccer",
+        "format_label": "7v7",
+        "environment_type": "outdoor",
+        "skill_level": "intermediate",
+        "game_player_group": "coed",
+        "starts_at": starts_at,
+        "ends_at": starts_at + timedelta(hours=1),
+        "starts_on_local": starts_at.astimezone(ZoneInfo("America/Chicago")).date(),
+        "timezone": "America/Chicago",
+        "location_name": f"Test Field {uuid.uuid4().hex[:6]}",
+        "address_line_1": "200 Test Avenue",
+        "city": "Chicago",
+        "state": "IL",
+        "postal_code": "60601",
+        "country_code": "US",
+        "subs_needed": 2,
+        "price_due_at_venue_cents": 0,
+        "currency": "USD",
+        "expires_at": starts_at,
+        "created_at": _now(),
+        "updated_at": _now(),
+    }
+    values.update(overrides)
+    post = _save(db, SubPost(**values))
+    _save(
+        db,
+        SubPostPosition(
+            id=uuid.uuid4(),
+            sub_post_id=post.id,
+            position_label="field_player",
+            player_group="open",
+            spots_needed=post.subs_needed,
+            sort_order=0,
+        ),
+    )
+    return post
+
+
+def make_sub_post_request(
+    db: Session,
+    *,
+    post: SubPost,
+    requester: User,
+    request_status: str = "confirmed",
+    **overrides,
+) -> SubPostRequest:
+    """Create a request for the post's first position, stamped for its status."""
+    position = db.query(SubPostPosition).filter_by(sub_post_id=post.id).first()
+    now = _now()
+    values = {
+        "id": uuid.uuid4(),
+        "sub_post_id": post.id,
+        "sub_post_position_id": position.id,
+        "requester_user_id": requester.id,
+        "request_status": request_status,
+        "confirmed_at": now if request_status == "confirmed" else None,
+        "declined_at": now if request_status == "declined" else None,
+        "sub_waitlisted_at": now if request_status == "sub_waitlist" else None,
+        "canceled_at": now
+        if request_status in {"canceled_by_player", "canceled_by_owner"}
+        else None,
+        "expired_at": now if request_status == "expired" else None,
+        "no_show_reported_at": now if request_status == "no_show_reported" else None,
+    }
+    values.update(overrides)
+    return _save(db, SubPostRequest(**values))
 
 
 def production_settings_env(**overrides: str | None) -> dict[str, str]:

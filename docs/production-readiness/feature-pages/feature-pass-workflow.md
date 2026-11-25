@@ -366,7 +366,7 @@ Confirm the correct branch and identify the exact changes authorized for publica
 
 If publication is authorized:
 
-1. Read the complete `docs/production-readiness/pass-pr-description-template.md`. Follow its applicable PR-body instructions to describe the actual changes and verification. Use the selected feature pass's F ID in the pull-request title, following the template's feature-pass format.
+1. Read the complete `docs/production-readiness/pass-pr-description-template.md`. Follow its applicable PR-body instructions to describe the actual changes. Use the selected feature pass's F ID in the pull-request title, following the template's feature-pass format.
 
 2. Stage only the changes approved in Gate D. Inspect the exact staged files and diff. Confirm that every staged file was reviewed in Gate D and that its contents match the approved version. If unrelated or unreviewed changes are staged, stop without modifying or discarding them.
 

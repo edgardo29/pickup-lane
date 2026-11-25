@@ -294,6 +294,3 @@ specification.
 - Reading files, searching, and compile checks are always allowed.
 - After running tests, report the exact commands, the results, and anything
   not run.
-- Before any test run expected to take more than two minutes, or a series of
-  runs such as a page's failure checks, tell the user the expected duration and
-  what drives it, and wait for approval.
