@@ -18,6 +18,7 @@ function PasswordResetPanel({
   error,
   onResetPassword,
   password,
+  passwordInvalid,
   setPassword,
   setShowPassword,
   showPassword,
@@ -28,33 +29,37 @@ function PasswordResetPanel({
       <AuthPanel>
         <AuthHalo icon={status === 'success' ? <ShieldCheckIcon /> : <LockIcon />} />
 
-        {status === 'checking' && (
-          <AuthHeader
-            title="Checking reset link"
-            subtitle="One moment while we verify your password reset link."
-          />
-        )}
+        <div role="status">
+          {status === 'checking' && (
+            <AuthHeader
+              title="Checking reset link"
+              subtitle="One moment while we verify your password reset link."
+            />
+          )}
+          {status === 'success' && (
+            <AuthHeader
+              title="Password changed"
+              subtitle="You can now sign in with your new password."
+            />
+          )}
+        </div>
 
         {status === 'invalid' && (
           <>
             <AuthHeader
-              title="Reset link expired"
-              subtitle="This password reset link is invalid or has already been used."
+              title="Reset link unavailable"
+              subtitle="Request a new link to reset your password."
             />
             <FormErrorMessage>{error}</FormErrorMessage>
             <Link className="auth-primary-button" to="/forgot-password">
               <SendIcon />
-              Send New Link
+              Request New Reset Link
             </Link>
           </>
         )}
 
         {status === 'success' && (
           <>
-            <AuthHeader
-              title="Password changed"
-              subtitle="You can now sign in with your new password."
-            />
             <Link className="auth-primary-button" to="/sign-in">
               <LogIn aria-hidden="true" />
               Back to Sign In
@@ -79,8 +84,10 @@ function PasswordResetPanel({
 
             <form className="auth-form" noValidate onSubmit={onResetPassword}>
               <AuthField
+                aria-describedby={passwordInvalid ? 'reset-password-hint reset-password-error' : 'reset-password-hint'}
+                aria-invalid={passwordInvalid}
                 autoComplete="new-password"
-                hint="At least 8 characters with a number or symbol"
+                hint={<span id="reset-password-hint">At least 8 characters with a number or symbol</span>}
                 icon={<LockIcon />}
                 label="New password"
                 onChange={(event) => setPassword(event.target.value)}
@@ -96,7 +103,11 @@ function PasswordResetPanel({
                 value={password}
               />
 
-              <FormErrorMessage>{error}</FormErrorMessage>
+              {error && (
+                <div id="reset-password-error">
+                  <FormErrorMessage>{error}</FormErrorMessage>
+                </div>
+              )}
 
               <button
                 className="auth-primary-button"
