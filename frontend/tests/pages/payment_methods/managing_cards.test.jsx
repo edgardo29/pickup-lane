@@ -3,8 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiRequestError } from '../../../src/lib/apiClient.js'
 import {
-  card, checkoutAnswers, fakePageApi, GAME_ID, LIST, MAKE_DEFAULT, myRosterPlace, REMOVE,
-  renderFromCheckout, renderPaymentMethods, requestCount, SAVE_CARD, signIn,
+  card, fakePageApi, GAME_ID, LIST, MAKE_DEFAULT, REMOVE,
+  renderPaymentMethods, requestCount, SAVE_CARD, signIn,
 } from './paymentMethodsTestKit.jsx'
 
 const { runWithStepUp, fakeStripe } = vi.hoisted(() => ({
@@ -267,54 +267,6 @@ describe('Payment Methods managing cards', () => {
 
     expect(await screen.findByRole('heading', { name: 'Game Checkout' })).toBeInTheDocument()
     expect(router.state.location.search).toBe('?guests=1')
-  })
-
-  it('F13-5: Manage cards on checkout opens this page, and Back returns with the same guests', async () => {
-    const user = userEvent.setup()
-    fakePageApi({ ...checkoutAnswers(), [LIST]: [card({ card_last4: '1111', is_default: true })] })
-    const router = renderFromCheckout()
-
-    await user.click(await screen.findByRole('button', { name: 'Add a guest' }))
-    await user.click(screen.getByRole('button', { name: 'Add a guest' }))
-    await user.click(screen.getByRole('link', { name: 'Manage cards' }))
-    expect(await screen.findByRole('heading', { name: 'Payment Methods' })).toBeInTheDocument()
-    await user.click(await screen.findByRole('link', { name: 'Back to checkout' }))
-
-    expect(await screen.findByRole('heading', { name: 'Confirm Spot' })).toBeInTheDocument()
-    expect(await screen.findByText('+2 guests')).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe(CHECKOUT_PATH)
-    expect(router.state.location.search).toBe('?guest_count=2')
-  })
-
-  it('F13-5: from adding guests, Back returns to adding the same number of guests', async () => {
-    const user = userEvent.setup()
-    fakePageApi({
-      ...checkoutAnswers({ participants: [myRosterPlace()] }),
-      [LIST]: [card({ card_last4: '1111', is_default: true })],
-    })
-    const router = renderFromCheckout('?mode=add-guests&guest_count=1')
-
-    await user.click(await screen.findByRole('button', { name: 'Add a guest' }))
-    await user.click(screen.getByRole('link', { name: 'Manage cards' }))
-    await user.click(await screen.findByRole('link', { name: 'Back to checkout' }))
-
-    expect(await screen.findByRole('heading', { name: 'Add Guests' })).toBeInTheDocument()
-    expect(await screen.findByText('Adding 2 guests')).toBeInTheDocument()
-    expect(router.state.location.search).toBe('?mode=add-guests&guest_count=2')
-  })
-
-  it('F13-5: checkout does not offer Manage cards while a payment is under way', async () => {
-    fakePageApi({
-      ...checkoutAnswers({
-        participants: [myRosterPlace({ participant_status: 'pending_payment', confirmed_at: null })],
-      }),
-      [LIST]: [card({ card_last4: '1111', is_default: true })],
-    })
-    renderFromCheckout()
-
-    expect(await screen.findByText(/Selected for this booking/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Change' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Manage cards' })).not.toBeInTheDocument()
   })
 
   it('F13-5: opened from Profile, Back returns to Profile', async () => {

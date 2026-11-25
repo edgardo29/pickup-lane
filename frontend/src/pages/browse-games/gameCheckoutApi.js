@@ -12,6 +12,19 @@ async function getAuthHeaders(firebaseUser) {
   }
 }
 
+// The participants endpoint defaults to 50 records, including past attendance.
+// Checkout needs the complete list to find this player's party and capacity.
+async function loadCheckoutParticipants({ firebaseUser, gameId }) {
+  const participants = []
+  const headers = await getAuthHeaders(firebaseUser)
+  const limit = 50
+  for (let offset = 0; ; offset += limit) {
+    const page = await apiRequest(`/games/${gameId}/participants?limit=${limit}&offset=${offset}`, { headers })
+    participants.push(...page)
+    if (page.length < limit) return participants
+  }
+}
+
 export async function loadGameCheckout({ firebaseUser, gameId }) {
   const game = await apiRequest(`/games/${gameId}`)
   const [venue, gameImages, venueImages, participants, paymentMethodsResult] = await Promise.all([
@@ -22,7 +35,7 @@ export async function loadGameCheckout({ firebaseUser, gameId }) {
       : Promise.resolve([]),
     // The player list requires sign-in.
     firebaseUser
-      ? apiRequest(`/games/${gameId}/participants`, { headers: await getAuthHeaders(firebaseUser) })
+      ? loadCheckoutParticipants({ firebaseUser, gameId })
       : Promise.resolve([]),
     firebaseUser && game.game_type === 'official' && game.payment_collection_type === 'in_app'
       ? listUserPaymentMethods(firebaseUser)

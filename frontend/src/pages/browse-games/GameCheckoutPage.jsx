@@ -15,7 +15,7 @@ import {
 import GameCheckoutLayout from './GameCheckoutLayout.jsx'
 import { GameCheckoutPaymentSelector } from './GameCheckoutPaymentSelector.jsx'
 import { buildGameCheckoutViewModel } from './gameCheckoutViewModel.js'
-import { useGameCheckoutActions } from './useGameCheckoutActions.js'
+import { describeCheckoutStatus, useGameCheckoutActions } from './useGameCheckoutActions.js'
 import { useGameCheckoutData } from './useGameCheckoutData.js'
 import { useGameCheckoutQuote } from './useGameCheckoutQuote.js'
 import { useAuth } from '../../hooks/useAuth.js'
@@ -40,7 +40,6 @@ const MAX_SAVED_PAYMENT_METHODS = 5
 function GameCheckoutPage() {
   const { gameId } = useParams()
   const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
   const {
     appUser,
     currentUser: firebaseUser,
@@ -48,6 +47,22 @@ function GameCheckoutPage() {
   } = useAuth()
   const isAddGuestsCheckout = searchParams.get('mode') === 'add-guests'
   const requestedGuestCount = Number.parseInt(searchParams.get('guest_count') || '', 10)
+
+  return (
+    <GameCheckout
+      key={`${appUser?.id || ''}:${gameId}:${isAddGuestsCheckout}`}
+      appUser={appUser}
+      firebaseUser={firebaseUser}
+      gameId={gameId}
+      isAddGuestsCheckout={isAddGuestsCheckout}
+      isAuthLoading={isAuthLoading}
+      requestedGuestCount={requestedGuestCount}
+    />
+  )
+}
+
+function GameCheckout({ appUser, firebaseUser, gameId, isAddGuestsCheckout, isAuthLoading, requestedGuestCount }) {
+  const navigate = useNavigate()
 
   const [guestCount, setGuestCount] = useState(() => (
     Number.isFinite(requestedGuestCount)
@@ -89,18 +104,29 @@ function GameCheckoutPage() {
     confirmBooking,
     isSubmitting,
     prepareStripeCheckout,
-    resetSubmitError,
-    resetStripeCheckout,
-    stripeCheckout,
+    checkoutPayment,
+    submittedGuestCount,
     stripeStatusMessage,
     submitError,
-  } = useGameCheckoutActions({ navigate })
+  } = useGameCheckoutActions({
+    navigate,
+    onCheckoutStatus: checkoutData.reconcileCheckoutStatus,
+  })
   const selectedPaymentMethodIsUsable = getUsablePaymentMethods(checkoutData.paymentMethods)
     .some((method) => method.id === selectedPaymentMethodId)
   const effectiveSelectedPaymentMethodId = selectedPaymentMethodIsUsable
     ? selectedPaymentMethodId
     : getPreferredPaymentMethod(checkoutData.paymentMethods)?.id || ''
+  const currentPaymentHoldsParty = Boolean(checkoutPayment && (
+    isAddGuestsCheckout
+      ? checkoutPayment.guest_reservation_status === 'held' || (
+        checkoutPayment.guest_reservation_status == null &&
+        describeCheckoutStatus(checkoutPayment).outcome === 'pending'
+      )
+      : checkoutPayment.reservation_status === 'held'
+  ))
   const checkout = buildGameCheckoutViewModel({
+    heldGuestCount: currentPaymentHoldsParty ? submittedGuestCount : null,
     appUser,
     game: checkoutData.game,
     guestCount,
@@ -123,7 +149,12 @@ function GameCheckoutPage() {
     isOfficialInAppGame && checkout.isWaitlistCheckout && !isAddGuestsCheckout,
   )
   const usesCardSelection = isStripeCheckout || isPaidWaitlistCheckout
+  const quoteRefreshKey = checkoutPayment &&
+    ['failed', 'retry_card', 'stopped'].includes(describeCheckoutStatus(checkoutPayment).outcome)
+    ? `${checkoutPayment.booking_id}:${checkoutPayment.payment_id}:${checkoutPayment.payment_status}`
+    : ''
   const { quote, quoteError, quoteStatus } = useGameCheckoutQuote({
+    refreshKey: quoteRefreshKey,
     addGuests: isAddGuestsCheckout,
     enabled: checkoutData.status === 'success' && isOfficialInAppGame,
     firebaseUser,
@@ -132,11 +163,6 @@ function GameCheckoutPage() {
   })
   // Until the quote loads, assume a card may be needed.
   const paymentRequired = quote ? quote.payment_required : true
-
-  useEffect(() => {
-    resetSubmitError()
-    resetStripeCheckout()
-  }, [appUser?.id, gameId, isAddGuestsCheckout, resetStripeCheckout, resetSubmitError])
 
   function resetSetupOperationIds() {
     setupCreateOperationIdRef.current = ''
@@ -261,7 +287,6 @@ function GameCheckoutPage() {
     setSelectedPaymentMethodId(paymentMethodId)
     setIsPaymentSelectorOpen(false)
     setCheckoutActionError('')
-    resetStripeCheckout()
   }
 
   function handleAgreementChange(nextAgreed) {
@@ -321,9 +346,16 @@ function GameCheckoutPage() {
       checkout.existingParticipant &&
       !checkout.isPaymentResume,
   )
+  // The latest server response owns payment progress. Selecting a card does
+  // not settle an existing payment or release the party's held spots.
+  const isPaymentPending = checkoutPayment
+    ? describeCheckoutStatus(checkoutPayment).outcome === 'pending'
+    : checkout.isPaymentResume
+  const isPartyHeld = checkoutPayment
+    ? currentPaymentHoldsParty
+    : checkout.isPaymentResume
   const isGuestSelectionLocked = Boolean(
-    isStripeCheckout &&
-      (stripeCheckout?.client_secret || checkout.isPaymentResume),
+    isStripeCheckout && (isSubmitting || isPaymentPending || isPartyHeld),
   )
   // Payment Methods brings the player back to this checkout with the same
   // mode and party size. Hidden once a payment is under way.
@@ -332,12 +364,17 @@ function GameCheckoutPage() {
     checkoutReturnParams.set('mode', 'add-guests')
   }
   checkoutReturnParams.set('guest_count', String(checkout.effectiveGuestCount))
-  const manageCardsPath = isGuestSelectionLocked
+  const manageCardsPath = isPaymentPending || isSubmitting ||
+    !stripePaymentsEnabled || !isStripeReady
     ? ''
     : `/profile/payment-methods?returnTo=${encodeURIComponent(
       `/games/${gameId}/checkout?${checkoutReturnParams}`,
     )}`
+  const isCheckingGuestPayment = Boolean(
+    isStripeCheckout && isAddGuestsCheckout && checkout.isPaymentResume,
+  )
   const confirmLabel = getConfirmLabel({
+    isGuestPaymentResume: isAddGuestsCheckout && checkout.isPaymentResume,
     isAddGuestsCheckout,
     isWaitlistCheckout: checkout.isWaitlistCheckout,
     isSubmitting,
@@ -351,22 +388,22 @@ function GameCheckoutPage() {
     }
 
     if (isStripeCheckout) {
-      if (stripePaymentsDisabled) {
+      if (!isCheckingGuestPayment && stripePaymentsDisabled) {
         setCheckoutActionError('Official game payments are disabled for this demo.')
         return
       }
 
-      if (stripeUnavailable) {
-        setCheckoutActionError('Secure payment is not configured.')
+      if (!isCheckingGuestPayment && stripeUnavailable && paymentRequired) {
+        setCheckoutActionError("Adding cards isn't available right now.")
         return
       }
 
-      if (quoteStatus !== 'success') {
+      if (!isCheckingGuestPayment && quoteStatus !== 'success') {
         setCheckoutActionError(quoteError || 'Loading your price...')
         return
       }
 
-      if (paymentRequired && !usesSavedPaymentMethod) {
+      if (!isCheckingGuestPayment && paymentRequired && !usesSavedPaymentMethod) {
         setCheckoutActionError(
           checkoutData.paymentMethodsError || 'Add a payment method to continue.',
         )
@@ -442,6 +479,7 @@ function GameCheckoutPage() {
       isBlockedByCapacity={checkout.isBlockedByCapacity}
       isExistingParticipantBlocked={isExistingParticipantBlocked}
       isGuestSelectionLocked={isGuestSelectionLocked}
+      isCheckingGuestPayment={isCheckingGuestPayment}
       isJoinWindowClosed={checkout.isJoinWindowClosed}
       isSubmitting={isSubmitting}
       isStripeCheckout={isStripeCheckout}
@@ -460,7 +498,6 @@ function GameCheckoutPage() {
       onConfirmBooking={handleConfirm}
       onGuestCountChange={(nextGuestCount) => {
         setGuestCount(nextGuestCount)
-        resetStripeCheckout()
       }}
       onOpenLegalPolicy={setActiveLegalPolicyId}
       onSetAgreed={handleAgreementChange}
@@ -476,7 +513,7 @@ function GameCheckoutPage() {
       quoteStatus={quoteStatus}
       setupError={!setupClientSecret ? setupError : ''}
       submitError={submitError}
-      stripeStatusMessage={stripeStatusMessage}
+      stripeStatusMessage={stripeStatusMessage || (isAddGuestsCheckout && checkout.isPaymentResume ? 'A guest payment is already in progress. Check its status before starting another.' : '')}
       stripeUnavailable={stripeUnavailable}
       title={checkout.title}
       total={checkout.total}
@@ -547,12 +584,17 @@ function GameCheckoutPage() {
 }
 
 function getConfirmLabel({
+  isGuestPaymentResume,
   isAddGuestsCheckout,
   isWaitlistCheckout,
   isSubmitting,
 }) {
   if (isSubmitting) {
     return 'Confirming...'
+  }
+
+  if (isGuestPaymentResume) {
+    return 'Check Payment'
   }
 
   if (isAddGuestsCheckout) {

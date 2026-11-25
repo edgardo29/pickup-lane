@@ -1,6 +1,9 @@
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from backend.schemas.game_schema import GameRosterCountsRead
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 
@@ -59,6 +62,9 @@ class GameCheckoutQuoteRead(BaseModel):
 
 
 class GameCheckoutStatusRead(BaseModel):
+    client_secret: str | None = None
+    guest_reservation_status: Literal["held", "confirmed", "released"] | None = None
+    roster_counts: GameRosterCountsRead | None = None
     booking_id: UUID
     booking_status: str
     booking_payment_status: str

@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { loadGameCheckoutQuote } from './gameCheckoutApi.js'
 
 // Loads the amount due after credit whenever the proposed party changes.
-export function useGameCheckoutQuote({ addGuests, enabled, firebaseUser, gameId, guestCount }) {
+export function useGameCheckoutQuote({ addGuests, enabled, firebaseUser, gameId, guestCount, refreshKey = '' }) {
   const [result, setResult] = useState({ key: '', quote: null, error: '' })
-  const requestKey = enabled ? `${gameId}:${guestCount}:${addGuests}` : ''
+  const requestKey = enabled ? `${gameId}:${guestCount}:${addGuests}:${refreshKey}` : ''
 
   useEffect(() => {
     if (!requestKey) {
@@ -32,7 +32,7 @@ export function useGameCheckoutQuote({ addGuests, enabled, firebaseUser, gameId,
     return () => {
       ignore = true
     }
-  }, [addGuests, firebaseUser, gameId, guestCount, requestKey])
+  }, [addGuests, firebaseUser, gameId, guestCount, refreshKey, requestKey])
 
   if (!requestKey) {
     return { quote: null, quoteError: '', quoteStatus: 'idle' }

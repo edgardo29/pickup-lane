@@ -14,6 +14,7 @@ export function buildGameCheckoutViewModel({
   appUser,
   game,
   guestCount,
+  heldGuestCount = null,
   images,
   isAddGuestsCheckout,
   isSubmitting,
@@ -23,7 +24,7 @@ export function buildGameCheckoutViewModel({
   selectedPaymentMethodId,
   venue,
 }) {
-  const summary = getParticipantSummary(participants, game?.total_spots)
+  const summary = getParticipantSummary(participants, game?.total_spots, game?.roster_counts)
   const existingParticipant =
     participants.find(
       (participant) =>
@@ -32,17 +33,35 @@ export function buildGameCheckoutViewModel({
     ) || null
   const primaryImage = getPrimaryImage(images, game)
   const maxGuests = game?.allow_guests ? game.max_guests_per_booking || 0 : 0
-  const currentGuestCount = getCurrentGuestCount(participants, existingParticipant, appUser?.id)
+  const pendingGuestCount = isAddGuestsCheckout && existingParticipant?.booking_id
+    ? participants.filter((participant) =>
+      participant.booking_id === existingParticipant.booking_id &&
+      participant.participant_type === 'guest' &&
+      participant.participant_status === 'pending_payment',
+    ).length
+    : 0
+  const currentGuestCount = getCurrentGuestCount(
+    isAddGuestsCheckout
+      ? participants.filter((participant) => participant.participant_status === 'confirmed')
+      : participants,
+    existingParticipant,
+    appUser?.id,
+  )
+  const hasSubmittedHold = heldGuestCount !== null
   const isPaymentResume = Boolean(
-    !isAddGuestsCheckout && existingParticipant?.participant_status === 'pending_payment',
+    hasSubmittedHold ||
+    (!isAddGuestsCheckout && existingParticipant?.participant_status === 'pending_payment') ||
+      (isAddGuestsCheckout && existingParticipant?.participant_status === 'confirmed' && pendingGuestCount > 0),
   )
   const addableGuestCount = isAddGuestsCheckout
-    ? Math.max(Math.min(maxGuests - currentGuestCount, summary.spotsLeft), 0)
+    ? Math.max(Math.min(maxGuests - currentGuestCount, summary.spotsLeft + (hasSubmittedHold ? heldGuestCount : pendingGuestCount)), 0)
     : maxGuests
   const minGuestCount = isAddGuestsCheckout && addableGuestCount > 0 ? 1 : 0
   const maxSelectableGuests = Math.max(addableGuestCount, 0)
-  const effectiveGuestCount = isPaymentResume
-    ? currentGuestCount
+  const effectiveGuestCount = hasSubmittedHold
+    ? heldGuestCount
+    : isPaymentResume
+      ? (isAddGuestsCheckout ? pendingGuestCount : currentGuestCount)
     : Math.min(Math.max(guestCount, minGuestCount), maxSelectableGuests)
   const projectedGuestCount = isAddGuestsCheckout
     ? Math.min(currentGuestCount + effectiveGuestCount, maxGuests)
@@ -55,7 +74,7 @@ export function buildGameCheckoutViewModel({
     ? nowMs !== null &&
       nowMs >= new Date(game.starts_at).getTime() + JOIN_WINDOW_MINUTES * 60 * 1000
     : false
-  const currentPendingPartySize = isPaymentResume ? currentGuestCount + 1 : 0
+  const currentPendingPartySize = !isAddGuestsCheckout && isPaymentResume ? effectiveGuestCount + 1 : 0
   const availableSpotsForCheckout = summary.spotsLeft + currentPendingPartySize
   const hasEnoughSpots = partySize <= availableSpotsForCheckout
   const isWaitlistCheckout = Boolean(!isAddGuestsCheckout && game && !hasEnoughSpots && game.waitlist_enabled)

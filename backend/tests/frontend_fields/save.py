@@ -50,6 +50,7 @@ PAGE_ENDPOINTS = {
         "GET /venues/{venue_id}",
         "GET /user-payment-methods",
         "POST /user-payment-methods/setup-intent",
+        "POST /user-payment-methods/sync",
         "GET /checkout/games/{game_id}/quote",
         "POST /checkout/games/{game_id}/payment-intent",
         "POST /checkout/games/{game_id}/guest-payment-intent",

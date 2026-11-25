@@ -19,6 +19,28 @@ export function useGameCheckoutData({
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState('')
 
+  const reconcileCheckoutStatus = useCallback((checkoutStatus) => {
+    if (checkoutStatus.roster_counts) {
+      setGame((current) => current ? { ...current, roster_counts: checkoutStatus.roster_counts } : current)
+    }
+    const guestAttemptEnded = ['confirmed', 'partially_cancelled'].includes(checkoutStatus.booking_status) && (
+      ['requires_payment_method', 'failed', 'canceled'].includes(checkoutStatus.payment_status) ||
+      Boolean(checkoutStatus.compensation_status) ||
+      checkoutStatus.guest_reservation_status === 'released'
+    )
+    if (checkoutStatus.reservation_status !== 'released' && !guestAttemptEnded) {
+      return
+    }
+
+    // Drop the released party from the loaded roster so it cannot become a
+    // pending booking again when the player starts a new payment attempt.
+    setParticipants((current) => current.filter((participant) => !(
+      participant.booking_id === checkoutStatus.booking_id &&
+      participant.participant_status === 'pending_payment' &&
+      (checkoutStatus.reservation_status === 'released' || participant.participant_type === 'guest')
+    )))
+  }, [])
+
   const reloadPaymentMethods = useCallback(async () => {
     if (!firebaseUser) {
       setPaymentMethods([])
@@ -92,6 +114,7 @@ export function useGameCheckoutData({
     paymentMethods,
     paymentMethodsError,
     reloadPaymentMethods,
+    reconcileCheckoutStatus,
     status,
     venue,
   }

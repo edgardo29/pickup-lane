@@ -229,6 +229,17 @@
           "title": "Checkout Total Cents",
           "type": "integer"
         },
+        "client_secret": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Client Secret"
+        },
         "compensation_status": {
           "anyOf": [
             {
@@ -251,6 +262,22 @@
         "final_amount_due_cents": {
           "title": "Final Amount Due Cents",
           "type": "integer"
+        },
+        "guest_reservation_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "held",
+                "confirmed",
+                "released"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Guest Reservation Status"
         },
         "minimum_charge_adjustment_cents": {
           "title": "Minimum Charge Adjustment Cents",
@@ -301,6 +328,16 @@
         "reservation_status": {
           "title": "Reservation Status",
           "type": "string"
+        },
+        "roster_counts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GameRosterCountsRead"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "stripe_amount_cents": {
           "title": "Stripe Amount Cents",
@@ -1260,6 +1297,9 @@
     },
     "POST /user-payment-methods/setup-intent": {
       "$ref": "#/$defs/UserPaymentMethodSetupIntentRead"
+    },
+    "POST /user-payment-methods/sync": {
+      "$ref": "#/$defs/UserPaymentMethodRead"
     }
   }
 }

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   confirmGameCheckout,
   createGameCheckoutPaymentIntent,
@@ -34,6 +34,15 @@ export function describeCheckoutStatus(checkoutStatus) {
     return {
       outcome: 'stopped',
       message: 'Your payment completed, but the guests could not be added. A refund is required.',
+    }
+  }
+  if (checkoutStatus.guest_reservation_status === 'released' &&
+    !['requires_payment_method', 'failed', 'canceled'].includes(checkoutStatus.payment_status)) {
+    return {
+      outcome: 'stopped',
+      message: checkoutStatus.payment_status === 'succeeded'
+        ? 'Your payment completed, but the guests could not be added. A refund is required.'
+        : 'The guest hold ended without adding the guests. Payment is still unresolved; a late successful charge requires a refund.',
     }
   }
   if (
@@ -78,21 +87,28 @@ export function describeCheckoutStatus(checkoutStatus) {
   return { outcome: 'pending', message: 'Confirming payment and your spot...' }
 }
 
-export function useGameCheckoutActions({ navigate }) {
+export function useGameCheckoutActions({ navigate, onCheckoutStatus }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
-  const [stripeCheckout, setStripeCheckout] = useState(null)
+  const [checkoutPayment, setCheckoutPayment] = useState(null)
+  const [submittedGuestCount, setSubmittedGuestCount] = useState(null)
   const [stripeStatusMessage, setStripeStatusMessage] = useState('')
   const isSubmittingRef = useRef(false)
+  const currentOwnerRef = useRef(null)
+
+  const updateCheckoutPayment = useCallback((checkoutStatus) => {
+    setCheckoutPayment(checkoutStatus)
+    onCheckoutStatus(checkoutStatus)
+  }, [onCheckoutStatus])
 
   const startSubmission = useCallback(function startSubmission() {
-    if (isSubmittingRef.current) {
+    if (isSubmittingRef.current || !currentOwnerRef.current) {
       return false
     }
 
     isSubmittingRef.current = true
     setIsSubmitting(true)
-    return true
+    return currentOwnerRef.current
   }, [])
 
   const finishSubmission = useCallback(function finishSubmission() {
@@ -100,21 +116,25 @@ export function useGameCheckoutActions({ navigate }) {
     setIsSubmitting(false)
   }, [])
 
-  const resetSubmitError = useCallback(() => {
-    setSubmitError('')
+  // The page keys this checkout by account, game, and mode. Leaving that
+  // checkout invalidates its outstanding requests without changing saved work.
+  useEffect(() => {
+    currentOwnerRef.current = {}
+    return () => { currentOwnerRef.current = null }
   }, [])
 
-  const resetStripeCheckout = useCallback(() => {
-    setStripeCheckout(null)
-    setStripeStatusMessage('')
-  }, [])
+  const isCurrentSubmission = useCallback((owner) => currentOwnerRef.current === owner, [])
 
   const pollCheckoutStatus = useCallback(
-    async ({ bookingId, firebaseUser, gameId }) => {
+    async ({ bookingId, firebaseUser, gameId, owner, stripePromise = null }) => {
       let latestStatus = null
+      const authenticatedPayments = new Set()
 
       for (let attempt = 0; attempt < CHECKOUT_STATUS_POLL_COUNT; attempt += 1) {
+        if (!isCurrentSubmission(owner)) return null
         latestStatus = await getGameCheckoutStatus({ bookingId, firebaseUser })
+        if (!isCurrentSubmission(owner)) return null
+        updateCheckoutPayment(latestStatus)
         const presentation = describeCheckoutStatus(latestStatus)
         if (presentation.outcome === 'confirmed') {
           navigate(`/games/${gameId}`, { replace: true })
@@ -130,13 +150,33 @@ export function useGameCheckoutActions({ navigate }) {
 
         setStripeStatusMessage(presentation.message)
 
+        if (
+          stripePromise && latestStatus.payment_status === 'requires_action' &&
+          latestStatus.guest_reservation_status === 'held' && latestStatus.client_secret &&
+          !authenticatedPayments.has(latestStatus.payment_id)
+        ) {
+          const stripe = await stripePromise
+          if (!isCurrentSubmission(owner)) return null
+          if (!stripe) throw new Error('Secure payment is not ready. Please try again.')
+          authenticatedPayments.add(latestStatus.payment_id)
+          const result = await stripe.handleNextAction({ clientSecret: latestStatus.client_secret })
+          if (!isCurrentSubmission(owner)) return null
+          if (result.error) {
+            throw new Error(result.error.message || 'Payment authentication failed.')
+          }
+          // Authentication alone is not confirmation; read the existing
+          // payment again before returning to Game Details.
+          continue
+        }
+
         await wait(CHECKOUT_STATUS_POLL_DELAY_MS)
       }
 
+      if (!isCurrentSubmission(owner)) return null
       setStripeStatusMessage('Payment is still unresolved. Your spot will not remain held past expiry.')
       return latestStatus
     },
-    [navigate],
+    [isCurrentSubmission, navigate, updateCheckoutPayment],
   )
 
   const prepareStripeCheckout = useCallback(
@@ -159,7 +199,7 @@ export function useGameCheckoutActions({ navigate }) {
         !game ||
         !appUser?.id ||
         !firebaseUser ||
-        isJoinWindowClosed ||
+        (isJoinWindowClosed && !(isAddGuestsCheckout && isPaymentResume)) ||
         (!isAddGuestsCheckout && existingParticipant && !isPaymentResume) ||
         (isAddGuestsCheckout &&
           (existingParticipant?.participant_status !== 'confirmed' || effectiveGuestCount <= 0))
@@ -167,7 +207,8 @@ export function useGameCheckoutActions({ navigate }) {
         return null
       }
 
-      if (!startSubmission()) {
+      const owner = startSubmission()
+      if (!owner) {
         return null
       }
 
@@ -175,6 +216,17 @@ export function useGameCheckoutActions({ navigate }) {
       setStripeStatusMessage('')
 
       try {
+        if (isAddGuestsCheckout && isPaymentResume) {
+          setStripeStatusMessage('Checking your guest payment...')
+          return await pollCheckoutStatus({
+            owner,
+            stripePromise,
+            bookingId: existingParticipant.booking_id,
+            firebaseUser,
+            gameId: game.id,
+          })
+        }
+
         const paymentIntent = await createGameCheckoutPaymentIntent({
           addGuests: isAddGuestsCheckout,
           firebaseUser,
@@ -184,6 +236,10 @@ export function useGameCheckoutActions({ navigate }) {
           returnUrl,
         })
 
+        if (!isCurrentSubmission(owner)) return null
+        setSubmittedGuestCount(effectiveGuestCount)
+        updateCheckoutPayment(paymentIntent)
+
         if (!paymentIntent.payment_required) {
           navigate(`/games/${game.id}`, { replace: true })
           return paymentIntent
@@ -192,6 +248,7 @@ export function useGameCheckoutActions({ navigate }) {
         if (paymentMethodId) {
           if (paymentIntent.stripe_status === 'requires_action') {
             const stripe = await stripePromise
+            if (!isCurrentSubmission(owner)) return null
             if (!stripe) {
               throw new Error('Secure payment is not ready. Please try again.')
             }
@@ -199,6 +256,7 @@ export function useGameCheckoutActions({ navigate }) {
             const nextActionResult = await stripe.handleNextAction({
               clientSecret: paymentIntent.client_secret,
             })
+            if (!isCurrentSubmission(owner)) return null
             if (nextActionResult.error) {
               throw new Error(
                 nextActionResult.error.message || 'Payment authentication failed.',
@@ -212,6 +270,7 @@ export function useGameCheckoutActions({ navigate }) {
 
           setStripeStatusMessage('Confirming your spot...')
           await pollCheckoutStatus({
+            owner,
             bookingId: paymentIntent.booking_id,
             firebaseUser,
             gameId: game.id,
@@ -219,9 +278,9 @@ export function useGameCheckoutActions({ navigate }) {
           return paymentIntent
         }
 
-        setStripeCheckout(paymentIntent)
         return paymentIntent
       } catch (requestError) {
+        if (!isCurrentSubmission(owner)) return null
         setSubmitError(
           requestError instanceof Error
             ? requestError.message
@@ -229,10 +288,10 @@ export function useGameCheckoutActions({ navigate }) {
         )
         return null
       } finally {
-        finishSubmission()
+        if (isCurrentSubmission(owner)) finishSubmission()
       }
     },
-    [finishSubmission, navigate, pollCheckoutStatus, startSubmission],
+    [finishSubmission, isCurrentSubmission, navigate, pollCheckoutStatus, startSubmission, updateCheckoutPayment],
   )
 
   const confirmBooking = useCallback(
@@ -260,7 +319,8 @@ export function useGameCheckoutActions({ navigate }) {
         return
       }
 
-      if (!startSubmission()) {
+      const owner = startSubmission()
+      if (!owner) {
         return
       }
 
@@ -274,23 +334,24 @@ export function useGameCheckoutActions({ navigate }) {
           isAddGuestsCheckout,
           waitlistPaymentMethodId,
         })
+        if (!isCurrentSubmission(owner)) return
         navigate(`/games/${game.id}`, { replace: true })
       } catch (requestError) {
+        if (!isCurrentSubmission(owner)) return null
         setSubmitError(requestError instanceof Error ? requestError.message : 'Unable to confirm booking.')
       } finally {
-        finishSubmission()
+        if (isCurrentSubmission(owner)) finishSubmission()
       }
     },
-    [finishSubmission, navigate, startSubmission],
+    [finishSubmission, isCurrentSubmission, navigate, startSubmission],
   )
 
   return {
     confirmBooking,
     isSubmitting,
     prepareStripeCheckout,
-    resetSubmitError,
-    resetStripeCheckout,
-    stripeCheckout,
+    checkoutPayment,
+    submittedGuestCount,
     stripeStatusMessage,
     submitError,
   }

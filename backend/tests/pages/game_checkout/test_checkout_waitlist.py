@@ -12,7 +12,11 @@ from backend.models import (
     WaitlistEntry,
 )
 from backend.tests.factories import make_booking, make_game_credit, make_participant
-from backend.tests.pages.game_checkout.conftest import paying_player, upcoming_game
+from backend.tests.pages.game_checkout.conftest import (
+    financial_and_attendance_state,
+    paying_player,
+    upcoming_game,
+)
 
 CONSENT = {
     "auto_charge_consent_accepted": True,
@@ -22,7 +26,9 @@ CONSENT = {
 
 def full_paid_game(db, stripe, **overrides):
     """A paid official game with one spot, held by a player who can leave."""
-    game = upcoming_game(db, total_spots=1, waitlist_enabled=True, **overrides)
+    game = upcoming_game(
+        db, **{"total_spots": 1, "waitlist_enabled": True, **overrides}
+    )
     holder, _card = paying_player(db, stripe)
     booking = make_booking(db, game=game, buyer=holder)
     make_participant(db, game=game, booking=booking, user=holder)
@@ -50,85 +56,201 @@ def participant_status(db, game, user):
 
 
 @pytest.mark.page("F17", 5)
-def test_whole_party_is_waitlisted_with_no_charge_now(db, client, firebase, stripe):
+def test_whole_party_is_waitlisted_together(db, client, firebase, stripe):
     game, _holder = full_paid_game(db, stripe)
     user, card = paying_player(db, stripe)
-
     response = join_waitlist(client, firebase, game, user, card, guest_count=1)
-
     assert response.status_code == 201, response.text
     assert response.json()["status"] == "waitlisted"
-    statuses = db.scalars(
-        select(GameParticipant.participant_status).where(
-            GameParticipant.game_id == game.id,
-            GameParticipant.participant_status == "waitlisted",
+    booking = db.scalar(
+        select(Booking).where(
+            Booking.buyer_user_id == user.id, Booking.game_id == game.id
         )
-    ).all()
-    assert len(statuses) == 2
-    entry = db.scalars(
-        select(WaitlistEntry).where(WaitlistEntry.user_id == user.id)
-    ).one()
-    assert entry.party_size == 2
-    assert entry.authorized_payment_method_id == card.id
-    assert entry.auto_charge_consent_at is not None
+    )
+    assert booking.participant_count == 2
+    assert db.scalars(
+        select(GameParticipant.participant_status).where(
+            GameParticipant.booking_id == booking.id
+        )
+    ).all() == ["waitlisted", "waitlisted"]
+    assert (
+        db.scalar(
+            select(WaitlistEntry.party_size).where(WaitlistEntry.user_id == user.id)
+        )
+        == 2
+    )
+
+
+@pytest.mark.page("F17", 5)
+def test_waitlist_join_makes_no_immediate_charge(db, client, firebase, stripe):
+    game, _holder = full_paid_game(db, stripe)
+    user, card = paying_player(db, stripe)
+    credit = make_game_credit(db, user=user, amount_cents=300)
+    response = join_waitlist(client, firebase, game, user, card)
+    assert response.status_code == 201, response.text
     assert payments_for(db, user) == []
+    assert db.scalars(select(GameCreditUsage)).all() == []
+    db.refresh(credit)
+    assert credit.available_cents == 300
+    assert stripe.created == []
+
+
+@pytest.mark.page("F17", 11)
+def test_paid_waitlist_requires_a_saved_card(db, client, firebase, stripe):
+    game, _holder = full_paid_game(db, stripe)
+    user, card = paying_player(db, stripe)
+    before = financial_and_attendance_state(db)
+    response = join_waitlist(client, firebase, game, user, card, payment_method_id=None)
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"] == "Choose a saved card before joining this waitlist."
+    )
+    assert financial_and_attendance_state(db) == before
+    assert stripe.created == []
+
+
+@pytest.mark.page("F17", 11)
+def test_paid_waitlist_requires_explicit_future_charge_consent(
+    db, client, firebase, stripe
+):
+    game, _holder = full_paid_game(db, stripe)
+    user, card = paying_player(db, stripe)
+    before = financial_and_attendance_state(db)
+    response = join_waitlist(
+        client, firebase, game, user, card, auto_charge_consent_accepted=False
+    )
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]
+        == "You must authorize Pickup Lane to charge your saved card if a spot opens before joining this waitlist."
+    )
+    assert financial_and_attendance_state(db) == before
     assert stripe.created == []
 
 
 @pytest.mark.page("F17", 11)
 @pytest.mark.parametrize(
-    "missing, detail",
-    [
-        ("card", "Choose a saved card before joining this waitlist."),
-        (
-            "consent",
-            (
-                "You must authorize Pickup Lane to charge your saved card if a spot "
-                "opens before joining this waitlist."
-            ),
-        ),
-    ],
+    "condition", ["foreign", "detached", "expired", "date_expired"]
 )
-def test_paid_waitlist_needs_a_card_and_consent(
-    db, client, firebase, stripe, missing, detail
+def test_paid_waitlist_refuses_unusable_cards(db, client, firebase, stripe, condition):
+    game, _holder = full_paid_game(db, stripe)
+    user, card = paying_player(db, stripe)
+    if condition == "foreign":
+        _other, card = paying_player(db, stripe)
+    elif condition == "date_expired":
+        card.exp_year = 2020
+    else:
+        card.method_status = condition
+        card.is_default = False
+    db.commit()
+    before = financial_and_attendance_state(db)
+    response = join_waitlist(client, firebase, game, user, card)
+    assert response.status_code == (404 if condition == "foreign" else 400)
+    assert financial_and_attendance_state(db) == before
+    assert stripe.created == []
+
+
+@pytest.mark.page("F17", 5)
+def test_paid_waitlist_records_the_authorized_card_and_consent(
+    db, client, firebase, stripe
 ):
     game, _holder = full_paid_game(db, stripe)
     user, card = paying_player(db, stripe)
-    body = {"guest_count": 0, "payment_method_id": str(card.id), **CONSENT}
-    if missing == "card":
-        body.pop("payment_method_id")
-    else:
-        body["auto_charge_consent_accepted"] = False
-
-    response = client.post(
-        f"/games/{game.id}/join", headers=firebase.sign_in(user), json=body
-    )
-
-    assert response.status_code == 400
-    assert response.json()["detail"] == detail
-    assert participant_status(db, game, user) == []
-    assert (
-        db.scalars(select(WaitlistEntry).where(WaitlistEntry.user_id == user.id)).all()
-        == []
-    )
+    response = join_waitlist(client, firebase, game, user, card)
+    assert response.status_code == 201, response.text
+    entry = db.scalar(select(WaitlistEntry).where(WaitlistEntry.user_id == user.id))
+    assert entry.authorized_payment_method_id == card.id
+    assert entry.authorized_stripe_payment_method_id == card.stripe_payment_method_id
+    assert entry.auto_charge_consent_at is not None
+    assert entry.auto_charge_consent_version == CONSENT["auto_charge_consent_version"]
 
 
 @pytest.mark.page("F17", 16)
-def test_opened_spot_confirms_only_after_the_automatic_charge_succeeds(
+def test_waitlist_charge_waits_until_the_whole_party_can_fit(
+    db, client, firebase, stripe
+):
+    game, holder = full_paid_game(db, stripe, total_spots=2)
+    extra_holder, _card = paying_player(db, stripe)
+    make_participant(
+        db,
+        game=game,
+        booking=make_booking(db, game=game, buyer=extra_holder),
+        user=extra_holder,
+    )
+    user, card = paying_player(db, stripe)
+    assert (
+        join_waitlist(client, firebase, game, user, card, guest_count=1).status_code
+        == 201
+    )
+    response = client.post(
+        f"/games/{game.id}/leave", headers=firebase.sign_in(holder), json={}
+    )
+    assert response.status_code == 200, response.text
+    assert participant_status(db, game, user) == ["waitlisted"]
+    assert stripe.created == []
+    response = client.post(
+        f"/games/{game.id}/leave", headers=firebase.sign_in(extra_holder), json={}
+    )
+    assert response.status_code == 200, response.text
+    assert participant_status(db, game, user) == ["confirmed"]
+    assert payments_for(db, user)[0].amount_cents == 2000
+
+
+@pytest.mark.page("F17", 16)
+def test_waitlist_booking_confirms_only_after_automatic_payment(
     db, client, firebase, stripe
 ):
     game, holder = full_paid_game(db, stripe)
     user, card = paying_player(db, stripe)
-    join_waitlist(client, firebase, game, user, card)
-
+    assert join_waitlist(client, firebase, game, user, card).status_code == 201
+    stripe.confirm_status = "processing"
     response = client.post(
         f"/games/{game.id}/leave", headers=firebase.sign_in(holder), json={}
     )
-
     assert response.status_code == 200, response.text
+    assert participant_status(db, game, user) == ["pending_payment"]
+    payment = payments_for(db, user)[0]
+    assert payment.payment_status == "processing"
+    stripe.report(db, payment, "succeeded")
     assert participant_status(db, game, user) == ["confirmed"]
-    payment = db.scalars(select(Payment).where(Payment.payer_user_id == user.id)).one()
-    assert (payment.payment_status, payment.amount_cents) == ("succeeded", 1000)
+
+
+@pytest.mark.page("F17", 16)
+def test_failed_automatic_payment_offers_the_spot_to_the_next_player(
+    db, client, firebase, stripe, monkeypatch
+):
+    game, holder = full_paid_game(db, stripe)
+    first, first_card = paying_player(db, stripe)
+    second, second_card = paying_player(db, stripe)
+    assert join_waitlist(client, firebase, game, first, first_card).status_code == 201
+    assert join_waitlist(client, firebase, game, second, second_card).status_code == 201
+    first_entry = db.scalar(
+        select(WaitlistEntry).where(WaitlistEntry.user_id == first.id)
+    )
+    second_entry = db.scalar(
+        select(WaitlistEntry).where(WaitlistEntry.user_id == second.id)
+    )
+    assert first_entry.position < second_entry.position
+    confirm = stripe.confirm_payment_intent
+
+    def charge_outcome(intent_id, **kwargs):
+        stripe.confirm_status = (
+            "requires_payment_method"
+            if kwargs["payment_method_id"] == first_card.stripe_payment_method_id
+            else "succeeded"
+        )
+        return confirm(intent_id, **kwargs)
+
+    from backend.services import game_waitlist_service
+
+    monkeypatch.setattr(game_waitlist_service, "confirm_payment_intent", charge_outcome)
+    response = client.post(
+        f"/games/{game.id}/leave", headers=firebase.sign_in(holder), json={}
+    )
+    assert response.status_code == 200, response.text
+    assert "confirmed" not in participant_status(db, game, first)
+    assert participant_status(db, game, second) == ["confirmed"]
+    assert payments_for(db, second)[0].payment_status == "succeeded"
 
 
 @pytest.mark.page("F17", 16)
@@ -178,9 +300,10 @@ def test_waitlist_promotion_applies_credit_available_when_the_spot_opens(
         )
     ).one()
     payment = db.scalars(select(Payment).where(Payment.booking_id == booking.id)).one()
-    usage = db.scalars(
+    usage = db.scalar(
         select(GameCreditUsage).where(GameCreditUsage.booking_id == booking.id)
-    ).one()
+    )
+    assert usage is not None
     db.refresh(credit)
     assert (booking.booking_status, booking.discount_cents, booking.total_cents) == (
         "confirmed",
@@ -217,9 +340,10 @@ def test_credit_covered_waitlist_offer_confirms_without_a_stripe_charge(
     entry = db.scalars(
         select(WaitlistEntry).where(WaitlistEntry.user_id == user.id)
     ).one()
-    usage = db.scalars(
+    usage = db.scalar(
         select(GameCreditUsage).where(GameCreditUsage.booking_id == booking.id)
-    ).one()
+    )
+    assert usage is not None
     notice = db.scalars(
         select(Notification).where(
             Notification.related_booking_id == booking.id,
@@ -260,9 +384,10 @@ def test_waitlist_promotion_covers_a_balance_below_stripes_minimum(
             Booking.game_id == game.id, Booking.buyer_user_id == user.id
         )
     ).one()
-    usage = db.scalars(
+    usage = db.scalar(
         select(GameCreditUsage).where(GameCreditUsage.booking_id == booking.id)
-    ).one()
+    )
+    assert usage is not None
     assert (booking.discount_cents, booking.total_cents) == (1000, 0)
     assert (usage.amount_cents, usage.usage_status) == (970, "redeemed")
     assert payments_for(db, user) == []
@@ -287,9 +412,10 @@ def test_failed_waitlist_charge_restores_reserved_credit(db, client, firebase, s
             Booking.game_id == game.id, Booking.buyer_user_id == user.id
         )
     ).one()
-    usage = db.scalars(
+    usage = db.scalar(
         select(GameCreditUsage).where(GameCreditUsage.booking_id == booking.id)
-    ).one()
+    )
+    assert usage is not None
     db.refresh(credit)
     assert booking.booking_status == "failed"
     assert (usage.amount_cents, usage.usage_status) == (300, "released")
