@@ -10,13 +10,6 @@ export function ResetPasswordPage() {
   const { confirmPasswordReset, refreshCurrentUserVerification, verifyPasswordReset } = useAuth()
   const mode = searchParams.get('mode') || 'resetPassword'
   const code = searchParams.get('oobCode') || ''
-  const passwordReset = usePasswordResetForm({
-    code,
-    confirmPasswordReset,
-    mode,
-    verifyPasswordReset,
-  })
-
   if (mode === 'verifyEmail') {
     return (
       <EmailVerificationAction
@@ -31,11 +24,30 @@ export function ResetPasswordPage() {
   }
 
   return (
+    <PasswordResetContent
+      key={code}
+      code={code}
+      confirmPasswordReset={confirmPasswordReset}
+      verifyPasswordReset={verifyPasswordReset}
+    />
+  )
+}
+
+// A new link owns a fresh form; pending work from the previous form is discarded.
+function PasswordResetContent({ code, confirmPasswordReset, verifyPasswordReset }) {
+  const passwordReset = usePasswordResetForm({
+    code,
+    confirmPasswordReset,
+    mode: 'resetPassword',
+    verifyPasswordReset,
+  })
+  return (
     <PasswordResetPanel
       email={passwordReset.email}
       error={passwordReset.error}
       onResetPassword={passwordReset.handleResetPassword}
       password={passwordReset.password}
+      passwordInvalid={passwordReset.passwordInvalid}
       setPassword={passwordReset.setPassword}
       setShowPassword={passwordReset.setShowPassword}
       showPassword={passwordReset.showPassword}

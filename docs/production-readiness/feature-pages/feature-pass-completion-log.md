@@ -65,7 +65,7 @@ order, not required completion prerequisites.
     <tr>
       <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;">F10</td>
       <td style="border: 1px solid #777; padding: 6px 10px;">Reset Password</td>
-      <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;"></td>
+      <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;">2026-11-25</td>
     </tr>
     <tr>
       <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;">F11</td>
