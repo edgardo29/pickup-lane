@@ -4,6 +4,7 @@ import {
   loadHostPublishFees,
   loadUserPaymentMethods,
 } from './createGameApi.js'
+import { useVerificationFormState } from '../../features/email-verification/useVerificationFormState.js'
 import { initialForm } from './createGameData.js'
 import { mapGameToForm } from './createGameMappers.js'
 
@@ -16,7 +17,10 @@ export function useCreateGameContext({
   onVerifiedHostRefresh,
   refreshCurrentUserVerification,
 }) {
-  const [form, setForm] = useState(initialForm)
+  const { form, setForm, preserveForVerification } = useVerificationFormState({
+    userId: firebaseUser?.uid, destination: '/create-game', initialForm, enabled: !isEditMode,
+  })
+  const initializedEditRef = useRef('')
   const [formBaseline, setFormBaseline] = useState(initialForm)
   const [currentUser, setCurrentUser] = useState(null)
   const [paymentMethod, setPaymentMethod] = useState(null)
@@ -51,17 +55,16 @@ export function useCreateGameContext({
         !hostPublishFees.some((fee) => fee.waiver_reason === 'first_game_free'),
       )
 
-      if (gameContext) {
+      const editKey = `${effectiveAppUser.id}:${gameId}`
+      if (gameContext && initializedEditRef.current !== editKey) {
         const editableForm = mapGameToForm(
           gameContext.game,
           gameContext.venue,
           gameContext.communityDetails,
         )
+        initializedEditRef.current = editKey
         setForm(editableForm)
         setFormBaseline(editableForm)
-      } else {
-        setForm(initialForm)
-        setFormBaseline(initialForm)
       }
     }
 
@@ -96,8 +99,6 @@ export function useCreateGameContext({
             setPaymentMethod(null)
             setFirstPublishIsFree(true)
             setCreatedGameId('')
-            setForm(initialForm)
-            setFormBaseline(initialForm)
           }
 
           if (blockedVerificationRefreshRef.current !== appUser.id) {
@@ -136,6 +137,7 @@ export function useCreateGameContext({
     isLoading,
     onVerifiedHostRefresh,
     refreshCurrentUserVerification,
+    setForm,
   ])
 
   return {
@@ -147,6 +149,7 @@ export function useCreateGameContext({
     isContextLoading,
     loadError,
     paymentMethod,
+    preserveForVerification,
     setCreatedGameId,
     setForm,
   }
