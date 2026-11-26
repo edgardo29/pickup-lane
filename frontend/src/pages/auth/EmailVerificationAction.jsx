@@ -1,124 +1,73 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { applyActionCode } from 'firebase/auth'
 import { ShieldCheckIcon } from '../../components/AuthIcons.jsx'
 import { FormErrorMessage } from '../../components/FormErrorMessage.jsx'
-import {
-  AuthHalo,
-  AuthHeader,
-  AuthPanel,
-} from '../../features/auth/AuthLayoutParts.jsx'
+import { AuthHalo, AuthHeader, AuthPanel } from '../../features/auth/AuthLayoutParts.jsx'
 import { AuthShell } from '../../features/auth/AuthShell.jsx'
+import {
+  CREATE_SUB_RETURN, getVerificationReturnPath, verificationReturnLink,
+} from '../../features/email-verification/emailVerificationReturn.js'
 import { auth } from '../../lib/firebase.js'
 
-function EmailVerificationAction({ code, refreshCurrentUserVerification }) {
-  const [status, setStatus] = useState(code ? 'checking' : 'invalid')
-  const [error, setError] = useState(code ? '' : 'This verification link is missing or invalid.')
-  const actionCodeRef = useRef({ code: '', promise: null })
+function EmailVerificationAction({ code, continueUrl, isAuthLoading, refreshCurrentUserVerification }) {
+  const [result, setResult] = useState({ status: code ? 'checking' : 'invalid', error: code ? '' : 'This verification link is missing or invalid.' })
+  const applicationRef = useRef(null)
+  const refreshVerification = useEffectEvent(() => refreshCurrentUserVerification())
+  const destination = getVerificationReturnPath(continueUrl)
+  const returnLabel = destination === CREATE_SUB_RETURN ? 'Create Sub Post' : 'Create Game'
 
   useEffect(() => {
-    let ignore = false
-
-    async function verifyEmailCode() {
-      if (!code) {
-        return
-      }
-
-      setStatus('checking')
-      setError('')
-
-      if (actionCodeRef.current.code !== code) {
-        actionCodeRef.current = { code, promise: null }
-      }
-
-      if (!actionCodeRef.current.promise) {
-        actionCodeRef.current.promise = applyActionCode(auth, code)
-          .then(() => ({ applied: true, error: null }))
-          .catch((requestError) => ({ applied: false, error: requestError }))
-      }
-
-      const applyResult = await actionCodeRef.current.promise
-      const refreshedUser = await waitForEmailVerification(
-        refreshCurrentUserVerification,
-        () => ignore,
-      )
-
-      if (!ignore) {
-        if (refreshedUser?.email_verified_at) {
-          setStatus('success')
+    if (!code || isAuthLoading) return undefined
+    const controller = new AbortController()
+    if (!applicationRef.current) {
+      applicationRef.current = applyActionCode(auth, code)
+        .then(() => ({ applied: true }))
+        .catch((error) => ({ applied: false, error }))
+    }
+    async function verify() {
+      const applied = await applicationRef.current
+      for (let attempt = 0; attempt < 3 && !controller.signal.aborted; attempt += 1) {
+        const account = await refreshVerification().catch(() => null)
+        if (controller.signal.aborted) return
+        if (account?.email_verified_at) {
+          setResult({ status: 'success', error: '' })
           return
         }
-
-        if (!applyResult.applied) {
-          setError('This verification link is expired or already used.')
-          setStatus('invalid')
-          return
-        }
-
-        setError('')
-        setStatus('unavailable')
+        if (attempt < 2) await waitForRefresh(controller.signal)
       }
+      if (controller.signal.aborted) return
+      const invalidCode = ['auth/expired-action-code', 'auth/invalid-action-code'].includes(applied.error?.code)
+      setResult(!applied.applied && invalidCode
+        ? { status: 'invalid', error: 'This verification link is expired or already used.' }
+        : { status: 'unavailable', error: '' })
     }
+    verify()
+    return () => controller.abort()
+  }, [code, isAuthLoading])
 
-    verifyEmailCode()
-
-    return () => {
-      ignore = true
-    }
-  }, [code, refreshCurrentUserVerification])
-
+  const titles = { checking: 'Verifying email', success: 'Email verified', invalid: 'Verification link unavailable', unavailable: 'Verification not confirmed' }
+  const subtitles = {
+    checking: 'One moment while we verify your email.',
+    success: 'Your account email is verified. Continue to your form to finish publishing.',
+    invalid: `Request a fresh verification email from ${returnLabel}.`,
+    unavailable: `We could not confirm your account verification. Return to ${returnLabel} to check again or request a fresh email.`,
+  }
   return (
     <AuthShell showBack={false} variant="reset-password">
       <AuthPanel>
         <div className="auth-action-result">
           <AuthHalo icon={<ShieldCheckIcon />} />
-
-          {status === 'checking' && (
-            <AuthHeader
-              title="Verifying email"
-              subtitle="One moment while we verify your email."
-            />
-          )}
-
-          {status === 'invalid' && (
-            <>
-              <AuthHeader
-                title="Verification link unavailable"
-                subtitle="Send a new verification email from Create Game."
-              />
-              <FormErrorMessage>{error}</FormErrorMessage>
-              <Link className="auth-primary-button" to="/create-game">
-                <ArrowRight aria-hidden="true" />
-                Back to Create Game
-              </Link>
-            </>
-          )}
-
-          {status === 'unavailable' && (
-            <>
-              <AuthHeader
-                title="Verification not confirmed"
-                subtitle="Return to Create Game. If hosting is still locked, request a fresh verification email."
-              />
-              <Link className="auth-primary-button" to="/create-game">
-                <ArrowRight aria-hidden="true" />
-                Back to Create Game
-              </Link>
-            </>
-          )}
-
-          {status === 'success' && (
-            <>
-              <AuthHeader
-                title="Email verified"
-                subtitle="You can now publish a community game."
-              />
-              <Link className="auth-primary-button" to="/create-game">
-                <ArrowRight aria-hidden="true" />
-                Continue
-              </Link>
-            </>
+          <div role="status" aria-live="polite" aria-atomic="true">
+            <AuthHeader title={titles[result.status]} subtitle={subtitles[result.status]} />
+          </div>
+          <FormErrorMessage>{result.error}</FormErrorMessage>
+          {result.status !== 'checking' && (
+            <Link className="auth-primary-button" to={verificationReturnLink(destination)}>
+              <ArrowRight aria-hidden="true" />
+              {result.status === 'success' ? 'Continue' : `Back to ${returnLabel}`}
+            </Link>
           )}
         </div>
       </AuthPanel>
@@ -126,31 +75,15 @@ function EmailVerificationAction({ code, refreshCurrentUserVerification }) {
   )
 }
 
-async function waitForEmailVerification(refreshCurrentUserVerification, shouldStop) {
-  const maxAttempts = 3
-
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    if (shouldStop()) {
-      return null
-    }
-
-    const refreshedUser = await refreshCurrentUserVerification().catch(() => null)
-
-    if (refreshedUser?.email_verified_at) {
-      return refreshedUser
-    }
-
-    if (attempt < maxAttempts - 1) {
-      await wait(700)
-    }
-  }
-
-  return null
-}
-
-function wait(milliseconds) {
+function waitForRefresh(signal) {
   return new Promise((resolve) => {
-    window.setTimeout(resolve, milliseconds)
+    function finish() {
+      window.clearTimeout(timeout)
+      signal.removeEventListener('abort', finish)
+      resolve()
+    }
+    const timeout = window.setTimeout(finish, 700)
+    signal.addEventListener('abort', finish, { once: true })
   })
 }
 

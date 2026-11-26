@@ -7,13 +7,16 @@ import '../../styles/auth/ResetPasswordPage.css'
 
 export function ResetPasswordPage() {
   const [searchParams] = useSearchParams()
-  const { confirmPasswordReset, refreshCurrentUserVerification, verifyPasswordReset } = useAuth()
+  const { confirmPasswordReset, currentUser, isLoading, refreshCurrentUserVerification, verifyPasswordReset } = useAuth()
   const mode = searchParams.get('mode') || 'resetPassword'
   const code = searchParams.get('oobCode') || ''
   if (mode === 'verifyEmail') {
     return (
       <EmailVerificationAction
+        key={`${currentUser?.uid || 'signed-out'}:${code}`}
         code={code}
+        isAuthLoading={isLoading}
+        continueUrl={searchParams.get('continueUrl')}
         refreshCurrentUserVerification={refreshCurrentUserVerification}
       />
     )

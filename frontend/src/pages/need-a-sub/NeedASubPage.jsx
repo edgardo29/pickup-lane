@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AppPageHeader, AppPageShell, AppTabs } from '../../components/app/index.js'
 import { PlusCircleIcon } from '../../components/BrowseIcons.jsx'
+import { EmailVerificationBlocker } from '../../features/email-verification/EmailVerificationBlocker.jsx'
+import { useEmailVerification } from '../../features/email-verification/useEmailVerification.js'
 import { useAuth } from '../../hooks/useAuth.js'
 import { NeedASubCreateDiscardModal } from './NeedASubCreateDiscardModal.jsx'
 import NeedASubCreateFlow from './NeedASubCreateFlow.jsx'
@@ -16,11 +18,11 @@ const NEED_SUB_DATE_STRIP_DAYS = 7
 const NEED_SUB_MAX_DATE_PAGE_INDEX = 1
 
 function NeedASubPage() {
-  const { appUser, currentUser, isLoading: isAuthLoading } = useAuth()
+  const { appUser, currentUser, isLoading: isAuthLoading, refreshCurrentUserVerification, sendCurrentUserVerificationEmail } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [notice, setNotice] = useState('')
-  const [activePanel, setActivePanel] = useState('browse')
+  const [activePanel, setActivePanel] = useState(() => new URLSearchParams(location.search).get('panel') === 'create' ? 'create' : 'browse')
   const [selectedPostView, setPostView] = useState('all')
   const [todayKey, setTodayKey] = useState(() => getMarketDateKey(new Date()))
   const [datePageIndex, setDatePageIndex] = useState(0)
@@ -56,6 +58,7 @@ function NeedASubPage() {
     checkDuplicateDate,
     clearCreateFeedback,
     removePosition,
+    preserveForVerification,
     resetCreateForm,
     submitPost,
     totalSpotsNeeded,
@@ -77,11 +80,16 @@ function NeedASubPage() {
 
     const timerId = window.setTimeout(() => {
       setNotice(routedNotice)
-      navigate(location.pathname, { replace: true })
+      navigate(`${location.pathname}${location.search}`, { replace: true })
     }, 0)
 
     return () => window.clearTimeout(timerId)
-  }, [location.pathname, location.state, navigate])
+  }, [location.pathname, location.search, location.state, navigate])
+
+  const verification = useEmailVerification({
+    appUser, enabled: activePanel === 'create', destination: '/need-a-sub?panel=create',
+    refreshCurrentUserVerification, sendCurrentUserVerificationEmail,
+  })
 
   const maxDatePageIndex = NEED_SUB_MAX_DATE_PAGE_INDEX
   const visibleDateOptions = useMemo(
@@ -212,21 +220,31 @@ function NeedASubPage() {
       {activePanel === 'create' ? (
         isSignedIn ? (
           <section className="need-sub-panel need-sub-create-panel">
-            <NeedASubCreateFlow
-              formError={formError}
-              form={form}
-              isCreating={isCreating}
-              totalSpotsNeeded={totalSpotsNeeded}
-              onCancel={requestCreateCancel}
-              onAddPosition={addPosition}
-              onCheckDuplicateDate={checkDuplicateDate}
-              onClearFeedback={clearCreateFeedback}
-              onRemovePosition={removePosition}
-              onSubmit={submitPost}
-              onUpdateField={updateField}
-              onUpdateGamePlayerGroup={updateGamePlayerGroup}
-              onUpdatePosition={updatePosition}
-            />
+            {!appUser?.email_verified_at ? (
+              <EmailVerificationBlocker
+                cooldownSeconds={verification.verificationCooldownSeconds}
+                error={verification.verificationError}
+                notice={verification.verificationNotice}
+                status={verification.verificationStatus}
+                onSend={() => { preserveForVerification(); return verification.sendEmailVerificationLink() }}
+              />
+            ) : (
+              <NeedASubCreateFlow
+                formError={formError}
+                form={form}
+                isCreating={isCreating}
+                totalSpotsNeeded={totalSpotsNeeded}
+                onCancel={requestCreateCancel}
+                onAddPosition={addPosition}
+                onCheckDuplicateDate={checkDuplicateDate}
+                onClearFeedback={clearCreateFeedback}
+                onRemovePosition={removePosition}
+                onSubmit={submitPost}
+                onUpdateField={updateField}
+                onUpdateGamePlayerGroup={updateGamePlayerGroup}
+                onUpdatePosition={updatePosition}
+              />
+            )}
           </section>
         ) : (
           <NeedASubState

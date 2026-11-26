@@ -12,7 +12,7 @@ import {
 import { buildReview } from './createGameFormatters.js'
 import { validateStep } from './createGameValidation.js'
 import { useCreateGameContext } from './useCreateGameContext.js'
-import { useCreateGameEmailVerification } from './useCreateGameEmailVerification.js'
+import { useEmailVerification } from '../../features/email-verification/useEmailVerification.js'
 import { useCreateGamePublish } from './useCreateGamePublish.js'
 
 function CreateGamePage() {
@@ -35,9 +35,10 @@ function CreateGamePage() {
     verificationError,
     verificationNotice,
     verificationStatus,
-  } = useCreateGameEmailVerification({
+  } = useEmailVerification({
     appUser,
-    isEditMode,
+    enabled: !isEditMode,
+    destination: '/create-game',
     refreshCurrentUserVerification,
     sendCurrentUserVerificationEmail,
   })
@@ -50,6 +51,7 @@ function CreateGamePage() {
     isContextLoading,
     loadError,
     paymentMethod,
+    preserveForVerification,
     setCreatedGameId,
     setForm,
   } = useCreateGameContext({
@@ -158,7 +160,7 @@ function CreateGamePage() {
       onDiscard={discardGame}
       onNext={goNext}
       onPublish={submitGame}
-      onSendVerification={sendEmailVerificationLink}
+      onSendVerification={() => { preserveForVerification(); return sendEmailVerificationLink() }}
       onUpdateField={updateField}
       publishError={publishError}
       review={review}

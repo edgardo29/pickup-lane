@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useVerificationFormState } from '../../features/email-verification/useVerificationFormState.js'
 import { createNeedASubPost, listNeedASubPostCards } from './needASubApi.js'
 import { buildAddedPositions, buildInitialNeedASubForm, getDefaultPositions } from './needASubData.js'
 import { buildNeedASubPayload } from './needASubPayloads.js'
@@ -10,7 +11,10 @@ export function useNeedASubCreateForm({
   setError,
   setNotice,
 }) {
-  const [form, setForm] = useState(() => buildInitialNeedASubForm())
+  const [initialForm] = useState(buildInitialNeedASubForm)
+  const { form, setForm, preserveForVerification } = useVerificationFormState({
+    userId: currentUser?.uid, destination: '/need-a-sub?panel=create', initialForm,
+  })
   const [isCreating, setIsCreating] = useState(false)
   const [formError, setFormError] = useState('')
   const totalSpotsNeeded = useMemo(
@@ -142,6 +146,7 @@ export function useNeedASubCreateForm({
     hasCreateChanges,
     isCreating,
     removePosition,
+    preserveForVerification,
     resetCreateForm,
     submitPost,
     totalSpotsNeeded,
