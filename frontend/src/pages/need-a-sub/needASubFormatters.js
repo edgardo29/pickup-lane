@@ -1,3 +1,5 @@
+import { NEED_A_SUB_TIME_ZONE } from './needASubData.js'
+
 export function buildPostHeadline(post) {
   return `Need ${post.subs_needed} ${post.subs_needed === 1 ? 'Sub' : 'Subs'}`
 }
@@ -82,12 +84,15 @@ export function formatDate(value) {
   }).format(new Date(value))
 }
 
+// Post dates and times are shown in the time zone posts are filed under, so
+// every screen and every visitor sees the same day and time.
 export function formatDateWithYear(value) {
   return new Intl.DateTimeFormat('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
     year: 'numeric',
+    timeZone: NEED_A_SUB_TIME_ZONE,
   }).format(new Date(value))
 }
 
@@ -95,11 +100,19 @@ export function formatTime(value) {
   return new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
     minute: '2-digit',
+    timeZone: NEED_A_SUB_TIME_ZONE,
+  }).format(new Date(value))
+}
+
+export function formatStartHour(value) {
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    timeZone: NEED_A_SUB_TIME_ZONE,
   }).format(new Date(value))
 }
 
 export function formatTimeRange(post) {
-  return `${formatTime(post.starts_at)}-${formatTime(post.ends_at)} · ${getDurationMinutes(post)} min`
+  return `${formatTimeRangeOnly(post)} · ${getDurationMinutes(post)} min`
 }
 
 export function formatTimeRangeOnly(post) {

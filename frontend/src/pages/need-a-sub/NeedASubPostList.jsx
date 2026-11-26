@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom'
 import {
   BuildingIcon,
   ClockIcon,
@@ -11,31 +10,32 @@ import {
   NeedSubGoalkeeperIcon,
 } from '../../components/GameFactIcons.jsx'
 import {
+  formatStartHour,
   formatStatus,
   formatTimeRangeOnly,
 } from './needASubFormatters.js'
 import { NeedASubPostListSkeleton } from './NeedASubSkeleton.jsx'
 
 function NeedASubPostList({
+  hasLoadFailed = false,
   hasMorePosts = false,
   isLoading,
   isLoadingMore = false,
-  isSignedIn,
   onLoadMore,
   onOpenPost,
+  onRetry,
   postView,
   posts,
 }) {
   return (
     <section className="need-sub-panel">
-      {postView === 'mine' && !isSignedIn ? (
-        <NeedASubState
-          title="Sign in to manage posts"
-          message="Your created posts and request queues live behind your account."
-          action={<Link to="/sign-in" state={{ from: '/need-a-sub' }}>Sign In</Link>}
-        />
-      ) : isLoading ? (
+      {isLoading ? (
         <NeedASubPostListSkeleton />
+      ) : hasLoadFailed ? (
+        <NeedASubState
+          title="Could not load posts"
+          action={<button className="need-sub-primary" type="button" onClick={onRetry}>Try again</button>}
+        />
       ) : !posts.length ? (
         <NeedASubState
           title={postView === 'mine' ? 'No posts created yet' : 'No Need a Sub posts yet'}
@@ -244,8 +244,7 @@ function groupPostsByHour(posts) {
   const groupedPosts = [...posts]
     .sort((first, second) => new Date(first.starts_at) - new Date(second.starts_at))
     .reduce((groups, post) => {
-      const date = new Date(post.starts_at)
-      const label = new Intl.DateTimeFormat('en-US', { hour: 'numeric' }).format(date)
+      const label = formatStartHour(post.starts_at)
 
       if (!groups.has(label)) {
         groups.set(label, [])

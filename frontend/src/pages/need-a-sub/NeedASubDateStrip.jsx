@@ -22,6 +22,8 @@ function NeedASubDateStrip({
       <div aria-label="Need a Sub posts by date" className="need-sub-date-strip">
         {dates.map((date) => (
           <button
+            aria-current={date.key === selectedDateKey ? 'date' : undefined}
+            aria-label={`Need a Sub posts on ${date.weekday} ${date.month} ${date.day}`}
             className={`need-sub-date ${date.key === selectedDateKey ? 'need-sub-date--active' : ''}`}
             key={date.key}
             onClick={() => onSelectDate(date.key)}

@@ -5,7 +5,7 @@ import { checkEmailAvailability } from '../../lib/authApi.js'
 import { getAuthErrorMessage } from '../../lib/authErrors.js'
 import { useCleanupUnfinishedSignupOnEntry, useGoogleRedirectCompletion } from '../../features/auth/authHooks.js'
 import {
-  getPostAuthPath,
+  getPostAuthNavigation,
   getSafeAuthBackPath,
   isValidEmail,
   isValidPassword,
@@ -104,7 +104,8 @@ export function useCreateAccountForm() {
     try {
       const signedInUser = await signInWithGoogle()
       if (signedInUser) {
-        navigate(returnPath || getPostAuthPath(signedInUser))
+        const next = getPostAuthNavigation(signedInUser, returnPath)
+        navigate(next.to, { state: next.state })
       } else {
         navigate('/finish-profile', { state: { from: returnPath } })
       }

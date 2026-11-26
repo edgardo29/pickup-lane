@@ -1,4 +1,4 @@
-import { toDateInputValue } from './needASubData.js'
+import { NEED_A_SUB_TIME_ZONE, toDateInputValue } from './needASubData.js'
 
 export function buildNeedASubPayload(form, totalSpotsNeeded) {
   return {
@@ -10,7 +10,7 @@ export function buildNeedASubPayload(form, totalSpotsNeeded) {
     team_name: null,
     starts_at: new Date(`${form.date}T${form.startTime}:00`).toISOString(),
     ends_at: new Date(`${form.date}T${form.endTime}:00`).toISOString(),
-    timezone: 'America/Chicago',
+    timezone: NEED_A_SUB_TIME_ZONE,
     location_name: form.locationName.trim(),
     address_line_1: form.addressLine1.trim(),
     city: form.city.trim(),

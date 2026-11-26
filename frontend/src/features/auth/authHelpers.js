@@ -5,6 +5,23 @@ export function getPostAuthPath(user) {
   return hasCompleteProfile(user) ? '/games' : '/finish-profile'
 }
 
+// Marks an arrival at the saved destination straight from sign-in, so a page
+// whose content is no longer available can send the visitor to game discovery.
+export function getAuthReturnState(returnPath) {
+  return returnPath ? { authReturn: true } : undefined
+}
+
+// Where a visitor goes once signed in. An unfinished profile goes to Finish
+// Profile first, carrying the saved destination; a finished one goes to the
+// destination, or to game discovery when there is none.
+export function getPostAuthNavigation(user, returnPath) {
+  if (!hasCompleteProfile(user)) {
+    return { to: '/finish-profile', state: returnPath ? { from: returnPath } : undefined }
+  }
+
+  return { to: returnPath || '/games', state: getAuthReturnState(returnPath) }
+}
+
 export function getSafeAuthBackPath(returnPath, fallback = '/') {
   if (!returnPath || typeof returnPath !== 'string') {
     return fallback

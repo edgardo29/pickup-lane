@@ -1,17 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AppPageHeader, AppPageShell, AppTabs } from '../../components/app/index.js'
-import {
-  PlusCircleIcon,
-  UserIcon,
-} from '../../components/BrowseIcons.jsx'
-import { LockIcon } from '../../components/AuthIcons.jsx'
+import { PlusCircleIcon } from '../../components/BrowseIcons.jsx'
 import { useAuth } from '../../hooks/useAuth.js'
 import { NeedASubCreateDiscardModal } from './NeedASubCreateDiscardModal.jsx'
 import NeedASubCreateFlow from './NeedASubCreateFlow.jsx'
 import NeedASubDateStrip from './NeedASubDateStrip.jsx'
 import NeedASubPostList, { NeedASubState } from './NeedASubPostList.jsx'
-import { POST_TABS } from './needASubData.js'
+import { NEED_A_SUB_TIME_ZONE, POST_TABS } from './needASubData.js'
 import { useNeedASubCreateForm } from './useNeedASubCreateForm.js'
 import { useNeedASubPostsData } from './useNeedASubPostsData.js'
 import '../../styles/need-a-sub/NeedASub.css'
@@ -20,26 +16,34 @@ const NEED_SUB_DATE_STRIP_DAYS = 7
 const NEED_SUB_MAX_DATE_PAGE_INDEX = 1
 
 function NeedASubPage() {
-  const { currentUser, isLoading: isAuthLoading } = useAuth()
+  const { appUser, currentUser, isLoading: isAuthLoading } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [notice, setNotice] = useState('')
   const [activePanel, setActivePanel] = useState('browse')
-  const [postView, setPostView] = useState('all')
+  const [selectedPostView, setPostView] = useState('all')
+  const [todayKey, setTodayKey] = useState(() => getMarketDateKey(new Date()))
   const [datePageIndex, setDatePageIndex] = useState(0)
-  const [selectedDateKey, setSelectedDateKey] = useState(() => getLocalDateKey(new Date()))
+  const [selectedDateKey, setSelectedDateKey] = useState(todayKey)
   const [showCreateDiscardModal, setShowCreateDiscardModal] = useState(false)
+  // A sign-in without a finished Pickup Lane account browses as a guest.
+  const accountUser = appUser ? currentUser : null
+  const isSignedIn = Boolean(accountUser)
+  const postView = isSignedIn ? selectedPostView : 'all'
   const {
     error,
+    hasLoadFailed,
     hasMorePosts,
     isLoading,
     isLoadingMore,
     loadMoreNeedASub,
     posts,
+    retryNeedASub,
     setError,
   } = useNeedASubPostsData({
-    currentUser,
+    currentUser: accountUser,
     isAuthLoading,
+    onReturn: moveToCurrentDate,
     postView,
     selectedDateKey,
   })
@@ -59,7 +63,7 @@ function NeedASubPage() {
     updateGamePlayerGroup,
     updatePosition,
   } = useNeedASubCreateForm({
-    currentUser,
+    currentUser: accountUser,
     navigate,
     setError,
     setNotice,
@@ -80,11 +84,28 @@ function NeedASubPage() {
   }, [location.pathname, location.state, navigate])
 
   const maxDatePageIndex = NEED_SUB_MAX_DATE_PAGE_INDEX
-  const isGuestBrowse = activePanel === 'browse' && !isAuthLoading && !currentUser
   const visibleDateOptions = useMemo(
-    () => buildDateOptions(datePageIndex),
-    [datePageIndex],
+    () => buildDateOptions(todayKey, datePageIndex),
+    [todayKey, datePageIndex],
   )
+
+  // After midnight in Chicago the strip starts at the new today; a selected
+  // date that has passed moves to today.
+  function moveToCurrentDate() {
+    const nextTodayKey = getMarketDateKey(new Date())
+
+    if (nextTodayKey === todayKey) {
+      return
+    }
+
+    const nextSelectedDateKey = selectedDateKey < nextTodayKey ? nextTodayKey : selectedDateKey
+    setTodayKey(nextTodayKey)
+    setSelectedDateKey(nextSelectedDateKey)
+    setDatePageIndex(Math.min(
+      Math.floor(countDaysBetween(nextTodayKey, nextSelectedDateKey) / NEED_SUB_DATE_STRIP_DAYS),
+      NEED_SUB_MAX_DATE_PAGE_INDEX,
+    ))
+  }
 
   function showBrowsePanel() {
     setShowCreateDiscardModal(false)
@@ -111,13 +132,25 @@ function NeedASubPage() {
     setPostView(nextView)
   }
 
+  function openPost(post) {
+    const postPath = `/need-a-sub/posts/${post.id}`
+
+    if (isSignedIn) {
+      navigate(postPath)
+      return
+    }
+
+    // Full post details need an account; come back to this post afterward.
+    navigate('/sign-in', { state: { backTo: '/need-a-sub', from: postPath } })
+  }
+
   function moveDatePage(nextPageIndex) {
     const normalizedPageIndex = Math.min(
       Math.max(nextPageIndex, 0),
       maxDatePageIndex,
     )
     setDatePageIndex(normalizedPageIndex)
-    setSelectedDateKey(buildDateOptions(normalizedPageIndex)[0]?.key || selectedDateKey)
+    setSelectedDateKey(buildDateOptions(todayKey, normalizedPageIndex)[0].key)
   }
 
   return (
@@ -134,24 +167,26 @@ function NeedASubPage() {
         }
       />
 
-      {activePanel === 'browse' && !isGuestBrowse && (
+      {activePanel === 'browse' && (
         <>
-          <div className="need-sub-browse-controls">
-            <AppTabs
-              ariaLabel="Need a Sub posts"
-              items={POST_TABS}
-              onChange={switchPostView}
-              value={postView}
-            />
-            <button
-              className="need-sub-header-action need-sub-header-action--primary"
-              type="button"
-              onClick={showCreatePanel}
-            >
-              <PlusCircleIcon />
-              Create Post
-            </button>
-          </div>
+          {isSignedIn && (
+            <div className="need-sub-browse-controls">
+              <AppTabs
+                ariaLabel="Need a Sub posts"
+                items={POST_TABS}
+                onChange={switchPostView}
+                value={postView}
+              />
+              <button
+                className="need-sub-header-action need-sub-header-action--primary"
+                type="button"
+                onClick={showCreatePanel}
+              >
+                <PlusCircleIcon />
+                Create Post
+              </button>
+            </div>
+          )}
 
           <NeedASubDateStrip
             canGoNext={datePageIndex < maxDatePageIndex}
@@ -166,13 +201,16 @@ function NeedASubPage() {
       )}
 
       {(notice || error) && (
-        <div className={`need-sub-alert ${error ? 'need-sub-alert--error' : ''}`}>
+        <div
+          className={`need-sub-alert ${error ? 'need-sub-alert--error' : ''}`}
+          role={error ? 'alert' : 'status'}
+        >
           {error || notice}
         </div>
       )}
 
       {activePanel === 'create' ? (
-        currentUser ? (
+        isSignedIn ? (
           <section className="need-sub-panel need-sub-create-panel">
             <NeedASubCreateFlow
               formError={formError}
@@ -198,20 +236,17 @@ function NeedASubPage() {
           />
         )
       ) : (
-        isGuestBrowse ? (
-          <NeedASubGuestPreview />
-        ) : (
-          <NeedASubPostList
-            isLoading={isLoading}
-            isLoadingMore={isLoadingMore}
-            isSignedIn={Boolean(currentUser)}
-            hasMorePosts={hasMorePosts}
-            onLoadMore={loadMoreNeedASub}
-            onOpenPost={(post) => navigate(`/need-a-sub/posts/${post.id}`)}
-            posts={posts}
-            postView={postView}
-          />
-        )
+        <NeedASubPostList
+          hasLoadFailed={hasLoadFailed}
+          isLoading={isLoading}
+          isLoadingMore={isLoadingMore}
+          hasMorePosts={hasMorePosts}
+          onLoadMore={loadMoreNeedASub}
+          onOpenPost={openPost}
+          onRetry={retryNeedASub}
+          posts={posts}
+          postView={postView}
+        />
       )}
 
       {showCreateDiscardModal && (
@@ -224,96 +259,42 @@ function NeedASubPage() {
   )
 }
 
-function NeedASubGuestPreview() {
-  return (
-    <section className="need-sub-guest-preview" aria-labelledby="need-sub-guest-preview-title">
-      <div className="need-sub-guest-preview__inner">
-        <div className="need-sub-guest-lock" aria-hidden="true">
-          <LockIcon />
-        </div>
-
-        <p className="need-sub-guest-preview__eyebrow">Guest Preview</p>
-        <h2 id="need-sub-guest-preview-title">How Need a Sub works</h2>
-        <p className="need-sub-guest-preview__lede">
-          Need a Sub helps hosts fill roster gaps fast. Hosts post the exact spots they need,
-          and players can review the game details and request to fill in.
-        </p>
-
-        <div className="need-sub-guest-steps" aria-label="How Need a Sub works">
-          <GuestPreviewStep
-            icon={<PlusCircleIcon />}
-            label="For hosts"
-            title="Post who you need"
-            copy="Hosts create a post for the players they need for a specific game."
-          />
-          <GuestPreviewStep
-            icon={<UserIcon />}
-            label="For players"
-            title="Ask to fill in"
-            copy="Players find games that need a substitute and request to join."
-          />
-        </div>
-
-        <p className="need-sub-guest-note">
-          Sign in or create an account to post who you need or request to fill in.
-        </p>
-
-        <div className="need-sub-guest-actions">
-          <Link className="need-sub-guest-action need-sub-primary" to="/create-account" state={{ from: '/need-a-sub' }}>
-            <PlusCircleIcon />
-            Register
-          </Link>
-          <Link className="need-sub-guest-action need-sub-create-secondary" to="/sign-in" state={{ from: '/need-a-sub' }}>
-            <LockIcon />
-            Sign In
-          </Link>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function GuestPreviewStep({ copy, icon, label, title }) {
-  return (
-    <article className="need-sub-guest-step">
-      <div className="need-sub-guest-step__icon">{icon}</div>
-      <span>{label}</span>
-      <strong>{title}</strong>
-      <p>{copy}</p>
-    </article>
-  )
-}
-
-function buildDateOptions(pageIndex) {
-  const firstDate = startOfLocalDay(new Date())
-  firstDate.setDate(firstDate.getDate() + (pageIndex * NEED_SUB_DATE_STRIP_DAYS))
+// Date keys are Chicago calendar dates (YYYY-MM-DD), the dates posts are filed
+// under. Calendar arithmetic runs in UTC so daylight saving cannot skip a day.
+function buildDateOptions(todayKey, pageIndex) {
+  const firstDayOffset = pageIndex * NEED_SUB_DATE_STRIP_DAYS
 
   return Array.from({ length: NEED_SUB_DATE_STRIP_DAYS }, (_, index) => {
-    const date = new Date(firstDate)
-    date.setDate(firstDate.getDate() + index)
+    const date = dateFromKey(todayKey)
+    date.setUTCDate(date.getUTCDate() + firstDayOffset + index)
+    const format = (options) => new Intl.DateTimeFormat('en-US', { ...options, timeZone: 'UTC' }).format(date)
 
     return {
-      day: new Intl.DateTimeFormat('en-US', { day: 'numeric' }).format(date),
-      key: getLocalDateKey(date),
-      month: new Intl.DateTimeFormat('en-US', { month: 'short' }).format(date),
-      weekday: new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date),
+      day: format({ day: 'numeric' }),
+      key: date.toISOString().slice(0, 10),
+      month: format({ month: 'short' }),
+      weekday: format({ weekday: 'short' }),
     }
   })
 }
 
-function getLocalDateKey(dateValue) {
-  const date = startOfLocalDay(dateValue)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-
-  return `${year}-${month}-${day}`
+function getMarketDateKey(now) {
+  // en-CA writes dates as YYYY-MM-DD.
+  return new Intl.DateTimeFormat('en-CA', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: NEED_A_SUB_TIME_ZONE,
+    year: 'numeric',
+  }).format(now)
 }
 
-function startOfLocalDay(value) {
-  const date = new Date(value)
-  date.setHours(0, 0, 0, 0)
-  return date
+function dateFromKey(dateKey) {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  return new Date(Date.UTC(year, month - 1, day))
+}
+
+function countDaysBetween(startKey, endKey) {
+  return Math.round((dateFromKey(endKey) - dateFromKey(startKey)) / 86_400_000)
 }
 
 export default NeedASubPage

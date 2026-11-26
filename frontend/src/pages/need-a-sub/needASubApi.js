@@ -35,7 +35,8 @@ export async function listNeedASubPostCards(
 
   const path = `/need-a-sub/posts/cards?${params.toString()}`
 
-  if (firebaseUser) {
+  // All Posts is the same public list for everyone; only My Posts needs the account.
+  if (view === 'mine') {
     return authenticatedRequest(firebaseUser, path)
   }
 
