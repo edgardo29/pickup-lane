@@ -26,7 +26,9 @@ async function loadCheckoutParticipants({ firebaseUser, gameId }) {
 }
 
 export async function loadGameCheckout({ firebaseUser, gameId }) {
-  const game = await apiRequest(`/games/${gameId}`)
+  const game = await apiRequest(`/games/${gameId}`, {
+    headers: await getAuthHeaders(firebaseUser),
+  })
   const [venue, gameImages, venueImages, participants, paymentMethodsResult] = await Promise.all([
     apiRequest(`/venues/${game.venue_id}`).catch(() => null),
     apiRequest(`/game-images?game_id=${gameId}&image_status=active`).catch(() => []),

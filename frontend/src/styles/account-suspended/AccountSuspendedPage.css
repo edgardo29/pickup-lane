@@ -9,6 +9,7 @@
 }
 
 .account-suspended-card {
+  overflow-wrap: anywhere;
   margin-top: 32px;
   padding: clamp(22px, 4vw, 34px);
   border: 1px solid rgba(248, 250, 252, 0.12);

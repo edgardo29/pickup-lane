@@ -65,6 +65,7 @@ import {
   ProfilePage,
   SettingsPage,
 } from '../pages/profile/index.js'
+import { AuthReturnGuard } from './AuthReturnGuard.jsx'
 import {
   RedirectSignedIn,
   RequireActiveAppUser,
@@ -102,12 +103,12 @@ export function AppRoutes() {
       <Route path="/policies/cancellation-refunds" element={<CancellationRefundPolicyPage />} />
       <Route path="/games" element={<Navigate to="/games/browse" replace />} />
       <Route path="/games/browse" element={<BrowseGamesPage />} />
-      <Route path="/games/:gameId" element={<GameDetailsPage />} />
+      <Route path="/games/:gameId" element={<AuthReturnGuard><GameDetailsPage /></AuthReturnGuard>} />
       <Route
         path="/games/:gameId/checkout"
         element={
           <RequireAppUser>
-            <GameCheckoutPage />
+            <AuthReturnGuard><GameCheckoutPage /></AuthReturnGuard>
           </RequireAppUser>
         }
       />
@@ -115,7 +116,7 @@ export function AppRoutes() {
         path="/games/:gameId/edit"
         element={
           <RequireAppUser>
-            <CreateGamePage />
+            <AuthReturnGuard><CreateGamePage /></AuthReturnGuard>
           </RequireAppUser>
         }
       />
@@ -420,12 +421,12 @@ export function AppRoutes() {
         />
       </Route>
       <Route path="/need-a-sub" element={<NeedASubPage />} />
-      <Route path="/need-a-sub/posts/:postId" element={<NeedASubDetailPage />} />
+      <Route path="/need-a-sub/posts/:postId" element={<AuthReturnGuard><NeedASubDetailPage /></AuthReturnGuard>} />
       <Route
         path="/need-a-sub/posts/:postId/edit"
         element={
           <RequireAppUser>
-            <NeedASubEditPage />
+            <AuthReturnGuard><NeedASubEditPage /></AuthReturnGuard>
           </RequireAppUser>
         }
       />
@@ -433,13 +434,13 @@ export function AppRoutes() {
         path="/need-a-sub/posts/:postId/published"
         element={
           <RequireAppUser>
-            <NeedASubPublishSuccessPage />
+            <AuthReturnGuard><NeedASubPublishSuccessPage /></AuthReturnGuard>
           </RequireAppUser>
         }
       />
       <Route
         path="/need-a-sub/posts/:postId/manage"
-        element={<NeedASubManageRedirect />}
+        element={<AuthReturnGuard><NeedASubManageRedirect /></AuthReturnGuard>}
       />
       <Route path="/player-hub" element={<Navigate to="/need-a-sub" replace />} />
       <Route

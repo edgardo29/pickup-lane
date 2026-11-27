@@ -2,7 +2,7 @@ import { getAuthErrorMessage } from '../../lib/authErrors.js'
 import { minimumSignupAge } from './authConstants.js'
 
 export function getPostAuthPath(user) {
-  return hasCompleteProfile(user) ? '/games' : '/finish-profile'
+  return getPostAuthNavigation(user).to
 }
 
 // Marks an arrival at the saved destination straight from sign-in, so a page
@@ -15,11 +15,27 @@ export function getAuthReturnState(returnPath) {
 // Profile first, carrying the saved destination; a finished one goes to the
 // destination, or to game discovery when there is none.
 export function getPostAuthNavigation(user, returnPath) {
+  if (user?.account_status === 'suspended') {
+    return { to: '/account-suspended' }
+  }
+
+  returnPath = getSafeAuthReturnPath(returnPath)
   if (!hasCompleteProfile(user)) {
     return { to: '/finish-profile', state: returnPath ? { from: returnPath } : undefined }
   }
 
   return { to: returnPath || '/games', state: getAuthReturnState(returnPath) }
+}
+
+// Only registered player routes can be authentication destinations. Keep the
+// query intact: checkout intent and the selected list tab live there.
+export function getSafeAuthReturnPath(value) {
+  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || /[\\\s#%]/.test(value.split('?')[0]) || /[\\\r\n]/.test(value)) return ''
+  const pathname = value.split('?')[0]
+  const pages = ['/', '/games', '/games/browse', '/need-a-sub', '/player-hub', '/create-game', '/my-games', '/inbox', '/profile', '/profile/edit', '/profile/payment-methods', '/settings', '/settings/payment-methods', '/terms', '/privacy', '/policies/cancellation-refunds']
+  const id = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+  const record = new RegExp(`^/(games/${id}(/checkout|/edit)?|need-a-sub/posts/${id}(/edit|/published|/manage)?)$`)
+  return pages.includes(pathname) || record.test(pathname) ? value : ''
 }
 
 export function getSafeAuthBackPath(returnPath, fallback = '/') {

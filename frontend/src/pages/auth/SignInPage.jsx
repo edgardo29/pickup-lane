@@ -25,6 +25,7 @@ export function SignInPage() {
         <SignInForm
           email={signInForm.email}
           error={signInForm.error}
+          invalidField={signInForm.invalidField}
           isSubmitting={signInForm.isSubmitting}
           onSubmit={signInForm.handleEmailSignIn}
           password={signInForm.password}

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { getPostAuthPath } from './authHelpers.js'
+import { getPostAuthNavigation } from './authHelpers.js'
 
 export function useCleanupUnfinishedSignupOnEntry({
   appUser,
@@ -59,6 +59,7 @@ export function useGoogleRedirectCompletion({
   navigate,
   pendingGoogleSignup,
   settleGoogleSignupRedirect,
+  returnPath,
 }) {
   useEffect(() => {
     if (isLoading) {
@@ -67,12 +68,14 @@ export function useGoogleRedirectCompletion({
 
     if (appUser) {
       settleGoogleSignupRedirect()
-      navigate(getPostAuthPath(appUser), { replace: true })
+      const next = getPostAuthNavigation(appUser, returnPath)
+      navigate(next.to, { replace: true, state: next.state })
       return
     }
 
     if (currentUser && pendingGoogleSignup) {
-      navigate('/finish-profile')
+      const next = getPostAuthNavigation(null, returnPath)
+      navigate(next.to, { replace: true, state: next.state })
     }
   }, [
     appUser,
@@ -81,5 +84,6 @@ export function useGoogleRedirectCompletion({
     navigate,
     pendingGoogleSignup,
     settleGoogleSignupRedirect,
+    returnPath,
   ])
 }

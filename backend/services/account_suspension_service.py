@@ -19,22 +19,25 @@ def get_suspended_account_notice(
             detail="This account is not suspended.",
         )
 
-    notice = db.scalar(
-        select(Notification)
-        .join(
-            AdminAction,
-            AdminAction.target_notification_id == Notification.id,
-        )
+    action = db.scalar(
+        select(AdminAction)
         .where(
             AdminAction.action_type == "suspend_user",
             AdminAction.outcome == "succeeded",
             AdminAction.target_user_id == user.id,
-            Notification.user_id == user.id,
-            Notification.notification_type == "account_security",
         )
         .order_by(AdminAction.created_at.desc(), AdminAction.id.desc())
         .limit(1)
     )
+    notice = None
+    if action is not None and action.target_notification_id is not None:
+        notice = db.scalar(
+            select(Notification).where(
+                Notification.id == action.target_notification_id,
+                Notification.user_id == user.id,
+                Notification.notification_type == "account_security",
+            )
+        )
     if notice is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

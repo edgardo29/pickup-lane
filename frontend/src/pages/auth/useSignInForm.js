@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth.js'
 import { getAuthErrorMessage } from '../../lib/authErrors.js'
@@ -27,6 +27,8 @@ export function useSignInForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
+  const [invalidField, setInvalidField] = useState('')
+  const pending = useRef(false)
   const resetStatus = searchParams.get('reset')
   const returnPath = typeof location.state?.from === 'string' ? location.state.from : ''
   const backPath = typeof location.state?.backTo === 'string'
@@ -36,56 +38,71 @@ export function useSignInForm() {
   useGoogleRedirectCompletion({
     appUser,
     currentUser,
-    isLoading,
+    isLoading: isLoading || status === 'submitting',
     navigate,
     pendingGoogleSignup,
     settleGoogleSignupRedirect,
+    returnPath,
   })
 
   async function handleEmailSignIn(event) {
     event.preventDefault()
+    if (pending.current || isLoading) return
+    setInvalidField('')
     setStatus('submitting')
     setError('')
 
     const trimmedEmail = email.trim()
 
     if (!isValidEmail(trimmedEmail)) {
+      setInvalidField('email')
       setError('Enter a valid email.')
       setStatus('idle')
       return
     }
 
     if (!password) {
+      setInvalidField('password')
       setError('Enter your password.')
       setStatus('idle')
       return
     }
 
+    pending.current = true
     try {
       const signedInUser = await signInWithEmail(trimmedEmail, password)
-      const next = getPostAuthNavigation(signedInUser, returnPath)
-      navigate(next.to, { replace: true, state: next.state })
+      if (!signedInUser) {
+        const next = getPostAuthNavigation(null, returnPath)
+        navigate(next.to, { replace: true, state: next.state })
+      } else setStatus('idle')
     } catch (requestError) {
       setError(getAuthErrorMessage(requestError))
       setStatus('idle')
+    } finally {
+      pending.current = false
     }
   }
 
   async function handleGoogleSignIn() {
+    if (pending.current || isLoading) return
+    pending.current = true
+    setInvalidField('')
     setStatus('submitting')
     setError('')
 
     try {
       const signedInUser = await signInWithGoogle()
       if (signedInUser) {
-        const next = getPostAuthNavigation(signedInUser, returnPath)
-        navigate(next.to, { replace: true, state: next.state })
+        setStatus('idle')
       } else {
-        navigate('/finish-profile', { replace: true, state: { from: returnPath } })
+        const next = getPostAuthNavigation(null, returnPath)
+        navigate(next.to, { replace: true, state: next.state })
       }
     } catch (requestError) {
       setError(getAuthErrorMessage(requestError))
       setStatus('idle')
+    } finally {
+      pending.current = false
     }
   }
 
@@ -93,9 +110,10 @@ export function useSignInForm() {
     email,
     backPath,
     error,
+    invalidField,
     handleEmailSignIn,
     handleGoogleSignIn,
-    isSubmitting: status === 'submitting',
+    isSubmitting: isLoading || status === 'submitting',
     password,
     resetStatus,
     returnPath,

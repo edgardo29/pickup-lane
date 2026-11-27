@@ -1,6 +1,6 @@
 import { AlertCircle } from 'lucide-react'
 
-export function FormErrorMessage({ children, className = '' }) {
+export function FormErrorMessage({ children, className = '', id }) {
   if (!children) {
     return null
   }
@@ -8,7 +8,7 @@ export function FormErrorMessage({ children, className = '' }) {
   const classes = ['form-error-message', className].filter(Boolean).join(' ')
 
   return (
-    <p className={classes} role="alert">
+    <p id={id} className={classes} role="alert">
       <AlertCircle aria-hidden="true" />
       <span>{children}</span>
     </p>

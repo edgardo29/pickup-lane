@@ -146,7 +146,7 @@ export function RedirectSignedIn({ children }) {
   const location = useLocation()
 
   if (isLoading) {
-    return null
+    return children
   }
 
   if (appUser) {

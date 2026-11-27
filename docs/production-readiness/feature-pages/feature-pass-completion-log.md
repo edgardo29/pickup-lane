@@ -50,7 +50,7 @@ order, not required completion prerequisites.
     <tr>
       <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;">F07</td>
       <td style="border: 1px solid #777; padding: 6px 10px;">Sign In</td>
-      <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;"></td>
+      <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;">2026-11-27</td>
     </tr>
     <tr>
       <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;">F08</td>
