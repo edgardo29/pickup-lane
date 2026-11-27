@@ -15,7 +15,6 @@ from backend.models import (
     GameImage,
     GameParticipant,
     ParticipantStatusHistory,
-    Payment,
     User,
     Venue,
     VenueImage,
@@ -1612,36 +1611,33 @@ def delete_game_workflow(
     return db_game
 
 
-def count_non_host_participants(
-    db: Session, game_id: uuid.UUID, participant_statuses: set[str]
+def count_game_participants(
+    db: Session,
+    game: Game,
+    participant_statuses: set[str],
+    *,
+    include_host_party: bool,
 ) -> int:
+    """Count a game's places in the given statuses.
+
+    The host's party is the host and the guests the host added to their own
+    game; leaving it out counts only the other players.
+    """
+    conditions = [
+        GameParticipant.game_id == game.id,
+        GameParticipant.participant_status.in_(participant_statuses),
+    ]
+    if not include_host_party:
+        conditions += [
+            GameParticipant.participant_type != "host",
+            or_(
+                GameParticipant.guest_of_user_id.is_(None),
+                GameParticipant.guest_of_user_id != game.host_user_id,
+            ),
+        ]
     return (
-        db.scalar(
-            select(func.count())
-            .select_from(GameParticipant)
-            .where(
-                GameParticipant.game_id == game_id,
-                GameParticipant.participant_type != "host",
-                GameParticipant.participant_status.in_(participant_statuses),
-            )
-        )
+        db.scalar(select(func.count()).select_from(GameParticipant).where(*conditions))
         or 0
-    )
-
-
-def game_has_paid_booking_payment(db: Session, game_id: uuid.UUID) -> bool:
-    return (
-        db.scalar(
-            select(Payment.id)
-            .join(Booking, Payment.booking_id == Booking.id)
-            .where(
-                Booking.game_id == game_id,
-                Payment.payment_type == "booking",
-                Payment.payment_status == "succeeded",
-            )
-            .limit(1)
-        )
-        is not None
     )
 
 

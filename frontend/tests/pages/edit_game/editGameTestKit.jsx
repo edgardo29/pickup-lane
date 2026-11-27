@@ -4,6 +4,7 @@ import { afterEach, vi } from 'vitest'
 import { useAuth } from '../../../src/hooks/useAuth.js'
 import { apiRequest } from '../../../src/lib/apiClient.js'
 import CreateGamePage from '../../../src/pages/create-game/CreateGamePage.jsx'
+import { RequireAppUser } from '../../../src/routes/RouteGuards.jsx'
 import { checkBackendAnswer } from '../../backendFields.js'
 import backendFields from './backend_fields.json'
 
@@ -92,7 +93,8 @@ export function game(overrides = {}) {
     public_visibility_status: 'visible',
     join_enforcement_status: 'open',
     title: 'Central Field 7v7',
-    description: null,
+    // Publishing copies the game notes into the description.
+    description: 'Bring water.',
     venue_id: VENUE_ID,
     venue_name_snapshot: 'Central Field',
     address_snapshot: '100 Main St, Chicago, IL 60601',
@@ -120,7 +122,8 @@ export function game(overrides = {}) {
     parking_notes: null,
     cancelled_at: null,
     cancel_reason: null,
-    host_guest_max: 2,
+    // The format's side size less one, as publishing sets it for 7v7.
+    host_guest_max: 6,
     host_user_id: HOST_ID,
     roster_counts: { occupied_spots: 1, spots_remaining: 13, waitlist_count: 0 },
     ...overrides,
@@ -170,7 +173,10 @@ export function fakePageApi(gameAnswer, extraAnswers = {}) {
     'GET /games/{game_id}': gameAnswer,
     'GET /venues/{venue_id}': venue(),
     'GET /community-game-details/games/{game_id}/host-edit': communityDetails(),
-    'PATCH /games/{game_id}/host-edit': gameAnswer,
+    // The edit save answers with the game but without its roster counts.
+    'PATCH /games/{game_id}/host-edit': gameAnswer && typeof gameAnswer === 'object' && !(gameAnswer instanceof Error)
+      ? { ...gameAnswer, roster_counts: null }
+      : gameAnswer,
     'PUT /community-game-details/games/{game_id}/host-edit': communityDetails(),
     ...extraAnswers,
   }
@@ -201,8 +207,10 @@ export function sentBody(endpoint) {
 
 export function renderEditGame() {
   const router = createMemoryRouter([
-    { path: '/games/:gameId/edit', element: <CreateGamePage /> },
+    // The app's own route: Edit Game sits behind the signed-in guard.
+    { path: '/games/:gameId/edit', element: <RequireAppUser><CreateGamePage /></RequireAppUser> },
     { path: '/games/:gameId', element: <h1>Game Details</h1> },
+    { path: '/sign-in', element: <h1>Sign In</h1> },
   ], { initialEntries: [`/games/${GAME_ID}/edit`] })
   render(<RouterProvider router={router} />)
   return router

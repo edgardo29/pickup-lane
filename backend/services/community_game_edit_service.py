@@ -10,6 +10,9 @@ from sqlalchemy.orm import Session
 
 from backend.models import Game, User, Venue
 from backend.schemas.game_schema import GameHostEdit
+from backend.services.community_game_detail_service import (
+    community_game_has_host_payment_method,
+)
 from backend.services.game_notification_service import (
     capture_game_updated_structural_snapshot,
     game_updated_changed_field_labels,
@@ -32,10 +35,7 @@ from backend.services.game_rules import (
     require_game_not_started,
     validate_game_business_rules,
 )
-from backend.services.game_service import (
-    count_non_host_participants,
-    game_has_paid_booking_payment,
-)
+from backend.services.game_service import count_game_participants
 from backend.services.moderation_surfacing_service import surface_community_game_text
 from backend.services.venue_service import find_or_create_facility_venue
 
@@ -194,13 +194,14 @@ def host_edit_game_workflow(
         )
 
     location_changed = host_edit_changes_location(db, db_game, game_update)
-    active_player_count = count_non_host_participants(
-        db, game_id, ACTIVE_PLAYER_STATUSES
+    # Guests the host adds to their own game do not lock it; every place taken,
+    # the host's party included, still limits how far capacity can drop.
+    active_player_count = count_game_participants(
+        db, db_game, ACTIVE_PLAYER_STATUSES, include_host_party=False
     )
-    reserved_player_count = count_non_host_participants(
-        db, game_id, RESERVED_PLAYER_STATUSES
+    taken_place_count = count_game_participants(
+        db, db_game, RESERVED_PLAYER_STATUSES, include_host_party=True
     )
-    paid_booking_exists = game_has_paid_booking_payment(db, game_id)
 
     if active_player_count > 0:
         changed_major_fields = [
@@ -228,16 +229,6 @@ def host_edit_game_workflow(
                 detail="Capacity can only be increased after players have joined.",
             )
 
-    if (
-        paid_booking_exists
-        and "price_per_player_cents" in update_data
-        and update_data["price_per_player_cents"] != db_game.price_per_player_cents
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Price cannot be changed after a booking payment exists.",
-        )
-
     effective_starts_at = ensure_timezone(
         update_data.get("starts_at", db_game.starts_at)
     )
@@ -260,13 +251,10 @@ def host_edit_game_workflow(
             effective_starts_at, db_game.timezone, now
         )
 
-    if (
-        "total_spots" in update_data
-        and update_data["total_spots"] < reserved_player_count
-    ):
+    if "total_spots" in update_data and update_data["total_spots"] < taken_place_count:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="total_spots cannot be less than confirmed players.",
+            detail="Capacity cannot drop below the places already taken.",
         )
 
     if location_changed:
@@ -294,6 +282,20 @@ def host_edit_game_workflow(
         update_data["payment_collection_type"] = (
             "external_host" if update_data["price_per_player_cents"] > 0 else "none"
         )
+        # Players of a paid game pay the host directly, so the host's payment
+        # methods must be saved first (Create Game, Section 3.1).
+        if update_data[
+            "price_per_player_cents"
+        ] > 0 and not community_game_has_host_payment_method(db, game_id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Add a host payment method before charging players.",
+            )
+
+    # Game Details shows the description, which publishing fills from the game
+    # notes, so edited notes replace it too.
+    if "game_notes" in update_data:
+        update_data["description"] = update_data["game_notes"]
 
     # The neighborhood describes where the game is without identifying the
     # facility, so the host's entry is kept even when a venue is reused.

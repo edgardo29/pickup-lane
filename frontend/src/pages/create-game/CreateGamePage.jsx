@@ -37,8 +37,8 @@ function CreateGamePage() {
     verificationStatus,
   } = useEmailVerification({
     appUser,
-    enabled: !isEditMode,
-    destination: '/create-game',
+    // The link returns the host to the page they verified from.
+    destination: isEditMode ? `/games/${gameId}/edit` : '/create-game',
     refreshCurrentUserVerification,
     sendCurrentUserVerificationEmail,
   })
@@ -73,7 +73,11 @@ function CreateGamePage() {
     isVerifiedContextPending
   )
   const isHostEmailVerified = Boolean(visibleUser?.email_verified_at)
-  const shouldBlockForEmailVerification = visibleUser && !isEditMode && !isHostEmailVerified
+  // Publishing and saving an edit both need a verified email, so an unverified
+  // host sees the verification requirement instead of the form. A visitor who
+  // cannot edit the game sees only that error; verifying would not help.
+  const shouldBlockForEmailVerification = visibleUser && !isHostEmailVerified
+    && !(isEditMode && loadError)
   const {
     clearPublishFeedback,
     publishError,
@@ -90,6 +94,7 @@ function CreateGamePage() {
     isHostEmailVerified,
     navigate,
     paymentMethod,
+    savedPrice: formBaseline.price,
     setActiveStep,
     setCreatedGameId,
   })

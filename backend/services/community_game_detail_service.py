@@ -391,6 +391,16 @@ def update_community_game_detail_workflow(
     return db_community_game_detail
 
 
+def community_game_has_host_payment_method(db: Session, game_id: uuid.UUID) -> bool:
+    """Whether players of this game have a saved way to pay the host."""
+    payment_methods = db.scalar(
+        select(CommunityGameDetail.payment_methods_snapshot).where(
+            CommunityGameDetail.game_id == game_id
+        )
+    )
+    return bool(payment_methods)
+
+
 def get_host_community_game_detail_workflow(
     db: Session,
     game_id: uuid.UUID,

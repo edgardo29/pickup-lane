@@ -166,6 +166,7 @@ export function BasicsStep({ form, updateField }) {
           </FormField>
           <FormField label="Price per player">
             <CurrencyInput
+              label="Price per player"
               value={form.price}
               onChange={handlePriceChange}
             />
