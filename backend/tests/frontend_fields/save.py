@@ -22,6 +22,18 @@ FILE_REF_PREFIX = "#/$defs/"
 
 # The backend endpoints each frontend page's tests fake.
 PAGE_ENDPOINTS = {
+    "sign_in": [
+        "GET /game-images",
+        "GET /games/{game_id}/participants",
+        "GET /venues/{venue_id}",
+        "GET /community-game-details/games/{game_id}/host-edit",
+        "GET /account-suspended",
+        "GET /auth/me",
+        "POST /auth/sync-user",
+        "PATCH /users/me",
+        "GET /games/{game_id}",
+        "GET /need-a-sub/posts/{sub_post_id}",
+    ],
     "email_verification": [
         "GET /auth/me",
         "POST /auth/sync-user",

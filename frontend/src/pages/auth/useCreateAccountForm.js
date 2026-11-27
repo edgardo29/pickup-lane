@@ -48,14 +48,16 @@ export function useCreateAccountForm() {
   useGoogleRedirectCompletion({
     appUser,
     currentUser,
-    isLoading,
+    isLoading: isLoading || status === 'submitting',
     navigate,
     pendingGoogleSignup,
     settleGoogleSignupRedirect,
+    returnPath,
   })
 
   async function handleCreateAccount(event) {
     event.preventDefault()
+    if (isLoading) return
     setStatus('submitting')
     setError('')
 
@@ -98,6 +100,7 @@ export function useCreateAccountForm() {
   }
 
   async function handleGoogleSignIn() {
+    if (isLoading) return
     setStatus('submitting')
     setError('')
 
@@ -121,7 +124,7 @@ export function useCreateAccountForm() {
     error,
     handleCreateAccount,
     handleGoogleSignIn,
-    isSubmitting: status === 'submitting',
+    isSubmitting: isLoading || status === 'submitting',
     password,
     returnPath,
     setEmail,

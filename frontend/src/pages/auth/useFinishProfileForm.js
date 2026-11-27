@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth.js'
 import { getAuthErrorMessage } from '../../lib/authErrors.js'
+import { auth } from '../../lib/firebase.js'
 import {
-  getAuthReturnState,
+  getPostAuthNavigation,
   getBirthdayValidation,
   hasCompleteProfile,
   splitDisplayName,
@@ -33,7 +34,22 @@ export function useFinishProfileForm() {
   const [birthYear, setBirthYear] = useState('')
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
+  const profileSave = useRef(null)
   const returnPath = typeof location.state?.from === 'string' ? location.state.from : ''
+
+  useEffect(() => {
+    const request = profileSave.current
+    if (request?.uid && request.uid !== currentUser?.uid) {
+      request.cancelled = true
+      // A different account must not inherit the previous account's save state.
+      setStatus('idle')
+      setError('')
+    }
+  }, [currentUser?.uid])
+
+  useEffect(() => () => {
+    if (profileSave.current) profileSave.current.cancelled = true
+  }, [])
 
   useEffect(() => {
     const displayNameParts = splitDisplayName(currentUser?.displayName)
@@ -107,6 +123,11 @@ export function useFinishProfileForm() {
     }
 
     setStatus('submitting')
+    const request = { uid: currentUser?.uid, cancelled: false }
+    profileSave.current = request
+    const isObsolete = () => request.cancelled || (
+      request.uid && auth.currentUser?.uid !== request.uid
+    )
 
     try {
       let userToUpdate = appUser
@@ -125,6 +146,10 @@ export function useFinishProfileForm() {
         }
       }
 
+      if (isObsolete()) return
+      request.uid = firebaseUserToUpdate?.uid
+      if (isObsolete()) return
+
       if (!userToUpdate?.id) {
         throw new Error('Profile sync did not finish.')
       }
@@ -135,9 +160,12 @@ export function useFinishProfileForm() {
         lastName: trimmedLastName,
       })
 
+      if (isObsolete()) return
       updateAppUser(updatedUser)
-      navigate(returnPath || '/games', { state: getAuthReturnState(returnPath) })
+      const next = getPostAuthNavigation(updatedUser, returnPath)
+      navigate(next.to, { replace: true, state: next.state })
     } catch (requestError) {
+      if (isObsolete()) return
       setError(getAuthErrorMessage(requestError))
       setStatus('idle')
     }

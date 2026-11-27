@@ -10,6 +10,7 @@ import {
 export function SignInForm({
   email,
   error,
+  invalidField,
   isSubmitting,
   onSubmit,
   password,
@@ -22,6 +23,8 @@ export function SignInForm({
   return (
     <form className="auth-form" noValidate onSubmit={onSubmit}>
       <AuthField
+        aria-invalid={invalidField === 'email' || undefined}
+        aria-describedby={invalidField === 'email' ? 'sign-in-error' : undefined}
         autoComplete="email"
         icon={<MailIcon />}
         inputMode="email"
@@ -34,6 +37,8 @@ export function SignInForm({
 
       <AuthField
         action={<Link to="/forgot-password">Forgot?</Link>}
+        aria-invalid={invalidField === 'password' || undefined}
+        aria-describedby={invalidField === 'password' ? 'sign-in-error' : undefined}
         autoComplete="current-password"
         icon={<LockIcon />}
         label="Password"
@@ -50,9 +55,9 @@ export function SignInForm({
         value={password}
       />
 
-      <FormErrorMessage>{error}</FormErrorMessage>
+      <FormErrorMessage id="sign-in-error">{error}</FormErrorMessage>
       {resetStatus === 'success' && !error && (
-        <p className="auth-success">Password changed.</p>
+        <p className="auth-success" role="status">Password changed.</p>
       )}
 
       <button

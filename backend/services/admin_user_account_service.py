@@ -462,8 +462,10 @@ def suspend_admin_user(
             summary="Pickup Lane suspended your account.",
             body=(
                 "Your Pickup Lane account was suspended for safety or policy "
-                "reasons. Product and staff actions are unavailable while the "
-                "suspension is active. Contact support if you believe this was a "
+                "reasons. You cannot create games or Sub Posts, join games, add "
+                "checkout guests, or make new Sub Post requests. You can still "
+                "manage or withdraw from existing commitments. Staff actions "
+                "are unavailable. Contact support if you believe this was a "
                 "mistake."
             ),
             action_key="view_profile",
