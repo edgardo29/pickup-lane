@@ -12,6 +12,7 @@ from backend.models import Game, User, Venue
 from backend.schemas.game_schema import GameHostEdit
 from backend.services.game_notification_service import (
     capture_game_updated_structural_snapshot,
+    game_updated_changed_field_labels,
     game_updated_structural_snapshot_changed,
     notify_connected_users_game_updated,
 )
@@ -382,6 +383,10 @@ def host_edit_game_workflow(
             db_game=db_game,
             actor_user_id=current_user.id,
             event_at=now,
+            changed_field_labels=game_updated_changed_field_labels(
+                structural_snapshot_before,
+                db_game,
+            ),
         )
 
     try:

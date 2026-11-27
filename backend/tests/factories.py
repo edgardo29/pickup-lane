@@ -7,6 +7,7 @@ any column.
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -19,6 +20,9 @@ from backend.models import (
     Game,
     GameCredit,
     GameParticipant,
+    Notification,
+    PlatformNotice,
+    PlatformNoticeRecipient,
     SubPost,
     SubPostPosition,
     SubPostRequest,
@@ -26,6 +30,12 @@ from backend.models import (
     UserPaymentMethod,
     Venue,
 )
+from backend.services.notification_event_service import (
+    build_app_notification_fields,
+    build_game_notification_fields,
+    build_need_a_sub_notification_fields,
+)
+from backend.services.notification_policy import NOTIFICATION_TYPE_CONFIG
 
 CANCELLED_PARTICIPANT_STATUSES = {"cancelled", "late_cancelled", "removed", "refunded"}
 
@@ -356,6 +366,88 @@ def make_sub_post_request(
     }
     values.update(overrides)
     return _save(db, SubPostRequest(**values))
+
+
+def make_notification(
+    db: Session,
+    *,
+    user: User,
+    event_at: datetime,
+    notification_type: str = "account_security",
+    game: Game | None = None,
+    sub_post: SubPost | None = None,
+    is_read: bool = False,
+    **overrides,
+) -> Notification:
+    """Create an Inbox notification for ``user`` from the app's own field builders.
+
+    Pass ``game`` for a game notice or ``sub_post`` for a Need a Sub notice;
+    otherwise it is an App Updates notice. A read notice was read at ``event_at``.
+    """
+    config = NOTIFICATION_TYPE_CONFIG[notification_type]
+    if game is not None:
+        fields = build_game_notification_fields(
+            game, notification_type, event_at=event_at
+        )
+        fields["related_game_id"] = game.id
+        domain = "game"
+    elif sub_post is not None:
+        fields = build_need_a_sub_notification_fields(
+            sub_post, notification_type, event_at=event_at
+        )
+        fields["related_sub_post_id"] = sub_post.id
+        domain = "need_a_sub"
+    else:
+        fields = build_app_notification_fields(notification_type, event_at=event_at)
+        domain = min(config.notification_domains)
+    values = {
+        "id": uuid.uuid4(),
+        "user_id": user.id,
+        "notification_type": notification_type,
+        "notification_category": config.notification_category,
+        "notification_domain": domain,
+        "is_read": is_read,
+        "read_at": event_at if is_read else None,
+        "created_at": event_at,
+        "updated_at": event_at,
+        **fields,
+    }
+    values.update(overrides)
+    return _save(db, Notification(**values))
+
+
+def make_platform_notice(
+    db: Session,
+    *,
+    published_at: datetime,
+    global_sequence: int | None = None,
+    recipient: User | None = None,
+    **overrides,
+) -> PlatformNotice:
+    """Create a published platform notice.
+
+    With ``recipient`` it is a selected notice for that user; otherwise it is a
+    global notice for every eligible user, ordered by ``global_sequence``.
+    """
+    unique = uuid.uuid4().hex
+    values = {
+        "id": uuid.uuid4(),
+        "title": "Pickup Lane update",
+        "message": "The platform has an update.",
+        "audience_type": "selected_users" if recipient else "all_eligible_users",
+        "global_sequence": None if recipient else global_sequence,
+        "published_at": published_at,
+        "created_by_admin_id": None,
+        "idempotency_key_hash": hashlib.sha256(f"key-{unique}".encode()).hexdigest(),
+        "request_fingerprint": hashlib.sha256(f"request-{unique}".encode()).hexdigest(),
+        "created_at": published_at,
+        "updated_at": published_at,
+    }
+    values.update(overrides)
+    notice = _save(db, PlatformNotice(**values))
+    if recipient is not None:
+        _save(db, PlatformNoticeRecipient(notice_id=notice.id, user_id=recipient.id))
+    return notice
 
 
 def production_settings_env(**overrides: str | None) -> dict[str, str]:

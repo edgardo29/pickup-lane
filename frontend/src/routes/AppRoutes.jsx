@@ -7,6 +7,7 @@ import {
   ResetPasswordPage,
   SignInPage,
 } from '../pages/auth/index.js'
+import { AccountSuspendedPage } from '../pages/account-suspended/index.js'
 import {
   AdminAuditLogPage,
   AdminCommunityGamePage,
@@ -64,7 +65,13 @@ import {
   ProfilePage,
   SettingsPage,
 } from '../pages/profile/index.js'
-import { RedirectSignedIn, RequireAdmin, RequireAppUser } from './RouteGuards.jsx'
+import {
+  RedirectSignedIn,
+  RequireActiveAppUser,
+  RequireAdmin,
+  RequireAppUser,
+  RequireSuspendedAppUser,
+} from './RouteGuards.jsx'
 
 export function AppRoutes() {
   return (
@@ -123,9 +130,17 @@ export function AppRoutes() {
       <Route
         path="/inbox"
         element={
-          <RequireAppUser>
+          <RequireActiveAppUser>
             <InboxPage />
-          </RequireAppUser>
+          </RequireActiveAppUser>
+        }
+      />
+      <Route
+        path="/account-suspended"
+        element={
+          <RequireSuspendedAppUser>
+            <AccountSuspendedPage />
+          </RequireSuspendedAppUser>
         }
       />
       <Route

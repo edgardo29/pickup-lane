@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -6,6 +7,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from backend.schemas.notification_schema import NotificationActionRead
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
+
+# The status filters each feed offers.
+AppUpdatesFilter = Literal["all", "new"]
+GameActivityFilter = Literal["all", "unread", "read"]
 
 
 class InboxItemRead(BaseModel):
@@ -16,6 +21,9 @@ class InboxItemRead(BaseModel):
     message: str
     source_label: str
     subject_label: str
+    subject_starts_at: datetime | None = None
+    subject_ends_at: datetime | None = None
+    subject_timezone: str | None = None
     row_subject: str
     summary: str
     occurred_at: datetime

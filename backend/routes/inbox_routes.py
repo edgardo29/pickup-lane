@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import User
 from backend.schemas.inbox_schema import (
+    AppUpdatesFilter,
+    GameActivityFilter,
     InboxCountsRead,
     InboxGlobalSeenUpdate,
     InboxItemRead,
@@ -30,7 +32,7 @@ router = APIRouter(prefix="/inbox", tags=["inbox"])
 )
 def list_app_updates_route(
     cursor: str | None = None,
-    filter: str = Query(default="all"),
+    filter: AppUpdatesFilter = Query(default="all"),
     limit: int = Query(default=30, ge=1, le=50),
     current_user: User = Depends(require_active_user),
     db: Session = Depends(get_db),
@@ -85,7 +87,7 @@ def mark_selected_platform_notice_read_route(
 )
 def list_game_activity_route(
     cursor: str | None = None,
-    filter: str = Query(default="all"),
+    filter: GameActivityFilter = Query(default="all"),
     limit: int = Query(default=30, ge=1, le=50),
     current_user: User = Depends(require_active_user),
     db: Session = Depends(get_db),

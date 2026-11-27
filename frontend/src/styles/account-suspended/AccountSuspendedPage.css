@@ -1,0 +1,31 @@
+.account-suspended-page {
+  min-height: 100svh;
+  color: var(--pl-text-strong);
+  background: var(--app-bg);
+}
+
+.account-suspended-shell {
+  --app-page-shell-width: min(760px, calc(100% - 32px));
+}
+
+.account-suspended-card {
+  margin-top: 32px;
+  padding: clamp(22px, 4vw, 34px);
+  border: 1px solid rgba(248, 250, 252, 0.12);
+  border-radius: 12px;
+  background: #0c141d;
+}
+
+.account-suspended-card h2,
+.account-suspended-card h3 {
+  color: var(--pl-lime-bright);
+}
+
+.account-suspended-card p,
+.account-suspended-card li {
+  line-height: 1.65;
+}
+
+.account-suspended-card ul {
+  padding-left: 20px;
+}

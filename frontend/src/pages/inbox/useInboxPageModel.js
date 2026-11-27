@@ -44,6 +44,12 @@ function normalizeFeed(response) {
   }
 }
 
+function getInboxSectionKey(notification) {
+  return notification.notification_category === GAME_ACTIVITY_CATEGORY
+    ? GAME_ACTIVITY_TAB
+    : APP_UPDATES_TAB
+}
+
 function getFirebaseUserKey(firebaseUser) {
   return firebaseUser?.uid || firebaseUser?.email || ''
 }
@@ -60,6 +66,13 @@ function buildFeedRequestKey({
     activeUserId || '',
     getFirebaseUserKey(firebaseUser),
   ].join(':')
+}
+
+function canApplyInboxBatch(currentFeed, requestKey, requestCursor) {
+  return (
+    currentFeed?.requestKey === requestKey &&
+    currentFeed?.nextCursor === requestCursor
+  )
 }
 
 export function useInboxPageModel() {
@@ -175,6 +188,7 @@ export function useInboxPageModel() {
         [activeFilter]: {
           ...createFeedState('loading'),
           requestKey: activeFeedRequestKey,
+          statusFilter: activeStatusFilter,
         },
       }))
 
@@ -200,6 +214,7 @@ export function useInboxPageModel() {
                 loadMoreError: '',
                 requestKey: activeFeedRequestKey,
                 status: 'success',
+                statusFilter: activeStatusFilter,
               },
             }
           })
@@ -248,17 +263,18 @@ export function useInboxPageModel() {
       activeFilter !== APP_UPDATES_TAB ||
       !seenToken ||
       !firebaseUser ||
-      globalSeenInFlightRef.current === seenToken
+      globalSeenInFlightRef.current === `${activeUserId}:${seenToken}`
     ) {
       return undefined
     }
 
-    let ignore = false
-    globalSeenInFlightRef.current = seenToken
+    const requestUserId = activeUserId
+    const inFlightKey = `${requestUserId}:${seenToken}`
+    globalSeenInFlightRef.current = inFlightKey
 
     saveGlobalAppUpdatesSeen(firebaseUser, seenToken)
       .then((updatedCounts) => {
-        if (ignore) {
+        if (loadedUserIdRef.current !== requestUserId) {
           return
         }
         setCounts(normalizeCounts(updatedCounts))
@@ -283,16 +299,18 @@ export function useInboxPageModel() {
         })
       })
       .catch(() => {
-        if (!ignore && globalSeenInFlightRef.current === seenToken) {
+        if (
+          loadedUserIdRef.current === requestUserId &&
+          globalSeenInFlightRef.current === inFlightKey
+        ) {
           globalSeenInFlightRef.current = ''
         }
       })
 
-    return () => {
-      ignore = true
-    }
+    return undefined
   }, [
     activeFilter,
+    activeUserId,
     feeds,
     firebaseUser,
   ])
@@ -317,8 +335,14 @@ export function useInboxPageModel() {
   }
 
   async function handleOpenNotification(notification) {
+    const itemKey = getInboxItemKey(notification)
+    setActiveNotification(notification)
     const markedNotification = await markInboxItemRead(notification)
-    setActiveNotification(markedNotification)
+    setActiveNotification((currentNotification) => (
+      getInboxItemKey(currentNotification) === itemKey
+        ? markedNotification
+        : currentNotification
+    ))
   }
 
   function handleNotificationAction(action) {
@@ -345,6 +369,30 @@ export function useInboxPageModel() {
         items: currentFeeds[GAME_ACTIVITY_TAB].items.map(replaceItem),
       },
     }))
+  }
+
+  function removeReadItemFromFilteredFeed(notification) {
+    const itemKey = getInboxItemKey(notification)
+    const sectionKey = getInboxSectionKey(notification)
+
+    setFeeds((currentFeeds) => {
+      // Use the filter of the list showing now, which may have loaded while
+      // the save was pending: a read item leaves a New or Unread list only.
+      const statusFilter = currentFeeds[sectionKey]?.statusFilter
+      if (statusFilter !== 'new' && statusFilter !== 'unread') {
+        return currentFeeds
+      }
+
+      return {
+        ...currentFeeds,
+        [sectionKey]: {
+          ...currentFeeds[sectionKey],
+          items: currentFeeds[sectionKey].items.filter(
+            (item) => getInboxItemKey(item) !== itemKey,
+          ),
+        },
+      }
+    })
   }
 
   function updateCountsForRead(notification, direction) {
@@ -381,6 +429,10 @@ export function useInboxPageModel() {
       read_at: new Date().toISOString(),
     }
 
+    const requestUserId = loadedUserIdRef.current
+    // After an account switch the feeds and counts belong to another account.
+    const isSameAccount = () => loadedUserIdRef.current === requestUserId
+
     replaceInboxItem(notification, optimisticNotification)
     updateCountsForRead(notification, -1)
 
@@ -390,7 +442,10 @@ export function useInboxPageModel() {
           firebaseUser,
           notification.source_id,
         )
-        replaceInboxItem(notification, savedNotification)
+        if (isSameAccount()) {
+          replaceInboxItem(notification, savedNotification)
+          removeReadItemFromFilteredFeed(notification)
+        }
         return savedNotification
       }
 
@@ -399,13 +454,19 @@ export function useInboxPageModel() {
           firebaseUser,
           notification.original_notification_id || notification.source_id,
         )
+        if (isSameAccount()) {
+          replaceInboxItem(notification, optimisticNotification)
+          removeReadItemFromFilteredFeed(notification)
+        }
         return optimisticNotification
       }
 
       return optimisticNotification
     } catch {
-      replaceInboxItem(notification, notification)
-      updateCountsForRead(notification, 1)
+      if (isSameAccount()) {
+        replaceInboxItem(notification, notification)
+        updateCountsForRead(notification, 1)
+      }
       return notification
     }
   }
@@ -421,6 +482,9 @@ export function useInboxPageModel() {
       return
     }
 
+    const requestKey = feed.requestKey
+    const requestCursor = feed.nextCursor
+
     setFeeds((currentFeeds) => ({
       ...currentFeeds,
       [sectionKey]: {
@@ -432,7 +496,7 @@ export function useInboxPageModel() {
 
     try {
       const response = await loadInboxFeed(firebaseUser, {
-        cursor: feed.nextCursor,
+        cursor: requestCursor,
         feedKey: sectionKey,
         filter: statusFilters[sectionKey] || 'all',
         limit: INBOX_PAGE_LIMIT,
@@ -441,6 +505,9 @@ export function useInboxPageModel() {
 
       setFeeds((currentFeeds) => {
         const currentFeed = currentFeeds[sectionKey]
+        if (!canApplyInboxBatch(currentFeed, requestKey, requestCursor)) {
+          return currentFeeds
+        }
         const existingKeys = new Set(currentFeed.items.map(getInboxItemKey))
         const nextItems = nextFeed.items.filter(
           (item) => !existingKeys.has(getInboxItemKey(item)),
@@ -460,16 +527,23 @@ export function useInboxPageModel() {
         }
       })
     } catch (requestError) {
-      setFeeds((currentFeeds) => ({
-        ...currentFeeds,
-        [sectionKey]: {
-          ...currentFeeds[sectionKey],
-          isLoadingMore: false,
-          loadMoreError: requestError instanceof Error
-            ? requestError.message
-            : 'More items could not be loaded.',
-        },
-      }))
+      setFeeds((currentFeeds) => {
+        const currentFeed = currentFeeds[sectionKey]
+        if (!canApplyInboxBatch(currentFeed, requestKey, requestCursor)) {
+          return currentFeeds
+        }
+
+        return {
+          ...currentFeeds,
+          [sectionKey]: {
+            ...currentFeed,
+            isLoadingMore: false,
+            loadMoreError: requestError instanceof Error
+              ? requestError.message
+              : 'More items could not be loaded.',
+          },
+        }
+      })
     }
   }
 

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import { getRenderableNotificationAction } from './inboxData.js'
 import {
@@ -7,6 +8,9 @@ import {
 import InboxNotificationIcon from './InboxNotificationIcon.jsx'
 
 function NotificationModal({ notification, onClose, onNotificationAction }) {
+  const closeButtonRef = useRef(null)
+  const dialogRef = useRef(null)
+  const onCloseRef = useRef(onClose)
   const action = getRenderableNotificationAction(notification)
   const actionDisabled = Boolean(action?.disabled)
   const eventAt = notification.occurred_at || notification.event_at || notification.created_at
@@ -25,16 +29,70 @@ function NotificationModal({ notification, onClose, onNotificationAction }) {
   )
   const body = notification.message || notification.body || 'Open this update for more details.'
 
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement
+    closeButtonRef.current?.focus()
+
+    function handleDialogKeyDown(event) {
+      if (event.key === 'Escape') {
+        onCloseRef.current()
+        return
+      }
+
+      if (event.key !== 'Tab') {
+        return
+      }
+
+      const focusable = Array.from(dialogRef.current?.querySelectorAll(
+        'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      ) || [])
+      if (focusable.length === 0) {
+        event.preventDefault()
+        return
+      }
+
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (
+        event.shiftKey &&
+        (document.activeElement === first || !dialogRef.current?.contains(document.activeElement))
+      ) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    window.addEventListener('keydown', handleDialogKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleDialogKeyDown)
+      if (previouslyFocused?.isConnected) {
+        previouslyFocused.focus()
+      } else {
+        const fallback = document.querySelector('.inbox-tab-panel select') ||
+          document.querySelector('[role="tab"][aria-selected="true"]')
+        fallback?.focus()
+      }
+    }
+  }, [])
+
   return (
     <div className="inbox-modal-backdrop" role="presentation" onClick={onClose}>
       <section
+        ref={dialogRef}
         className="inbox-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="inbox-modal-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <button className="inbox-modal__close" type="button" onClick={onClose} aria-label="Close">
+        <button ref={closeButtonRef} className="inbox-modal__close" type="button" onClick={onClose} aria-label="Close">
           <X aria-hidden="true" />
         </button>
 

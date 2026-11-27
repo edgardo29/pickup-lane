@@ -19,6 +19,8 @@ export function createFeedState(status = 'idle') {
     nextCursor: '',
     requestKey: '',
     status,
+    // The status filter the feed's rows were loaded for.
+    statusFilter: '',
   }
 }
 

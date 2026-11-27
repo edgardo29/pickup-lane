@@ -3,11 +3,27 @@ import '../../styles/inbox/InboxPage.css'
 import InboxSection from './InboxSection.jsx'
 import { InboxState } from './InboxState.jsx'
 import NotificationModal from './NotificationModal.jsx'
-import { inboxTabs } from './inboxData.js'
+import { GAME_ACTIVITY_TAB, inboxTabs } from './inboxData.js'
 import { useInboxPageModel } from './useInboxPageModel.js'
 
 function InboxPage() {
   const page = useInboxPageModel()
+  const tabItems = inboxTabs.map((tab) => {
+    const section = page.inboxSections.find((item) => item.key === tab.key)
+    const count = section?.count ?? 0
+    const countMeaning = tab.key === GAME_ACTIVITY_TAB ? 'unread' : 'new'
+
+    return {
+      key: tab.key,
+      label: (
+        <span className="inbox-tab-label">
+          {tab.label}
+          <span className="inbox-tab-label__count" aria-hidden="true">{count}</span>
+          <span className="inbox-tab-label__spoken">{`, ${count} ${countMeaning}`}</span>
+        </span>
+      ),
+    }
+  })
 
   return (
     <AppPageShell className="inbox-page" mainClassName="inbox-shell">
@@ -17,7 +33,7 @@ function InboxPage() {
         tabs={
           <AppTabs
             ariaLabel="Inbox filters"
-            items={inboxTabs}
+            items={tabItems}
             onChange={page.setActiveFilter}
             value={page.activeFilter}
           />

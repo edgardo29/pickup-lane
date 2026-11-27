@@ -95,6 +95,7 @@ _NON_API_MOUNT_TEMPLATES = frozenset({"/static"})
 
 SUPPORTED_BROWSER_API_ROUTE_TAGS = frozenset(
     {
+        "account_suspended",
         "admin",
         "admin_actions",
         "admin_community_games",
