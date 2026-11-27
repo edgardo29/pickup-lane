@@ -10,6 +10,7 @@ import {
   buildCommunityPublishPayload,
   buildHostEditPayload,
 } from './createGamePayloads.js'
+import { getPriceCents } from './createGamePayment.js'
 import { validateCreateGame } from './createGameValidation.js'
 import { stripePromise } from '../../lib/stripe.js'
 
@@ -29,6 +30,7 @@ export function useCreateGamePublish({
   isHostEmailVerified,
   navigate,
   paymentMethod,
+  savedPrice,
   setActiveStep,
   setCreatedGameId,
 }) {
@@ -114,29 +116,40 @@ export function useCreateGamePublish({
     const detailsKey = JSON.stringify(detailsPayload)
     const saved = savedEditPayloadsRef.current
 
-    if (saved.game !== gameKey) {
+    async function saveGame(failureMessage) {
+      if (saved.game === gameKey) return
       try {
         await patchHostEditGame(firebaseUser, gameId, gamePayload)
       } catch (error) {
-        throw new Error(
-          `Your game changes were not saved. ${getErrorMessage(error)}`,
-          { cause: error },
-        )
+        throw new Error(failureMessage(getErrorMessage(error)), { cause: error })
       }
       saved.game = gameKey
     }
 
-    if (saved.details !== detailsKey) {
+    async function saveDetails(failureMessage) {
+      if (saved.details === detailsKey) return
       try {
         await upsertHostCommunityGameDetails(firebaseUser, gameId, detailsPayload)
       } catch (error) {
-        throw new Error(
-          'Your game changes were saved, but the payment details were not. ' +
-            `${getErrorMessage(error)} Save again to retry the payment details.`,
-          { cause: error },
-        )
+        throw new Error(failureMessage(getErrorMessage(error)), { cause: error })
       }
       saved.details = detailsKey
+    }
+
+    // A free game becoming paid saves its payment methods first, so players
+    // never see a paid game without a way to pay the host.
+    if (Number(savedPrice) === 0 && getPriceCents(form) > 0) {
+      await saveDetails((reason) => `Your changes were not saved. ${reason}`)
+      await saveGame((reason) => (
+        'Your payment details were saved, but the game changes were not. ' +
+        `${reason} Save again to retry the game changes.`
+      ))
+    } else {
+      await saveGame((reason) => `Your game changes were not saved. ${reason}`)
+      await saveDetails((reason) => (
+        'Your game changes were saved, but the payment details were not. ' +
+        `${reason} Save again to retry the payment details.`
+      ))
     }
 
     navigate(`/games/${gameId}`)
@@ -148,8 +161,8 @@ export function useCreateGamePublish({
       return
     }
 
-    if (!isEditMode && !isHostEmailVerified) {
-      setPublishError('Verify your email before publishing.')
+    if (!isHostEmailVerified) {
+      setPublishError(isEditMode ? 'Verify your email before saving changes.' : 'Verify your email before publishing.')
       return
     }
 

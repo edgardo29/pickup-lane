@@ -7,7 +7,7 @@ import { FormErrorMessage } from '../../components/FormErrorMessage.jsx'
 import { AuthHalo, AuthHeader, AuthPanel } from '../../features/auth/AuthLayoutParts.jsx'
 import { AuthShell } from '../../features/auth/AuthShell.jsx'
 import {
-  CREATE_SUB_RETURN, getVerificationReturnPath, verificationReturnLink,
+  getVerificationReturnLabel, getVerificationReturnPath, verificationReturnLink,
 } from '../../features/email-verification/emailVerificationReturn.js'
 import { auth } from '../../lib/firebase.js'
 
@@ -16,7 +16,7 @@ function EmailVerificationAction({ code, continueUrl, isAuthLoading, refreshCurr
   const applicationRef = useRef(null)
   const refreshVerification = useEffectEvent(() => refreshCurrentUserVerification())
   const destination = getVerificationReturnPath(continueUrl)
-  const returnLabel = destination === CREATE_SUB_RETURN ? 'Create Sub Post' : 'Create Game'
+  const returnLabel = getVerificationReturnLabel(destination)
 
   useEffect(() => {
     if (!code || isAuthLoading) return undefined
@@ -50,7 +50,9 @@ function EmailVerificationAction({ code, continueUrl, isAuthLoading, refreshCurr
   const titles = { checking: 'Verifying email', success: 'Email verified', invalid: 'Verification link unavailable', unavailable: 'Verification not confirmed' }
   const subtitles = {
     checking: 'One moment while we verify your email.',
-    success: 'Your account email is verified. Continue to your form to finish publishing.',
+    success: returnLabel === 'Edit Game'
+      ? 'Your account email is verified. Continue to your game to finish saving your changes.'
+      : 'Your account email is verified. Continue to your form to finish publishing.',
     invalid: `Request a fresh verification email from ${returnLabel}.`,
     unavailable: `We could not confirm your account verification. Return to ${returnLabel} to check again or request a fresh email.`,
   }

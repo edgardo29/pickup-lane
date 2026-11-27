@@ -66,6 +66,7 @@ export function CreateGameLayout({
               <EmailVerificationBlocker
                 cooldownSeconds={verificationCooldownSeconds}
                 error={verificationError}
+                isEditMode={isEditMode}
                 notice={verificationNotice}
                 status={verificationStatus}
                 onSend={onSendVerification}
@@ -137,7 +138,7 @@ export function CreateGameLayout({
         )}
 
       {showDiscardModal && (
-        <DiscardModal onClose={onCloseDiscard} onDiscard={onDiscard} />
+        <DiscardModal isEditMode={isEditMode} onClose={onCloseDiscard} onDiscard={onDiscard} />
       )}
     </AppPageShell>
   )

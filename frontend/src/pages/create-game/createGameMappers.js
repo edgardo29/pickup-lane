@@ -26,9 +26,12 @@ export function mapGameToForm(game, venue, communityDetails = null) {
     parkingNote: game.parking_notes || '',
     gameNotes: game.game_notes || '',
     hostRules: game.custom_rules_text || '',
-    paymentMethods: normalizePaymentMethods(
-      communityDetails?.payment_methods_snapshot,
-    ),
+    // A free game lists no payment method; it opens as needing no payment,
+    // as Create Game sets a free game.
+    paymentMethods: Number(game.price_per_player_cents) === 0
+      && !communityDetails?.payment_methods_snapshot?.length
+      ? [{ type: 'none', value: '' }]
+      : normalizePaymentMethods(communityDetails?.payment_methods_snapshot),
   }
 }
 

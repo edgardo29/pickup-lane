@@ -18,7 +18,7 @@ The page processes the existing Firebase verification link and refreshes the cur
 
 ### 3.2. Return to Hosting
 
-Verification preserves the intended return destination, including [Create Game](F14-create-game-spec.md) and [Create Sub Post](F21-create-sub-post-spec.md), and entered form information where applicable. An expired or invalid link offers a way to request another verification email through the existing send/resend flow at the originating entry point.
+Verification preserves the intended return destination, including [Create Game](F14-create-game-spec.md), [Create Sub Post](F21-create-sub-post-spec.md), and the [Edit Game](F18-edit-game-spec.md#41-who-and-what-can-be-edited) page of the game being edited, and entered form information where applicable. An expired or invalid link offers a way to request another verification email through the existing send/resend flow at the originating entry point.
 
 ## 4. Important Behavior & Decisions
 

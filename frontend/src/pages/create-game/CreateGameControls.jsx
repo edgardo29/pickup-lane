@@ -83,10 +83,11 @@ export function StepperInput({ value, min, max, onChange }) {
   )
 }
 
-export function CurrencyInput({ value, onChange }) {
+export function CurrencyInput({ label, value, onChange }) {
   return (
     <div className="create-game-money-input">
       <input
+        aria-label={label}
         inputMode="numeric"
         pattern="[0-9]*"
         value={value}

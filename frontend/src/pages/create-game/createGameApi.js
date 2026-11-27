@@ -63,7 +63,9 @@ export async function loadEditableGame(firebaseUser, gameId, appUserId) {
     throw new Error('Sign in to edit this game.')
   }
 
-  const game = await apiRequest(`/games/${gameId}`)
+  const authHeaders = { Authorization: `Bearer ${await firebaseUser.getIdToken()}` }
+  // Sent signed in, so the host can open a game staff have hidden from the public.
+  const game = await apiRequest(`/games/${gameId}`, { headers: authHeaders })
   // The server also refuses these saves; the page should not offer the form.
   if (game.game_type !== 'community' || game.host_user_id !== appUserId) {
     throw new Error('Only the host of a community game can edit it.')
@@ -73,11 +75,7 @@ export async function loadEditableGame(firebaseUser, gameId, appUserId) {
   const venue = await apiRequest(`/venues/${game.venue_id}`)
   const communityDetails = await apiRequest(
     `/community-game-details/games/${gameId}/host-edit`,
-    {
-      headers: {
-        Authorization: `Bearer ${await firebaseUser.getIdToken()}`,
-      },
-    },
+    { headers: authHeaders },
   )
     .catch((error) => {
       if (error?.status === 404) {

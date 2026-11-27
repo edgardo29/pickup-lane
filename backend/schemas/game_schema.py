@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -10,6 +11,10 @@ MAX_PRICE_PER_PLAYER_CENTS = 99_900
 MAX_PLAYER_GUESTS_PER_BOOKING = 2
 MAX_CANCEL_REASON_LENGTH = 500
 MAX_AUTO_CHARGE_CONSENT_VERSION_LENGTH = 50
+# The formats a community game can use (Create Game, Section 4.1).
+CommunityGameFormat = Literal[
+    "3v3", "4v4", "5v5", "6v6", "7v7", "8v8", "9v9", "10v10", "11v11"
+]
 
 
 # GameCreate defines the fields an admin caller is allowed to send when using
@@ -268,7 +273,7 @@ class GameHostEdit(BaseModel):
     neighborhood: str | None = None
     starts_at: datetime | None = None
     ends_at: datetime | None = None
-    format_label: str | None = None
+    format_label: CommunityGameFormat | None = None
     game_player_group: str | None = None
     skill_level: str | None = None
     environment_type: str | None = None
