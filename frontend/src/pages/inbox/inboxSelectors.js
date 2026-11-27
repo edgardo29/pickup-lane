@@ -6,11 +6,36 @@ import {
   isInboxItemNew,
 } from './inboxData.js'
 
+const EMPTY_STATES = {
+  [APP_UPDATES_TAB]: {
+    all: {
+      title: 'No app updates',
+      message: 'Platform notices and account updates will show up here.',
+    },
+    new: {
+      title: 'No new app updates',
+      message: 'New platform notices and account updates will show up here.',
+    },
+  },
+  [GAME_ACTIVITY_TAB]: {
+    all: {
+      title: 'No game activity',
+      message: 'Game, chat, roster, and Need a Sub updates will show up here.',
+    },
+    unread: {
+      title: 'No unread game activity',
+      message: 'Unread game, chat, roster, and Need a Sub updates will show up here.',
+    },
+    read: {
+      title: 'No read game activity',
+      message: 'Game activity you have opened will show up here.',
+    },
+  },
+}
+
 function createInboxSection({
   count,
   description,
-  emptyMessage,
-  emptyTitle,
   hasMore,
   isLoadingMore,
   key,
@@ -21,12 +46,13 @@ function createInboxSection({
 }) {
   const statusFilter = statusFilters?.[key] || INBOX_STATUS_FILTER_ALL
   const fallbackCount = items.filter(isInboxItemNew).length
+  const emptyState = EMPTY_STATES[key][statusFilter] || EMPTY_STATES[key].all
 
   return {
     count: typeof count === 'number' ? count : fallbackCount,
     description,
-    emptyMessage,
-    emptyTitle,
+    emptyMessage: emptyState.message,
+    emptyTitle: emptyState.title,
     hasMore: Boolean(hasMore),
     isLoadingMore: Boolean(isLoadingMore),
     items,
@@ -35,7 +61,6 @@ function createInboxSection({
     statusFilterOptions: getStatusFilterOptions(key),
     statusFilterValue: statusFilter,
     title,
-    totalItems: items.length,
   }
 }
 
@@ -47,8 +72,6 @@ export function getInboxSections(feeds, statusFilters = {}, counts = {}) {
     createInboxSection({
       count: counts.app_updates_new_count,
       description: 'Platform notices, account alerts, and admin updates.',
-      emptyMessage: 'Platform notices and account updates will show up here.',
-      emptyTitle: 'No app updates',
       hasMore: appUpdates.hasMore,
       isLoadingMore: appUpdates.isLoadingMore,
       key: APP_UPDATES_TAB,
@@ -60,8 +83,6 @@ export function getInboxSections(feeds, statusFilters = {}, counts = {}) {
     createInboxSection({
       count: counts.game_activity_unread_count,
       description: 'Game, roster, chat, and Need a Sub updates.',
-      emptyMessage: 'Game, chat, roster, and Need a Sub updates will show up here.',
-      emptyTitle: 'No game activity',
       hasMore: gameActivity.hasMore,
       isLoadingMore: gameActivity.isLoadingMore,
       key: GAME_ACTIVITY_TAB,

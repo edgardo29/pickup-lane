@@ -22,6 +22,10 @@ from backend.schemas.admin_official_game_schema import (
 )
 from backend.services.admin_action_service import record_admin_action
 from backend.services.game_credit_service import release_reserved_game_credits
+from backend.services.game_notification_service import (
+    changed_field_labels,
+    notify_connected_users_game_updated,
+)
 from backend.services.game_rules import (
     OFFICIAL_FORCED_FIELDS,
     OPEN_GAME_STATUSES,
@@ -643,6 +647,18 @@ def update_official_game(
     sync_game_capacity_status(db, game)
     game.updated_at = now
     db.add(game)
+
+    # Edit Official Game, Section 4.7: every saved change notifies affected
+    # players; no fixed list of qualifying fields applies.
+    notice_field_labels = changed_field_labels(actual_changed_fields)
+    if notice_field_labels:
+        notify_connected_users_game_updated(
+            db,
+            db_game=game,
+            actor_user_id=admin_user.id,
+            event_at=now,
+            changed_field_labels=notice_field_labels,
+        )
 
     record_admin_action(
         db,

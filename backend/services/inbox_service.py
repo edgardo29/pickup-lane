@@ -21,7 +21,13 @@ from backend.models import (
     PlatformNoticeSelectedRead,
     User,
 )
-from backend.schemas.inbox_schema import InboxCountsRead, InboxItemRead, InboxListRead
+from backend.schemas.inbox_schema import (
+    AppUpdatesFilter,
+    GameActivityFilter,
+    InboxCountsRead,
+    InboxItemRead,
+    InboxListRead,
+)
 from backend.services.account_eligibility_service import user_is_account_eligible
 from backend.services.notification_display_service import serialize_notification
 from backend.services.platform_notice_service import (
@@ -75,7 +81,12 @@ def decode_signed_payload(token: str, *, expected_kind: str) -> dict[str, Any]:
         )
 
     try:
-        envelope = json.loads(base64.urlsafe_b64decode(normalized.encode("ascii")))
+        decoded = base64.b64decode(
+            normalized.encode("ascii"),
+            altchars=b"-_",
+            validate=True,
+        )
+        envelope = json.loads(decoded)
         payload = envelope["payload"]
         signature = envelope["signature"]
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
@@ -105,31 +116,43 @@ def encode_cursor(
     *,
     feed_as_of: datetime,
     feed_name: str,
+    filter_mode: str,
     item: InboxItemRead,
     source_rank: int,
+    user_id: uuid.UUID,
 ) -> str:
     return encode_payload(
         {
             "kind": "inbox_cursor",
             "feed_name": feed_name,
+            "filter_mode": filter_mode,
             "occurred_at": item.occurred_at.isoformat(),
             "source_id": str(item.source_id),
             "source_rank": source_rank,
             "source_type": item.source_type,
             "feed_as_of": feed_as_of.isoformat(),
+            "user_id": str(user_id),
         }
     )
 
 
 def decode_cursor(
-    cursor: str | None, *, expected_feed_name: str
+    cursor: str | None,
+    *,
+    expected_feed_name: str,
+    expected_filter_mode: str,
+    expected_user_id: uuid.UUID,
 ) -> dict[str, Any] | None:
     normalized = str(cursor or "").strip()
     if not normalized:
         return None
 
     payload = decode_signed_payload(normalized, expected_kind="inbox_cursor")
-    if payload.get("feed_name") != expected_feed_name:
+    if (
+        payload.get("feed_name") != expected_feed_name
+        or payload.get("filter_mode") != expected_filter_mode
+        or payload.get("user_id") != str(expected_user_id)
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="cursor is invalid.",
@@ -240,6 +263,9 @@ def platform_notice_item(
         message=notice.message,
         source_label="Pickup Lane",
         subject_label="Pickup Lane",
+        subject_starts_at=None,
+        subject_ends_at=None,
+        subject_timezone=None,
         row_subject="",
         summary=notice.message,
         occurred_at=notice.published_at,
@@ -275,6 +301,9 @@ def notification_item(
         message=serialized["body"],
         source_label=serialized["source_label"],
         subject_label=serialized["subject_label"],
+        subject_starts_at=serialized["subject_starts_at"],
+        subject_ends_at=serialized["subject_ends_at"],
+        subject_timezone=serialized["subject_timezone"],
         row_subject=serialized["row_subject"],
         summary=serialized["summary"],
         occurred_at=serialized["event_at"],
@@ -476,37 +505,21 @@ def list_notification_items(
     ]
 
 
-def validate_app_updates_filter(filter_mode: str) -> str:
-    normalized = str(filter_mode or "all").strip().lower()
-    if normalized not in {"all", "new"}:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="filter is not supported.",
-        )
-    return normalized
-
-
-def validate_game_activity_filter(filter_mode: str) -> str:
-    normalized = str(filter_mode or "all").strip().lower()
-    if normalized not in {"all", "unread", "read"}:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="filter is not supported.",
-        )
-    return normalized
-
-
 def list_app_updates(
     db: Session,
     *,
     cursor: str | None = None,
-    filter_mode: str = "all",
+    filter_mode: AppUpdatesFilter = "all",
     limit: int = 30,
     user: User,
 ) -> InboxListRead:
-    normalized_filter = validate_app_updates_filter(filter_mode)
     page_limit = effective_limit(limit)
-    cursor_data = decode_cursor(cursor, expected_feed_name="app_updates")
+    cursor_data = decode_cursor(
+        cursor,
+        expected_feed_name="app_updates",
+        expected_filter_mode=filter_mode,
+        expected_user_id=user.id,
+    )
     feed_as_of = cursor_data["feed_as_of"] if cursor_data else now_utc()
 
     items = []
@@ -515,7 +528,7 @@ def list_app_updates(
             db,
             cursor_data=cursor_data,
             feed_as_of=feed_as_of,
-            filter_mode=normalized_filter,
+            filter_mode=filter_mode,
             limit=page_limit,
             user=user,
         )
@@ -525,7 +538,7 @@ def list_app_updates(
             db,
             cursor_data=cursor_data,
             feed_as_of=feed_as_of,
-            filter_mode=normalized_filter,
+            filter_mode=filter_mode,
             limit=page_limit,
             user=user,
         )
@@ -536,7 +549,7 @@ def list_app_updates(
             category="app",
             cursor_data=cursor_data,
             feed_as_of=feed_as_of,
-            filter_mode=normalized_filter,
+            filter_mode=filter_mode,
             limit=page_limit,
             user=user,
         )
@@ -562,8 +575,10 @@ def list_app_updates(
         next_cursor=encode_cursor(
             feed_as_of=feed_as_of,
             feed_name="app_updates",
+            filter_mode=filter_mode,
             item=page_items[-1],
             source_rank=APP_UPDATE_SOURCE_RANKS[page_items[-1].source_type],
+            user_id=user.id,
         )
         if has_more and page_items
         else None,
@@ -581,20 +596,24 @@ def list_game_activity(
     db: Session,
     *,
     cursor: str | None = None,
-    filter_mode: str = "all",
+    filter_mode: GameActivityFilter = "all",
     limit: int = 30,
     user: User,
 ) -> InboxListRead:
-    normalized_filter = validate_game_activity_filter(filter_mode)
     page_limit = effective_limit(limit)
-    cursor_data = decode_cursor(cursor, expected_feed_name="game_activity")
+    cursor_data = decode_cursor(
+        cursor,
+        expected_feed_name="game_activity",
+        expected_filter_mode=filter_mode,
+        expected_user_id=user.id,
+    )
     feed_as_of = cursor_data["feed_as_of"] if cursor_data else now_utc()
     items = list_notification_items(
         db,
         category="game_activity",
         cursor_data=cursor_data,
         feed_as_of=feed_as_of,
-        filter_mode=normalized_filter,
+        filter_mode=filter_mode,
         limit=page_limit,
         user=user,
     )
@@ -611,8 +630,10 @@ def list_game_activity(
         next_cursor=encode_cursor(
             feed_as_of=feed_as_of,
             feed_name="game_activity",
+            filter_mode=filter_mode,
             item=page_items[-1],
             source_rank=GAME_ACTIVITY_SOURCE_RANKS[page_items[-1].source_type],
+            user_id=user.id,
         )
         if has_more and page_items
         else None,

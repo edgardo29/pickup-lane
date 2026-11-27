@@ -290,6 +290,62 @@ def game_updated_structural_snapshot_changed(
     return any(before[field_name] != after[field_name] for field_name in before)
 
 
+GAME_UPDATED_FIELD_LABELS = {
+    "title": "title",
+    "starts_at": "start time",
+    "ends_at": "end time",
+    "timezone": "time zone",
+    "venue_id": "venue",
+    "venue_name_snapshot": "venue",
+    "address_snapshot": "address",
+    "city_snapshot": "location",
+    "state_snapshot": "location",
+    "neighborhood_snapshot": "neighborhood",
+    "environment_type": "indoor or outdoor setting",
+    "format_label": "format",
+    "game_player_group": "player group",
+    "skill_level": "skill level",
+    "total_spots": "number of spots",
+    "price_per_player_cents": "price",
+    "allow_guests": "guest policy",
+    "max_guests_per_booking": "guest policy",
+    "waitlist_enabled": "waitlist",
+    "is_chat_enabled": "game chat",
+    "game_notes": "game notes",
+    "parking_notes": "parking notes",
+}
+
+
+def changed_field_labels(changed_field_names: set[str]) -> list[str]:
+    """Readable labels for the changed fields, in a fixed order, without repeats."""
+    return list(
+        dict.fromkeys(
+            label
+            for field_name, label in GAME_UPDATED_FIELD_LABELS.items()
+            if field_name in changed_field_names
+        )
+    )
+
+
+def game_updated_changed_field_labels(
+    before: dict[str, object],
+    db_game: Game,
+) -> list[str]:
+    after = capture_game_updated_structural_snapshot(db_game)
+    return changed_field_labels(
+        {field_name for field_name in before if before[field_name] != after[field_name]}
+    )
+
+
+def format_changed_field_labels(changed_field_labels: list[str] | None) -> str:
+    labels = list(dict.fromkeys(changed_field_labels or ["game details"]))
+    if len(labels) == 1:
+        return labels[0]
+    if len(labels) == 2:
+        return f"{labels[0]} and {labels[1]}"
+    return f"{', '.join(labels[:-1])}, and {labels[-1]}"
+
+
 def list_game_updated_recipient_user_ids(
     db: Session,
     db_game: Game,
@@ -322,6 +378,7 @@ def notify_connected_users_game_updated(
     db_game: Game,
     actor_user_id: uuid.UUID | None,
     event_at: datetime,
+    changed_field_labels: list[str] | None = None,
 ) -> None:
     if (
         db_game.publish_status != "published"
@@ -339,12 +396,35 @@ def notify_connected_users_game_updated(
         return
 
     for recipient_user_id in recipient_user_ids:
+        confirmed_official_booking = (
+            db_game.game_type == "official"
+            and db.scalar(
+                select(Booking.id)
+                .where(
+                    Booking.game_id == db_game.id,
+                    Booking.buyer_user_id == recipient_user_id,
+                    Booking.booking_status.in_(("confirmed", "partially_cancelled")),
+                )
+                .limit(1)
+            )
+            is not None
+        )
+        changed_copy = format_changed_field_labels(changed_field_labels)
         aggregation_key = game_updated_aggregation_key(db_game.id, recipient_user_id)
         notification_fields = build_game_notification_fields(
             db_game,
             "game_updated",
             event_at=event_at,
             aggregation_key=aggregation_key,
+            summary=f"The {changed_copy} changed.",
+            body=(
+                f"The {changed_copy} changed after you booked. Review the latest "
+                "details. You may keep your booking or request removal and choose "
+                "a refund to the original payment method or Pickup Lane game credit. "
+                "This notice does not change your booking or issue money."
+                if confirmed_official_booking
+                else f"The {changed_copy} changed. Review the latest game details."
+            ),
         )
         notification_fields.update(
             {

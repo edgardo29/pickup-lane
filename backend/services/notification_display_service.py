@@ -5,8 +5,9 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
-from backend.models import Game, Notification, SubPost, SubPostRequest
+from backend.models import Game, Notification, SubPost, SubPostRequest, User
 from backend.services.game_rules import GAME_STATUSES_WITH_DISABLED_INBOX_ACTIONS
+from backend.services.game_service import user_can_view_hidden_game
 from backend.services.need_a_sub_rules import (
     ACTIVE_VISIBLE_POST_STATUSES,
     CHAT_ALLOWED_POST_STATUSES,
@@ -168,6 +169,19 @@ def build_notification_action(
         ):
             return None
 
+        if game.public_visibility_status != "visible":
+            recipient = db.get(User, notification.user_id)
+            if recipient is None or not user_can_view_hidden_game(
+                db,
+                game,
+                recipient,
+                now=datetime.now(UTC),
+            ):
+                return build_disabled_action_payload(
+                    action_key,
+                    "You no longer have access to this game.",
+                )
+
         return build_action_payload(
             action_key, f"/games/{notification.related_game_id}"
         )
@@ -205,15 +219,10 @@ def build_notification_action(
         )
 
     if action_key == "view_policy":
-        return {
-            **build_action_payload(
-                action_key, policy_path_for_notification(notification)
-            ),
-            "state": {
-                "from": "/inbox",
-                "fromLabel": "Back to Inbox",
-            },
-        }
+        # Inbox, Section 4.1: destinations come from display rules, never from
+        # message text. No rule names a policy notice's page yet, so it has no
+        # action.
+        return None
 
     if action_key == "payment_methods":
         return build_action_payload(action_key, "/profile/payment-methods")
@@ -245,20 +254,6 @@ def build_disabled_action_payload(
         "disabled": True,
         "disabled_reason": disabled_reason,
     }
-
-
-def policy_path_for_notification(notification: Notification) -> str:
-    notification_text = (
-        f"{notification.title} {notification.summary} {notification.body}"
-    ).lower()
-
-    if "privacy" in notification_text:
-        return "/privacy"
-
-    if "refund" in notification_text or "cancel" in notification_text:
-        return "/policies/cancellation-refunds"
-
-    return "/terms"
 
 
 def serialize_notification(

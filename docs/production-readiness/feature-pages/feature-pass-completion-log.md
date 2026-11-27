@@ -140,7 +140,7 @@ order, not required completion prerequisites.
     <tr>
       <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;">F25</td>
       <td style="border: 1px solid #777; padding: 6px 10px;">Inbox</td>
-      <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;"></td>
+      <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;">2026-11-26</td>
     </tr>
     <tr>
       <td style="border: 1px solid #777; padding: 6px 10px; text-align: center;">F26</td>

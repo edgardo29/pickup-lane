@@ -48,6 +48,36 @@ export function RequireAppUser({ children }) {
   return children
 }
 
+export function RequireActiveAppUser({ children }) {
+  const { appUser, isLoading } = useAuth()
+  const location = useLocation()
+
+  if (isLoading) return null
+  if (!appUser) {
+    const returnPath = `${location.pathname}${location.search}`
+    return <Navigate to="/sign-in" replace state={{ backTo: getSafeAuthBackPath(returnPath), from: returnPath }} />
+  }
+  if (appUser.account_status === 'suspended') {
+    return <Navigate to="/account-suspended" replace />
+  }
+  return children
+}
+
+export function RequireSuspendedAppUser({ children }) {
+  const { appUser, isLoading } = useAuth()
+  const location = useLocation()
+
+  if (isLoading) return null
+  if (!appUser) {
+    const returnPath = `${location.pathname}${location.search}`
+    return <Navigate to="/sign-in" replace state={{ backTo: getSafeAuthBackPath(returnPath), from: returnPath }} />
+  }
+  if (appUser.account_status !== 'suspended') {
+    return <Navigate to="/inbox" replace />
+  }
+  return children
+}
+
 export function RequireAdmin({ children }) {
   const { appUser, isLoading } = useAuth()
   const {

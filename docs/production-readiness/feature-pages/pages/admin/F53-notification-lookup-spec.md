@@ -58,8 +58,8 @@ The detail compares the stored notification with current app state. A
 destination can be available, unavailable, broken, or not applicable.
 
 - **Game links** stop being available when the game is deleted, unpublished,
-  cancelled, expired, or removed. A game that has started or completed keeps its
-  link.
+  cancelled, expired, or removed, or when the game is hidden and the recipient
+  can no longer open it. A game that has started or completed keeps its link.
 - **Need a Sub links** stop being available when the post is no longer active or
   its start time has passed.
 - **Need a Sub chat links** are also disabled, with a reason, when the post was
@@ -106,6 +106,7 @@ These scenarios are for future verification; none are marked complete.
 | 16 | ☐ | Open a notification ID that does not exist. | A not-found error appears. |
 | 17 | ☐ | Fail the history or detail request. | An error appears without stale rows or detail from another request. |
 | 18 | ☐ | Inspect the page for edit controls. | No resend, retry, delete, or read-state controls exist. |
+| 19 | ☐ | Open a notification for a hidden game the recipient can no longer open. | The destination is unavailable, with its reason and no Open destination link. |
 
 ## 6. Open Items to Resolve
 

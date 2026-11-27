@@ -39,7 +39,8 @@ NOTIFICATION_TYPE_CONFIG = {
         title="Policy update",
         summary="A Pickup Lane policy was updated.",
         body="A Pickup Lane policy was updated.",
-        action_key="view_policy",
+        # No display rule names which policy page a notice opens yet.
+        action_key=None,
         icon="Megaphone",
         preference_class="conditional",
         implementation_status="planned_if_tooling",

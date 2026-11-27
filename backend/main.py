@@ -62,6 +62,7 @@ from backend.observability.request_body_limits import (
     RequestBodyLimitRoute,
 )
 from backend.routes import (
+    account_suspension_router,
     admin_actions_router,
     admin_community_games_router,
     admin_game_credits_router,
@@ -496,6 +497,7 @@ def _include_routers(app: FastAPI) -> None:
     # Include feature-specific routers here so the main app stays small as the API
     # surface grows.
     app.include_router(users_router)
+    app.include_router(account_suspension_router)
     app.include_router(auth_router)
     app.include_router(user_settings_router)
     app.include_router(user_stats_router)

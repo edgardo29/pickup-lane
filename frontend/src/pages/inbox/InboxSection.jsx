@@ -13,9 +13,6 @@ function InboxSection({
   section,
   showHeader = true,
 }) {
-  const isFilteredEmpty = section.totalItems > 0 && items.length === 0
-  const countLabel = String(section.count ?? 0)
-
   return (
     <section className="inbox-section">
       {showHeader && (
@@ -24,7 +21,6 @@ function InboxSection({
           <div>
             <h2>{section.title}</h2>
           </div>
-          <span>{countLabel}</span>
         </div>
       )}
 
@@ -48,11 +44,7 @@ function InboxSection({
       )}
 
       {items.length === 0 ? (
-        <InboxState
-          compact
-          title={isFilteredEmpty ? 'No matching notifications' : emptyTitle}
-          message={isFilteredEmpty ? 'Try another source filter.' : emptyMessage}
-        />
+        <InboxState compact title={emptyTitle} message={emptyMessage} />
       ) : (
         <>
           <div className="inbox-list">

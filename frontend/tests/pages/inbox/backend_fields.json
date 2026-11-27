@@ -1,0 +1,732 @@
+{
+  "$defs": {
+    "InboxCountsRead": {
+      "properties": {
+        "app_updates_new_count": {
+          "default": 0,
+          "title": "App Updates New Count",
+          "type": "integer"
+        },
+        "game_activity_unread_count": {
+          "default": 0,
+          "title": "Game Activity Unread Count",
+          "type": "integer"
+        }
+      },
+      "title": "InboxCountsRead",
+      "type": "object"
+    },
+    "InboxItemRead": {
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NotificationActionRead"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "icon": {
+          "default": "Bell",
+          "title": "Icon",
+          "type": "string"
+        },
+        "is_new": {
+          "title": "Is New",
+          "type": "boolean"
+        },
+        "item_kind": {
+          "title": "Item Kind",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "notification_category": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Notification Category"
+        },
+        "notification_domain": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Notification Domain"
+        },
+        "notification_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Notification Type"
+        },
+        "occurred_at": {
+          "format": "date-time",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "original_notification_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Original Notification Id"
+        },
+        "read_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Read At"
+        },
+        "read_behavior": {
+          "title": "Read Behavior",
+          "type": "string"
+        },
+        "row_subject": {
+          "title": "Row Subject",
+          "type": "string"
+        },
+        "severity": {
+          "default": "default",
+          "title": "Severity",
+          "type": "string"
+        },
+        "source_id": {
+          "format": "uuid",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_label": {
+          "title": "Source Label",
+          "type": "string"
+        },
+        "source_type": {
+          "title": "Source Type",
+          "type": "string"
+        },
+        "subject_ends_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Subject Ends At"
+        },
+        "subject_label": {
+          "title": "Subject Label",
+          "type": "string"
+        },
+        "subject_starts_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Subject Starts At"
+        },
+        "subject_timezone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Subject Timezone"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_type",
+        "source_id",
+        "item_kind",
+        "title",
+        "message",
+        "source_label",
+        "subject_label",
+        "row_subject",
+        "summary",
+        "occurred_at",
+        "is_new",
+        "read_behavior"
+      ],
+      "title": "InboxItemRead",
+      "type": "object"
+    },
+    "InboxListRead": {
+      "properties": {
+        "global_seen_token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Global Seen Token"
+        },
+        "has_more": {
+          "default": false,
+          "title": "Has More",
+          "type": "boolean"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/InboxItemRead"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "limit": {
+          "default": 50,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Next Cursor"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "InboxListRead",
+      "type": "object"
+    },
+    "NotificationActionRead": {
+      "properties": {
+        "disabled": {
+          "default": false,
+          "title": "Disabled",
+          "type": "boolean"
+        },
+        "disabled_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Disabled Reason"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Path"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "State"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "path"
+      ],
+      "title": "NotificationActionRead",
+      "type": "object"
+    },
+    "NotificationRead": {
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NotificationActionRead"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "action_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Action Key"
+        },
+        "actor_user_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Actor User Id"
+        },
+        "aggregate_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Aggregate Count"
+        },
+        "aggregation_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Aggregation Key"
+        },
+        "body": {
+          "title": "Body",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "event_at": {
+          "format": "date-time",
+          "title": "Event At",
+          "type": "string"
+        },
+        "icon": {
+          "title": "Icon",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "is_read": {
+          "title": "Is Read",
+          "type": "boolean"
+        },
+        "notification_category": {
+          "title": "Notification Category",
+          "type": "string"
+        },
+        "notification_domain": {
+          "title": "Notification Domain",
+          "type": "string"
+        },
+        "notification_type": {
+          "title": "Notification Type",
+          "type": "string"
+        },
+        "read_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Read At"
+        },
+        "related_booking_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Related Booking Id"
+        },
+        "related_chat_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Related Chat Id"
+        },
+        "related_game_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Related Game Id"
+        },
+        "related_message_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Related Message Id"
+        },
+        "related_participant_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Related Participant Id"
+        },
+        "related_payment_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Related Payment Id"
+        },
+        "related_refund_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Related Refund Id"
+        },
+        "related_sub_post_chat_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Related Sub Post Chat Id"
+        },
+        "related_sub_post_chat_message_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Related Sub Post Chat Message Id"
+        },
+        "related_sub_post_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Related Sub Post Id"
+        },
+        "related_sub_post_position_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Related Sub Post Position Id"
+        },
+        "related_sub_post_request_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Related Sub Post Request Id"
+        },
+        "row_subject": {
+          "title": "Row Subject",
+          "type": "string"
+        },
+        "severity": {
+          "title": "Severity",
+          "type": "string"
+        },
+        "source_label": {
+          "title": "Source Label",
+          "type": "string"
+        },
+        "source_type": {
+          "title": "Source Type",
+          "type": "string"
+        },
+        "subject_ends_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Subject Ends At"
+        },
+        "subject_label": {
+          "title": "Subject Label",
+          "type": "string"
+        },
+        "subject_starts_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Subject Starts At"
+        },
+        "subject_timezone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Subject Timezone"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "user_id": {
+          "format": "uuid",
+          "title": "User Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "user_id",
+        "notification_type",
+        "notification_category",
+        "notification_domain",
+        "source_type",
+        "source_label",
+        "title",
+        "subject_label",
+        "subject_starts_at",
+        "subject_ends_at",
+        "subject_timezone",
+        "row_subject",
+        "summary",
+        "body",
+        "action_key",
+        "action",
+        "icon",
+        "severity",
+        "event_at",
+        "aggregation_key",
+        "aggregate_count",
+        "actor_user_id",
+        "related_game_id",
+        "related_chat_id",
+        "related_booking_id",
+        "related_payment_id",
+        "related_refund_id",
+        "related_participant_id",
+        "related_message_id",
+        "related_sub_post_id",
+        "related_sub_post_chat_id",
+        "related_sub_post_chat_message_id",
+        "related_sub_post_request_id",
+        "related_sub_post_position_id",
+        "is_read",
+        "read_at",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "NotificationRead",
+      "type": "object"
+    },
+    "SuspendedAccountRead": {
+      "properties": {
+        "account_status": {
+          "title": "Account Status",
+          "type": "string"
+        },
+        "notice_message": {
+          "title": "Notice Message",
+          "type": "string"
+        },
+        "notice_occurred_at": {
+          "format": "date-time",
+          "title": "Notice Occurred At",
+          "type": "string"
+        },
+        "notice_title": {
+          "title": "Notice Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "account_status",
+        "notice_title",
+        "notice_message",
+        "notice_occurred_at"
+      ],
+      "title": "SuspendedAccountRead",
+      "type": "object"
+    }
+  },
+  "endpoints": {
+    "GET /account-suspended": {
+      "$ref": "#/$defs/SuspendedAccountRead"
+    },
+    "GET /inbox/app-updates": {
+      "$ref": "#/$defs/InboxListRead"
+    },
+    "GET /inbox/counts": {
+      "$ref": "#/$defs/InboxCountsRead"
+    },
+    "GET /inbox/game-activity": {
+      "$ref": "#/$defs/InboxListRead"
+    },
+    "PATCH /notifications/{notification_id}/read": {
+      "$ref": "#/$defs/NotificationRead"
+    },
+    "PUT /inbox/app-updates/global-seen": {
+      "$ref": "#/$defs/InboxCountsRead"
+    },
+    "PUT /inbox/app-updates/platform-notices/{notice_id}/read": {
+      "$ref": "#/$defs/InboxItemRead"
+    }
+  }
+}

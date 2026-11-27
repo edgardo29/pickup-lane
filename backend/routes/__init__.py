@@ -1,5 +1,6 @@
 # Re-export routers here so the main FastAPI app can include feature routes
 # from one place as the API grows.
+from backend.routes.account_suspension_routes import router as account_suspension_router
 from backend.routes.admin_action_routes import router as admin_actions_router
 from backend.routes.admin_community_routes import (
     router as admin_community_games_router,
@@ -84,6 +85,7 @@ from backend.routes.venue_routes import router as venues_router
 from backend.routes.waitlist_entry_routes import router as waitlist_entries_router
 
 __all__ = [
+    "account_suspension_router",
     "admin_actions_router",
     "admin_community_games_router",
     "admin_game_credits_router",

@@ -30,6 +30,15 @@ PAGE_ENDPOINTS = {
         "GET /games/browse",
         "GET /need-a-sub/posts/cards",
     ],
+    "inbox": [
+        "GET /inbox/app-updates",
+        "PUT /inbox/app-updates/global-seen",
+        "PUT /inbox/app-updates/platform-notices/{notice_id}/read",
+        "GET /inbox/game-activity",
+        "GET /inbox/counts",
+        "PATCH /notifications/{notification_id}/read",
+        "GET /account-suspended",
+    ],
     "browse_games": ["GET /games/browse"],
     "game_details": [
         "GET /games/{game_id}",
