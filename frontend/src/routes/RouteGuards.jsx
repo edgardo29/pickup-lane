@@ -1,4 +1,5 @@
-import { Navigate, useLocation } from 'react-router-dom'
+import { useEffect, useEffectEvent } from 'react'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { getPostAuthNavigation, getSafeAuthBackPath } from '../features/auth/authHelpers.js'
 import { useAuth } from '../hooks/useAuth.js'
 import {
@@ -156,4 +157,12 @@ export function RedirectSignedIn({ children }) {
   }
 
   return children
+}
+
+// The draft lives through both signup pages and is discarded on leaving them.
+export function SignupFlow() {
+  const { clearPendingSignup } = useAuth()
+  const clearDraft = useEffectEvent(clearPendingSignup)
+  useEffect(() => () => clearDraft(), [])
+  return <Outlet />
 }

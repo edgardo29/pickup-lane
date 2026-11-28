@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react'
 import {
   ClipboardCheck,
   FileText,
@@ -24,10 +25,36 @@ export function LegalPolicyModal({ onClose, policyId }) {
   const Icon = policyIcons[policy.id] || FileText
   const titleId = `legal-policy-modal-title-${policy.id}`
 
+  const dialogRef = useRef(null)
+  const closeRef = useRef(null)
   useDismissibleModal(onClose)
+  useLayoutEffect(() => {
+    const opener = document.activeElement
+    const dialog = dialogRef.current
+    closeRef.current.focus()
+    function keepFocus(event) {
+      if (!dialog.contains(event.target)) closeRef.current.focus()
+    }
+    function trapTab(event) {
+      if (event.key !== 'Tab') return
+      const controls = [...dialog.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]')]
+      const first = controls[0]
+      const last = controls.at(-1)
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+    }
+    document.addEventListener('focusin', keepFocus)
+    dialog.addEventListener('keydown', trapTab)
+    return () => {
+      document.removeEventListener('focusin', keepFocus)
+      dialog.removeEventListener('keydown', trapTab)
+      if (opener?.isConnected) opener.focus()
+    }
+  }, [policy.id])
 
   return (
     <div
+      ref={dialogRef}
       aria-labelledby={titleId}
       aria-modal="true"
       className="legal-policy-modal-backdrop"
@@ -47,6 +74,7 @@ export function LegalPolicyModal({ onClose, policyId }) {
           </div>
 
           <button
+            ref={closeRef}
             aria-label={`Close ${policy.title}`}
             className="legal-policy-modal__close"
             type="button"
@@ -56,7 +84,7 @@ export function LegalPolicyModal({ onClose, policyId }) {
           </button>
         </header>
 
-        <div className="legal-policy-modal__content">
+        <div aria-label={`${policy.title} text`} className="legal-policy-modal__content" role="region" tabIndex={0}>
           {policy.sections.map((section) => (
             <section key={section.title}>
               <h3>{section.title}</h3>

@@ -26,7 +26,7 @@ Email/password signup creates the identity and app account only after valid prof
 
 ### 4.2. Validation and Recovery
 
-First and last names are required. Birthday must be a real date, not in the future, and meet the minimum account age of 18. Both the form and backend enforce this during registration and profile completion; direct underage requests receive clear validation feedback. The same age rule applies to later date-of-birth updates under [Profile](F12-profile-spec.md#42-edit-and-settings-boundaries). A visitor without an active signup or signed-in identity returns to Create Account. A failed save leaves the form available with an error; a failed cleanup prevents Back from silently abandoning an incomplete account.
+First and last names are required. Birthday must be a real date, not in the future, and meet the minimum account age of 18. Age is calculated using the current calendar date in `America/Chicago`, consistently in the frontend and backend. A person born on February 29 reaches age 18 on March 1 in a non-leap year. Both the form and backend enforce this during registration and profile completion; direct underage requests receive clear validation feedback. The same age rule applies to later date-of-birth updates under [Profile](F12-profile-spec.md#42-edit-and-settings-boundaries). A visitor without an active signup or signed-in identity returns to Create Account. A failed save leaves the form available with an error; a failed cleanup prevents Back from silently abandoning an incomplete account.
 
 ## 5. Tests & Edge Cases
 
@@ -46,7 +46,7 @@ These scenarios are for future verification; none are marked complete.
 | # | Done | Scenario | Expected result |
 |---:|:---:|---|---|
 | 5 | ☐ | Submit missing names, missing/invalid birthday, a future birthday, or an age below 18. | The relevant field error appears and profile completion does not proceed; a direct underage profile-completion request is also rejected by the backend. |
-| 6 | ☐ | Submit on the exact 18th birthday. | The age boundary is accepted by the form and backend. |
+| 6 | ☐ | Submit immediately before and on the 18th birthday in America/Chicago, including when UTC has a different date and when a February 29 birthday reaches 18 in a non-leap year. | The form and backend reject the underage date and accept the exact 18th birthday using the Chicago calendar date; a February 29 birthday reaches 18 on March 1 in a non-leap year. |
 | 7 | ☐ | Open Finish Profile without a pending signup or signed-in identity. | The visitor returns to Create Account. |
 | 8 | ☐ | Fail account creation, profile save, or unfinished-account cleanup. | An error is shown; the page does not claim completion or silently discard the unfinished provider account. |
 | 9 | ☐ | Submit repeatedly while saving. | The form is disabled during the pending save and does not create duplicate profiles. |

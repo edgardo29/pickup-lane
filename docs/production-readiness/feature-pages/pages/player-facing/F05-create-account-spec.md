@@ -26,7 +26,7 @@ The page links to Sign In and opens the current Terms of Service and Privacy Pol
 
 ### 4.1. Deferred Email Account Creation
 
-The email and password are held only during the active signup flow. The identity and app account are created when a valid, age-eligible profile is submitted on [Finish Profile](F06-finish-profile-spec.md). The minimum age is 18 and must be checked by the frontend and backend during registration. Abandoning this first step creates no account.
+The email and password are held only during the active signup flow. The identity and app account are created when a valid, age-eligible profile is submitted on [Finish Profile](F06-finish-profile-spec.md). The minimum age is 18 and must be checked by the frontend and backend during registration, using the America/Chicago calendar date and the February 29 rule in [Finish Profile, Section 4.2](F06-finish-profile-spec.md#42-validation-and-recovery). Abandoning this first step creates no account.
 
 ### 4.2. Existing Accounts and Failures
 
@@ -58,6 +58,7 @@ These scenarios are for future verification; none are marked complete.
 | 7 | ☐ | Fail email availability or cancel Google sign-in. | A recoverable error appears; no success or unintended transition is shown. |
 | 8 | ☐ | Refresh or leave before submitting Finish Profile after the email step. | The pending email/password does not create an identity or app account. |
 | 9 | ☐ | Open Create Account while already signed in. | The user is redirected to the supplied destination or game discovery. |
+| 10 | ☐ | Start email or Google signup, then submit profile details immediately before and on the 18th birthday, including when UTC has a different date and for a February 29 birthday. | Registration cannot complete before the 18th birthday in America/Chicago; it can complete on that birthday. A February 29 birthday reaches 18 on March 1 in a non-leap year. The frontend and backend apply the same rule. |
 
 ## 6. Open Items to Resolve
 

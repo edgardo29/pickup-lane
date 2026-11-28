@@ -130,6 +130,11 @@
   padding: 2px 18px 18px;
 }
 
+.legal-policy-modal__content:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: -3px;
+}
+
 .legal-policy-modal__content section {
   padding: 16px 0;
   border-bottom: 1px solid rgba(248, 250, 252, 0.08);

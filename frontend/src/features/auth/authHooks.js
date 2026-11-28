@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { getPostAuthNavigation } from './authHelpers.js'
 
 export function useCleanupUnfinishedSignupOnEntry({
@@ -11,45 +11,32 @@ export function useCleanupUnfinishedSignupOnEntry({
   pendingSignup,
   setError,
 }) {
+  const [attempt, setAttempt] = useState(0)
+  const [result, setResult] = useState(null)
+  const uid = currentUser?.uid
+  const needed = !disabled && !isLoading && Boolean(currentUser)
+    && !appUser?.id && !pendingGoogleSignup && !pendingSignup
+  const settled = result && result.uid === uid && result.attempt === attempt ? result : null
+
   useEffect(() => {
+    if (!needed) return undefined
     let ignore = false
-
-    async function cleanup() {
-      if (
-        disabled ||
-        isLoading ||
-        !currentUser ||
-        appUser?.id ||
-        pendingGoogleSignup ||
-        pendingSignup
-      ) {
-        return
+    cleanupUnfinishedSignup().then(() => {
+      if (!ignore) setResult({ uid, attempt, failed: false })
+    }).catch(() => {
+      if (!ignore) {
+        setResult({ uid, attempt, failed: true })
+        setError('Could not cancel sign-up. Please try again.')
       }
+    })
+    return () => { ignore = true }
+  }, [attempt, cleanupUnfinishedSignup, needed, setError, uid])
 
-      try {
-        await cleanupUnfinishedSignup()
-      } catch {
-        // Local/dev Firebase Admin cleanup can fail even though a local sign-out
-        // is enough to unblock the next sign-in attempt.
-        if (!ignore) setError('')
-      }
-    }
-
-    cleanup()
-
-    return () => {
-      ignore = true
-    }
-  }, [
-    appUser?.id,
-    cleanupUnfinishedSignup,
-    currentUser,
-    disabled,
-    isLoading,
-    pendingGoogleSignup,
-    pendingSignup,
-    setError,
-  ])
+  return {
+    cleanupFailed: Boolean(settled?.failed),
+    isCleaning: needed && !settled,
+    retryCleanup: () => { setError(''); setAttempt((value) => value + 1) },
+  }
 }
 
 export function useGoogleRedirectCompletion({

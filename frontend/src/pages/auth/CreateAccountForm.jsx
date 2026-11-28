@@ -10,6 +10,7 @@ export function CreateAccountForm({
   email,
   error,
   isSubmitting,
+  invalidField,
   onSubmit,
   password,
   setEmail,
@@ -20,6 +21,8 @@ export function CreateAccountForm({
   return (
     <form className="auth-form" noValidate onSubmit={onSubmit}>
       <AuthField
+        aria-describedby={invalidField === 'email' ? 'create-account-error' : undefined}
+        aria-invalid={invalidField === 'email'}
         autoComplete="email"
         icon={<MailIcon />}
         inputMode="email"
@@ -31,6 +34,8 @@ export function CreateAccountForm({
       />
 
       <AuthField
+        aria-describedby={invalidField === 'password' ? 'create-account-error' : undefined}
+        aria-invalid={invalidField === 'password'}
         autoComplete="new-password"
         hint="At least 8 characters with a number or symbol"
         icon={<LockIcon />}
@@ -48,7 +53,7 @@ export function CreateAccountForm({
         value={password}
       />
 
-      <FormErrorMessage>{error}</FormErrorMessage>
+      <FormErrorMessage id="create-account-error">{error}</FormErrorMessage>
 
       <button className="auth-primary-button" disabled={isSubmitting} type="submit">
         <UserPlus aria-hidden="true" />

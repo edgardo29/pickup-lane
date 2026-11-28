@@ -30,6 +30,7 @@ export function CreateAccountPage() {
           email={accountForm.email}
           error={accountForm.error}
           isSubmitting={accountForm.isSubmitting}
+          invalidField={accountForm.invalidField}
           onSubmit={accountForm.handleCreateAccount}
           password={accountForm.password}
           setEmail={accountForm.setEmail}
@@ -37,6 +38,12 @@ export function CreateAccountPage() {
           setShowPassword={accountForm.setShowPassword}
           showPassword={accountForm.showPassword}
         />
+
+        {accountForm.cleanupFailed && (
+          <button className="auth-primary-button" type="button" onClick={accountForm.retryCleanup}>
+            Retry signup cleanup
+          </button>
+        )}
 
         <AuthSwitch
           text="Already have an account?"

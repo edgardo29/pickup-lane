@@ -85,6 +85,10 @@ describe('Game Checkout', () => {
     renderCheckout()
     await user.click(await screen.findByRole('button', { name: 'Terms of Service' }))
     expect(await screen.findByRole('dialog', { name: 'Terms of Service' })).toBeInTheDocument()
+    const content = screen.getByRole('region', { name: 'Terms of Service text' })
+    expect(content).toHaveAttribute('tabindex', '0')
+    await user.tab(); expect(content).toHaveFocus()
+    await user.tab(); expect(screen.getByRole('button', { name: 'Close Terms of Service' })).toHaveFocus()
   })
 
   it("F17-1: Cancellation Policy opens its policy", async () => {
@@ -93,6 +97,10 @@ describe('Game Checkout', () => {
     renderCheckout()
     await user.click(await screen.findByRole('button', { name: 'Cancellation Policy' }))
     expect(await screen.findByRole('dialog', { name: 'Cancellation and Refund Policy' })).toBeInTheDocument()
+    const content = screen.getByRole('region', { name: 'Cancellation and Refund Policy text' })
+    expect(content).toHaveAttribute('tabindex', '0')
+    await user.tab(); expect(content).toHaveFocus()
+    await user.tab(); expect(screen.getByRole('button', { name: 'Close Cancellation and Refund Policy' })).toHaveFocus()
   })
 
   it("F17-1: confirmation waits for agreement", async () => {
