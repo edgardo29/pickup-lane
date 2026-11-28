@@ -68,6 +68,7 @@ import {
 import { AuthReturnGuard } from './AuthReturnGuard.jsx'
 import {
   RedirectSignedIn,
+  SignupFlow,
   RequireActiveAppUser,
   RequireAdmin,
   RequireAppUser,
@@ -86,15 +87,17 @@ export function AppRoutes() {
           </RedirectSignedIn>
         }
       />
-      <Route
-        path="/create-account"
-        element={
-          <RedirectSignedIn>
-            <CreateAccountPage />
-          </RedirectSignedIn>
-        }
-      />
-      <Route path="/finish-profile" element={<FinishProfilePage />} />
+      <Route element={<SignupFlow />}>
+        <Route
+          path="/create-account"
+          element={
+            <RedirectSignedIn>
+              <CreateAccountPage />
+            </RedirectSignedIn>
+          }
+        />
+        <Route path="/finish-profile" element={<FinishProfilePage />} />
+      </Route>
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/check-email" element={<CheckEmailPage />} />

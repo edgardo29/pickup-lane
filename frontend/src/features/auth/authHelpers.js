@@ -137,34 +137,25 @@ export function splitDisplayName(displayName) {
 }
 
 export function getBirthdayValidation(month, day, year) {
-  if (!month || !day || !year) {
-    return { isValid: false, message: 'Enter your birthday.' }
-  }
-
+  if (!month || !day || !year) return { isValid: false, message: 'Enter your birthday.' }
   const value = `${year}-${month}-${day}`
-  const dateOfBirth = new Date(`${value}T00:00:00`)
-
-  if (Number.isNaN(dateOfBirth.getTime())) {
+  const dateOfBirth = new Date(`${value}T00:00:00Z`)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(dateOfBirth.getTime())
+    || dateOfBirth.toISOString().slice(0, 10) !== value) {
     return { isValid: false, message: 'Enter a valid birthday.' }
   }
-
-  const today = new Date()
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-
-  if (dateOfBirth > todayStart) {
-    return { isValid: false, message: 'Birthday cannot be in the future.' }
+  // Signup uses Chicago's calendar even when the device is elsewhere.
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date()).map(({ type, value }) => [type, value]))
+  const today = `${parts.year}-${parts.month}-${parts.day}`
+  if (value > today) return { isValid: false, message: 'Birthday cannot be in the future.' }
+  const eighteenthBirthday = new Date(dateOfBirth)
+  // setUTCFullYear moves February 29 to March 1 in a non-leap year.
+  eighteenthBirthday.setUTCFullYear(eighteenthBirthday.getUTCFullYear() + minimumSignupAge)
+  if (eighteenthBirthday.toISOString().slice(0, 10) > today) {
+    return { isValid: false, message: `You must be at least ${minimumSignupAge} years old to use Pickup Lane.` }
   }
-
-  const minimumBirthday = new Date(dateOfBirth)
-  minimumBirthday.setFullYear(minimumBirthday.getFullYear() + minimumSignupAge)
-
-  if (minimumBirthday > todayStart) {
-    return {
-      isValid: false,
-      message: `You must be at least ${minimumSignupAge} years old to use Pickup Lane.`,
-    }
-  }
-
   return { isValid: true, value }
 }
 

@@ -21,23 +21,17 @@ export function buildAuthProviderAccountActions({
         return
       }
 
-      let cleanupError = null
-
-      try {
-        await cleanupUnfinishedAccount(firebaseUser)
-      } catch (error) {
-        cleanupError = error
+      if (auth.currentUser?.uid !== firebaseUser.uid) {
+        throw new Error('The signed-in account changed.')
       }
-
+      // Keep the session and draft available when Firebase cleanup fails.
+      await cleanupUnfinishedAccount(firebaseUser)
+      if (auth.currentUser?.uid !== firebaseUser.uid) return
       await signOut(auth).catch(() => {})
       setFirebaseUser(null)
       setAppUser(null)
       setPendingSignup(null)
       setPendingGoogleSignup(false)
-
-      if (cleanupError) {
-        throw cleanupError
-      }
     },
     deleteAccount: async (confirmation) => {
       try {

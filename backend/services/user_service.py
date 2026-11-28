@@ -1,6 +1,7 @@
 """Shared user helpers used by user-adjacent routes and services."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -102,12 +103,40 @@ def list_user_profiles(
     return list(users)
 
 
+def validate_profile_birthday(birthday: date | None) -> None:
+    """Registration and profile edits share Chicago's age-18 calendar rule."""
+    today = datetime.now(UTC).astimezone(ZoneInfo("America/Chicago")).date()
+    if birthday is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Enter a valid birthday.",
+        )
+    if birthday > today:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Birthday cannot be in the future.",
+        )
+    try:
+        eighteenth_birthday = birthday.replace(year=birthday.year + 18)
+    except ValueError:
+        # February 29 reaches 18 on March 1 in a non-leap year.
+        eighteenth_birthday = date(birthday.year + 18, 3, 1)
+    if today < eighteenth_birthday:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="You must be at least 18 years old to use Pickup Lane.",
+        )
+
+
 def update_current_user_profile(
     db: Session,
     current_user: User,
     update_data: dict[str, object],
 ) -> User:
     db_user = get_current_user_profile(db, current_user)
+
+    if "date_of_birth" in update_data:
+        validate_profile_birthday(update_data["date_of_birth"])
 
     if (
         "email" in update_data
